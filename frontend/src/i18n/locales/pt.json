@@ -1503,8 +1503,6 @@
     "layoutSaved": "Layout salvo",
     "saveLayoutFailed": "Falha ao salvar layout",
     "editLayout": "Editar Layout",
-    "moveEarlier": "Move earlier",
-    "moveLater": "Move later",
     "editWidgetTooltip": "Editar widget",
     "deleteWidgetTooltip": "Excluir widget",
     "noChange": "Nenhuma alteração",

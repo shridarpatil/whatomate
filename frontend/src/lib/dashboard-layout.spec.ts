@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { DashboardWidget } from '@/services/api'
-import { orderWidgets, placeWidgets, reorder, type Placed } from './dashboard-layout'
+import { orderWidgets, placeWidgets, reorder, resize, type Placed } from './dashboard-layout'
 
 const widget = (id: string, p: Partial<DashboardWidget> = {}): DashboardWidget => ({
   id, name: id, description: '', data_source: 'messages', metric: 'count', field: '', filters: [],
@@ -67,5 +67,32 @@ describe('reorder', () => {
   })
   it('returns the same order for out-of-range moves', () => {
     expect(reorder(order, 0, 9).map(p => p.id)).toEqual(['A', 'B', 'C'])
+  })
+})
+
+describe('resize', () => {
+  const order: Placed[] = [
+    { id: 'A', x: 0, y: 0, w: 6, h: 3 },
+    { id: 'B', x: 6, y: 0, w: 6, h: 3 },
+  ]
+  it('widening an item wraps the next one to a new row', () => {
+    const out = resize(order, 0, 8, 3)
+    expect(out[0]).toEqual({ id: 'A', x: 0, y: 0, w: 8, h: 3 })
+    expect(out[1]).toEqual({ id: 'B', x: 0, y: 3, w: 6, h: 3 })
+  })
+  it('row height follows the tallest item', () => {
+    const out = resize(order, 0, 4, 7)
+    expect(out[1]).toMatchObject({ x: 4, y: 0 })
+    expect(out[0]).toMatchObject({ w: 4, h: 7 })
+  })
+  it('rounds and clamps sizes', () => {
+    expect(resize(order, 0, 0.4, 0)[0]).toMatchObject({ w: 2, h: 2 })
+    expect(resize(order, 0, 15.6, 99)[0]).toMatchObject({ w: 12, h: 20 })
+    expect(resize(order, 0, 5.6, 3.4)[0]).toMatchObject({ w: 6, h: 3 })
+  })
+  it('does not mutate the input and ignores a bad index', () => {
+    const out = resize(order, 5, 3, 3)
+    expect(out).toEqual(order)
+    expect(out[0]).not.toBe(order[0])
   })
 })

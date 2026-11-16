@@ -413,6 +413,11 @@ export const iconData: Record<string, Array<[tag: string, attrs: Record<string, 
     ["circle", {"cx":"12","cy":"5","r":"1"}],
     ["circle", {"cx":"12","cy":"19","r":"1"}],
   ],
+  MoveDiagonal2: [
+    ["polyline", {"points":"5 11 5 5 11 5"}],
+    ["polyline", {"points":"19 13 19 19 13 19"}],
+    ["line", {"x1":"5","x2":"19","y1":"5","y2":"19"}],
+  ],
   MousePointerClick: [
     ["path", {"d":"m9 9 5 12 1.8-5.2L21 14Z"}],
     ["path", {"d":"M7.2 2.2 8 5.1"}],

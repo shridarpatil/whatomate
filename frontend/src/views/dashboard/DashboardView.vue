@@ -7,7 +7,7 @@ import LineChart from '@/components/charts/LineChart.vue'
 import BarChart from '@/components/charts/BarChart.vue'
 import PieChart from '@/components/charts/PieChart.vue'
 import type { ChartSeries } from '@/components/charts/chart-utils'
-import { orderWidgets, reorder, type Placed } from '@/lib/dashboard-layout'
+import { orderWidgets, reorder, resize, GRID_COLS, type Placed } from '@/lib/dashboard-layout'
 import { widgetsService, type DashboardWidget, type WidgetData, type LayoutItem } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import {
@@ -26,9 +26,8 @@ import {
   BarChart3,
   FileText,
   X,
-  ChevronLeft,
-  ChevronRight,
   GripVertical,
+  MoveDiagonal2,
   Megaphone,
   Settings,
   Contact,
@@ -132,15 +131,12 @@ const colorOptions = computed(() => [
   { value: 'cyan', label: t('dashboard.colorCyan') }
 ])
 
-const WIDGET_COLORS: Record<string, string> = {
-  blue: 'var(--primary)',
-  cyan: 'var(--primary)',
-  green: 'var(--success)',
-  orange: 'var(--warning)',
-  red: 'var(--danger)',
-  purple: 'var(--muted-foreground)'
-}
-const widgetColor = (color: string) => WIDGET_COLORS[color] || WIDGET_COLORS.blue
+// Chart colours are CSS variables (theme.css): --widget-chart follows the card's
+// data-widget-color; --chart-1..8 is the classic categorical palette.
+const WIDGET_LINE = 'var(--widget-chart)'
+const WIDGET_BAR = 'color-mix(in srgb, var(--widget-chart) 80%, transparent)'
+const CHART_PALETTE = Array.from({ length: 8 }, (_, i) => `var(--chart-${i + 1})`)
+const paletteColor = (i: number) => CHART_PALETTE[i % CHART_PALETTE.length]
 
 // Chart type options
 const chartTypeOptions = computed(() => [
@@ -170,7 +166,7 @@ const getChart = (widget: DashboardWidget): WidgetChart => {
     return {
       ...empty,
       labels: groupedSeries.labels,
-      series: groupedSeries.datasets.map(ds => ({ label: ds.label, data: ds.data }))
+      series: groupedSeries.datasets.map((ds, i) => ({ label: ds.label, data: ds.data, color: paletteColor(i) }))
     }
   }
 
@@ -180,11 +176,14 @@ const getChart = (widget: DashboardWidget): WidgetChart => {
     return { ...empty, labels: source.map(d => d.label), values: source.map(d => d.value) }
   }
 
-  const source = kind === 'bar' && dataPoints.length > 0 ? dataPoints : chartData
+  const grouped = kind === 'bar' && dataPoints.length > 0
+  const source = grouped ? dataPoints : chartData
   return {
     ...empty,
     labels: source.map(d => d.label),
-    series: [{ label: widget.name, data: source.map(d => d.value), color: widgetColor(widget.color) }]
+    series: [{ label: widget.name, data: source.map(d => d.value), color: kind === 'bar' ? WIDGET_BAR : WIDGET_LINE }],
+    // Grouped bars get one palette colour per category (old Chart.js look).
+    values: grouped ? source.map(d => d.value) : []
   }
 }
 
@@ -261,6 +260,8 @@ const getWidgetIcon = (dataSource: string) => {
 // Grid layout state: widgets render in a fixed 12-column grid; edit mode reorders them.
 // Saved grid_w / grid_h are never changed here, only the flowed x / y.
 const GRID_ROW_HEIGHT = 40
+// Same pixel height as the old grid-layout-plus item: h rows of 40px plus 16px margins between them.
+const GRID_MARGIN = 16
 
 const isReorderMode = ref(false)
 const order = ref<Placed[]>([])
@@ -279,9 +280,14 @@ const items = computed(() => order.value.flatMap((p, index) => {
 }))
 
 const colSpan = (w: number) => Math.min(12, Math.max(1, Math.round(w)))
-const minHeight = (h: number) => `${h * GRID_ROW_HEIGHT}px`
-const chartHeight = (h: number) => Math.max(160, h * GRID_ROW_HEIGHT - 90)
-const bodyMaxHeight = (h: number) => `${Math.max(120, h * GRID_ROW_HEIGHT - 80)}px`
+const widgetHeight = (h: number) => h * GRID_ROW_HEIGHT + (h - 1) * GRID_MARGIN
+// Chart area = card minus padding (2 x 24), header tile (40) and gap (16); the
+// "show data" toggle (18) sits below it.
+const chartArea = (h: number) => Math.max(100, widgetHeight(h) - 104 - 18)
+// Line/bar: SVG height (multi-series lines also show a ~24px legend on top).
+const chartHeight = (h: number, multi = false) => chartArea(h) - (multi ? 24 : 0)
+// Pie: diameter leaves room for the legend row below it.
+const pieSize = (h: number) => `${Math.max(80, chartArea(h) - 28)}px`
 
 // Rebuild order when widgets change
 watch(widgets, (val) => {
@@ -307,12 +313,93 @@ const persistLayout = async () => {
   }
 }
 
-const moveWidget = (from: number, to: number) => {
-  if (to < 0 || to >= order.value.length) return
-  order.value = reorder(order.value, from, to)
+const scheduleLayoutSave = () => {
   layoutDirty = true
   if (layoutSaveTimer) clearTimeout(layoutSaveTimer)
   layoutSaveTimer = setTimeout(persistLayout, 500)
+}
+
+const moveWidget = (from: number, to: number) => {
+  if (to < 0 || to >= order.value.length) return
+  order.value = reorder(order.value, from, to)
+  scheduleLayoutSave()
+}
+
+const resizeWidget = (index: number, w: number, h: number) => {
+  const p = order.value[index]
+  if (!p) return
+  const next = resize(order.value, index, w, h)
+  if (next[index].w === p.w && next[index].h === p.h) return
+  order.value = next
+  scheduleLayoutSave()
+}
+
+// Edit layout: drag a widget onto another to move it there.
+const gridEl = ref<HTMLElement | null>(null)
+const dragFrom = ref<number | null>(null)
+const dragOver = ref<number | null>(null)
+let resizing = false
+
+const onDragStart = (index: number, e: DragEvent) => {
+  if (resizing) { e.preventDefault(); return }
+  dragFrom.value = index
+  if (e.dataTransfer) {
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', String(index))
+  }
+}
+const onDragOver = (index: number, e: DragEvent) => {
+  if (dragFrom.value === null) return
+  e.preventDefault()
+  dragOver.value = index
+}
+const onDrop = (index: number) => {
+  if (dragFrom.value !== null) moveWidget(dragFrom.value, index)
+  onDragEnd()
+}
+const onDragEnd = () => {
+  dragFrom.value = null
+  dragOver.value = null
+}
+
+// Edit layout: drag the corner handle to resize, snapping to grid columns and rows.
+const startResize = (index: number, e: PointerEvent) => {
+  const start = order.value[index]
+  const grid = gridEl.value
+  if (!start || !grid) return
+  e.preventDefault()
+  const handle = e.currentTarget as HTMLElement
+  handle.setPointerCapture(e.pointerId)
+  resizing = true
+  const gap = parseFloat(getComputedStyle(grid).columnGap) || 0
+  const colStep = (grid.clientWidth + gap) / GRID_COLS
+  const rowStep = GRID_ROW_HEIGHT + GRID_MARGIN
+  const { clientX: x0, clientY: y0 } = e
+  const { w: w0, h: h0 } = start
+  const move = (ev: PointerEvent) => {
+    resizeWidget(index, w0 + (ev.clientX - x0) / colStep, h0 + (ev.clientY - y0) / rowStep)
+  }
+  const stop = () => {
+    resizing = false
+    handle.removeEventListener('pointermove', move)
+    handle.removeEventListener('pointerup', stop)
+    handle.removeEventListener('pointercancel', stop)
+  }
+  handle.addEventListener('pointermove', move)
+  handle.addEventListener('pointerup', stop)
+  handle.addEventListener('pointercancel', stop)
+}
+
+const resizeByKey = (index: number, e: KeyboardEvent) => {
+  const p = order.value[index]
+  if (!p) return
+  const delta: Record<string, [number, number]> = {
+    ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1],
+  }
+  const d = delta[e.key]
+  if (!d) return
+  e.preventDefault()
+  resizeWidget(index, p.w + d[0], p.h + d[1])
 }
 
 // Save immediately when leaving edit mode
@@ -597,96 +684,100 @@ onMounted(() => {
     </PageHeader>
 
     <!-- Content -->
-    <div class="flex-1 scroll-y p-4">
+    <div class="flex-1 scroll-y" data-page-body>
       <!-- Loading Skeleton -->
       <div v-if="isLoading" class="row">
         <div v-for="i in 4" :key="i" class="col-3">
-          <article class="card" aria-busy="true">
-            <div role="status" class="skeleton line"></div>
-            <div role="status" class="skeleton box"></div>
+          <article class="card vstack gap-2" data-widget aria-busy="true">
+            <header class="hstack items-center justify-between gap-2">
+              <div role="status" class="skeleton line" data-size="label"></div>
+              <div role="status" class="skeleton box" data-size="tile"></div>
+            </header>
+            <div role="status" class="skeleton line" data-size="value"></div>
+            <div role="status" class="skeleton line" data-size="hint"></div>
           </article>
         </div>
       </div>
 
       <!-- Widget grid -->
-      <div v-else-if="items.length > 0" class="row">
+      <div v-else-if="items.length > 0" ref="gridEl" class="row" :data-layout-editing="isReorderMode || undefined">
         <div
           v-for="{ p, widget, index } in items"
           :key="widget.id"
           :class="`col-${colSpan(p.w)}`"
-          :style="{ minHeight: minHeight(p.h) }"
+          :style="{ height: `${widgetHeight(p.h)}px` }"
+          :draggable="isReorderMode ? 'true' : undefined"
+          :data-dragging="dragFrom === index || undefined"
+          :data-drag-over="(dragOver === index && dragFrom !== index) || undefined"
           data-testid="dashboard-widget"
+          @dragstart="onDragStart(index, $event)"
+          @dragover="onDragOver(index, $event)"
+          @drop.prevent="onDrop(index)"
+          @dragend="onDragEnd"
         >
-          <article class="card h-full vstack gap-2" data-hover-group>
+          <article
+            class="card h-full vstack gap-2"
+            :data-widget="isNumberWidget(widget) ? 'number' : widget.display_type"
+            :data-widget-color="widget.color"
+            data-hover-group
+          >
+            <button
+              v-if="isReorderMode"
+              type="button"
+              class="ghost icon small"
+              data-resize-handle
+              :aria-label="$t('dashboard.resizeWidget')"
+              :title="$t('dashboard.resizeWidget')"
+              @pointerdown="startResize(index, $event)"
+              @keydown="resizeByKey(index, $event)"
+            >
+              <MoveDiagonal2 :size="14" />
+            </button>
             <header class="hstack items-center gap-2">
               <div class="flex-1 min-w-0">
                 <h4 class="truncate">{{ widget.name }}</h4>
-                <small v-if="widget.description" class="text-light">{{ widget.description }}</small>
+                <small v-if="widget.description && !isNumberWidget(widget)" class="text-light">{{ widget.description }}</small>
               </div>
 
-              <div v-if="isReorderMode" class="hstack gap-1">
-                <button
-                  type="button"
-                  class="ghost icon small"
-                  :disabled="index === 0"
-                  :aria-label="$t('dashboard.moveEarlier')"
-                  :title="$t('dashboard.moveEarlier')"
-                  @click="moveWidget(index, index - 1)"
-                >
-                  <ChevronLeft :size="16" />
-                </button>
-                <button
-                  type="button"
-                  class="ghost icon small"
-                  :disabled="index === order.length - 1"
-                  :aria-label="$t('dashboard.moveLater')"
-                  :title="$t('dashboard.moveLater')"
-                  @click="moveWidget(index, index + 1)"
-                >
-                  <ChevronRight :size="16" />
-                </button>
-              </div>
               <!-- Edit/delete appear on card hover or keyboard focus (always shown on touch screens). -->
-              <div v-else-if="canEditWidget || canDeleteWidget" class="hstack gap-1" data-hover-reveal>
+              <div v-if="!isReorderMode && (canEditWidget || canDeleteWidget)" class="hstack gap-1" data-hover-reveal>
                 <button
                   v-if="canEditWidget"
                   type="button"
                   class="ghost icon small"
+                  data-widget-action="edit"
                   :aria-label="$t('dashboard.editWidgetTooltip')"
                   :title="$t('dashboard.editWidgetTooltip')"
                   @click="openEditWidgetDialog(widget)"
                 >
-                  <Pencil :size="14" />
+                  <Pencil :size="12" />
                 </button>
                 <button
                   v-if="canDeleteWidget"
                   type="button"
                   class="ghost icon small"
+                  data-widget-action="delete"
                   :aria-label="$t('dashboard.deleteWidgetTooltip')"
                   :title="$t('dashboard.deleteWidgetTooltip')"
                   @click="openDeleteDialog(widget)"
                 >
-                  <Trash2 :size="14" />
+                  <Trash2 :size="12" />
                 </button>
               </div>
 
-              <component
-                :is="getWidgetIcon(widget.data_source)"
-                v-if="isNumberWidget(widget) || isChartWidget(widget)"
-                :size="20"
-                :color="widgetColor(widget.color)"
-                aria-hidden="true"
-              />
+              <span v-if="isNumberWidget(widget) || isChartWidget(widget)" data-widget-icon aria-hidden="true">
+                <component :is="getWidgetIcon(widget.data_source)" :size="20" />
+              </span>
             </header>
 
             <!-- Number -->
             <template v-if="isNumberWidget(widget)">
               <div v-if="isWidgetDataLoading" role="status" class="skeleton line" aria-busy="true"></div>
-              <h2 v-else>{{ formatNumber(widgetData[widget.id]?.value || 0) }}</h2>
-              <div v-if="widget.show_change && widgetData[widget.id]" class="hstack items-center gap-2">
+              <h2 v-else data-widget-value>{{ formatNumber(widgetData[widget.id]?.value || 0) }}</h2>
+              <small v-if="widget.show_change && widgetData[widget.id]" class="hstack items-center gap-1" data-widget-change>
                 <span
-                  class="badge"
-                  :data-variant="widgetData[widget.id].change > 0 ? 'success' : widgetData[widget.id].change < 0 ? 'danger' : 'secondary'"
+                  class="hstack items-center gap-1"
+                  :data-trend="widgetData[widget.id].change > 0 ? 'up' : widgetData[widget.id].change < 0 ? 'down' : 'flat'"
                 >
                   <component
                     :is="widgetData[widget.id].change > 0 ? TrendingUp : widgetData[widget.id].change < 0 ? TrendingDown : Minus"
@@ -694,37 +785,41 @@ onMounted(() => {
                   />
                   {{ Math.abs(widgetData[widget.id].change || 0).toFixed(1) }}%
                 </span>
-                <small class="text-light">{{ comparisonPeriodLabel }}</small>
-              </div>
+                {{ comparisonPeriodLabel }}
+              </small>
             </template>
 
             <!-- Chart -->
             <template v-else-if="isChartWidget(widget)">
               <div v-if="isWidgetDataLoading" role="status" class="skeleton box" aria-busy="true"></div>
-              <template v-else-if="hasChartData(widget.id)">
+              <div
+                v-else-if="hasChartData(widget.id)"
+                class="flex-1 min-h-0 scroll-y"
+                data-widget-chart
+                :style="{ '--pie-size': pieSize(p.h) }"
+              >
                 <template v-for="chart in [getChart(widget)]" :key="chart.kind">
                   <LineChart
                     v-if="chart.kind === 'line'"
                     :labels="chart.labels"
                     :series="chart.series"
-                    :height="chartHeight(p.h)"
-                    :caption="widget.name"
+                    :height="chartHeight(p.h, chart.series.length > 1)"
                   />
                   <BarChart
                     v-else-if="chart.kind === 'bar'"
                     :labels="chart.labels"
                     :series="chart.series"
+                    :point-colors="chart.values.length ? chart.values.map((_, i) => paletteColor(i)) : undefined"
                     :height="chartHeight(p.h)"
-                    :caption="widget.name"
                   />
                   <PieChart
                     v-else
                     :labels="chart.labels"
                     :values="chart.values"
-                    :caption="widget.name"
+                    :colors="CHART_PALETTE"
                   />
                 </template>
-              </template>
+              </div>
               <p v-else class="text-light">{{ $t('common.noData') }}</p>
             </template>
 
@@ -734,8 +829,7 @@ onMounted(() => {
               <!-- Grouped table (group_by set) -->
               <div
                 v-else-if="widget.group_by_field && widgetData[widget.id]?.data_points?.length"
-                class="table scroll-y"
-                :style="{ maxHeight: bodyMaxHeight(p.h) }"
+                class="table scroll-y flex-1 min-h-0"
               >
                 <table>
                   <thead>
@@ -755,11 +849,11 @@ onMounted(() => {
               <!-- Row list (no group_by) -->
               <ul
                 v-else-if="widgetData[widget.id]?.table_rows?.length"
-                class="unstyled vstack gap-2 scroll-y"
-                :style="{ maxHeight: bodyMaxHeight(p.h) }"
+                class="unstyled vstack gap-2 scroll-y flex-1 min-h-0"
+                data-widget-rows
               >
-                <li v-for="row in widgetData[widget.id]?.table_rows" :key="row.id" class="hstack gap-2">
-                  <figure data-variant="avatar" :aria-label="row.label">
+                <li v-for="row in widgetData[widget.id]?.table_rows" :key="row.id" class="hstack gap-2" data-widget-row>
+                  <figure data-variant="avatar" :data-direction="row.direction" :aria-label="row.label">
                     <abbr :title="row.label">{{ row.label.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() }}</abbr>
                   </figure>
                   <div class="flex-1 min-w-0">
@@ -772,11 +866,12 @@ onMounted(() => {
                     </div>
                     <p class="text-light truncate">{{ row.sub_label }}</p>
                     <div class="hstack gap-2">
-                      <span v-if="row.direction" class="badge" :data-variant="row.direction === 'incoming' ? 'success' : 'secondary'">{{ row.direction }}</span>
+                      <span v-if="row.direction" class="badge" :data-variant="row.direction === 'incoming' ? 'success' : 'secondary'" :data-pill="row.direction === 'incoming' ? 'green' : 'blue'">{{ row.direction }}</span>
                       <span
                         v-if="row.status"
                         class="badge"
                         :data-variant="row.status === 'read' ? 'success' : row.status === 'failed' ? 'danger' : 'secondary'"
+                        :data-pill="row.status === 'delivered' ? 'blue' : row.status === 'read' ? 'green' : row.status === 'failed' ? 'red' : 'grey'"
                       >{{ row.status }}</span>
                     </div>
                   </div>
@@ -788,8 +883,8 @@ onMounted(() => {
             <!-- Shortcuts -->
             <div
               v-else
-              class="row scroll-y"
-              :style="{ maxHeight: bodyMaxHeight(p.h) }"
+              class="row scroll-y flex-1 min-h-0"
+              data-shortcut-grid
             >
               <template v-for="key in (widget.config?.shortcuts || [])" :key="key">
                 <div
@@ -798,9 +893,12 @@ onMounted(() => {
                 >
                   <RouterLink
                     :to="SHORTCUT_REGISTRY[key as keyof typeof SHORTCUT_REGISTRY].to"
-                    class="button outline w-100"
+                    class="vstack items-center justify-center gap-2 w-100"
+                    :data-shortcut="key"
                   >
-                    <component :is="SHORTCUT_REGISTRY[key as keyof typeof SHORTCUT_REGISTRY].icon" :size="16" />
+                    <span data-shortcut-icon aria-hidden="true">
+                      <component :is="SHORTCUT_REGISTRY[key as keyof typeof SHORTCUT_REGISTRY].icon" :size="24" />
+                    </span>
                     {{ SHORTCUT_REGISTRY[key as keyof typeof SHORTCUT_REGISTRY].label }}
                   </RouterLink>
                 </div>
@@ -814,6 +912,7 @@ onMounted(() => {
     <!-- Widget Dialog -->
     <Modal
       v-model:open="isWidgetDialogOpen"
+      data-classic-dialog
       :title="isEditMode ? $t('dashboard.editWidget') : $t('dashboard.createWidget')"
       :description="$t('dashboard.widgetDialogDesc')"
     >
@@ -952,6 +1051,7 @@ onMounted(() => {
     <!-- Delete Confirmation Dialog -->
     <Modal
       v-model:open="deleteDialogOpen"
+      data-classic-dialog
       alert
       :title="$t('dashboard.deleteWidgetTitle')"
       :description="$t('dashboard.deleteWidgetConfirm', { name: widgetToDelete?.name })"

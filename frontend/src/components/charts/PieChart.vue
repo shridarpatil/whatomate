@@ -11,6 +11,7 @@ const props = defineProps<{
   labels: string[]
   values: number[]
   donut?: boolean
+  colors?: string[] // per-slice colours; falls back to the series palette
   formatValue?: (v: number) => string
   caption?: string
 }>()
@@ -27,7 +28,7 @@ const empty = computed(() => total.value <= 0)
 const arcs = computed(() => pieArcs(slices.value.map(s => s.value), R, props.donut ? R * 0.6 : 0))
 const pct = (v: number) => `${total.value > 0 ? Math.round((v / total.value) * 1000) / 10 : 0}%`
 
-const items = computed(() => slices.value.map((s, i) => ({ label: s.label, color: seriesColor(i), kind: 'box' as const })))
+const items = computed(() => slices.value.map((s, i) => ({ label: s.label, color: props.colors?.[i] || seriesColor(i), kind: 'box' as const })))
 
 function describe(i: number) {
   const s = slices.value[i]

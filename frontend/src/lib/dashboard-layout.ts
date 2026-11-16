@@ -70,15 +70,8 @@ export function orderWidgets(widgets: DashboardWidget[]): Placed[] {
     .map(({ p }) => p)
 }
 
-/** Moves one item, then re-flows x/y left to right. Sizes (w/h) are never changed. */
-export function reorder(order: Placed[], from: number, to: number): Placed[] {
-  const inRange = (i: number) => Number.isInteger(i) && i >= 0 && i < order.length
-  const list = order.map(p => ({ ...p }))
-  if (inRange(from) && inRange(to) && from !== to) {
-    const [moved] = list.splice(from, 1)
-    list.splice(to, 0, moved)
-  }
-
+/** Re-flows x/y left to right in list order, wrapping at GRID_COLS. */
+function reflow(list: Placed[]): Placed[] {
   let x = 0
   let y = 0
   let rowH = 0
@@ -94,4 +87,31 @@ export function reorder(order: Placed[], from: number, to: number): Placed[] {
     rowH = Math.max(rowH, item.h)
   }
   return list
+}
+
+/** Moves one item, then re-flows x/y left to right. Sizes (w/h) are never changed. */
+export function reorder(order: Placed[], from: number, to: number): Placed[] {
+  const inRange = (i: number) => Number.isInteger(i) && i >= 0 && i < order.length
+  const list = order.map(p => ({ ...p }))
+  if (inRange(from) && inRange(to) && from !== to) {
+    const [moved] = list.splice(from, 1)
+    list.splice(to, 0, moved)
+  }
+  return reflow(list)
+}
+
+export const MIN_W = 2
+export const MIN_H = 2
+export const MAX_H = 20
+
+/** Sets one item's size (rounded, clamped to MIN_W..GRID_COLS and MIN_H..MAX_H), then re-flows. */
+export function resize(order: Placed[], index: number, w: number, h: number): Placed[] {
+  const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, Math.round(v)))
+  const list = order.map(p => ({ ...p }))
+  const item = list[index]
+  if (item) {
+    item.w = clamp(w, MIN_W, GRID_COLS)
+    item.h = clamp(h, MIN_H, MAX_H)
+  }
+  return reflow(list)
 }
