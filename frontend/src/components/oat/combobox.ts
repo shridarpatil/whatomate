@@ -4,7 +4,7 @@ export interface ComboOption {
   hint?: string
 }
 
-export function filterOptions(options: ComboOption[], query: string): ComboOption[] {
+export function filterOptions<T extends ComboOption>(options: T[], query: string): T[] {
   const q = query.trim().toLowerCase()
   if (!q) return options
   return options.filter(

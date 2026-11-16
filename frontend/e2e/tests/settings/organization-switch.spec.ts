@@ -83,7 +83,7 @@ test.describe('Organization Switching (Super Admin)', () => {
     expect(page.url()).toContain('/settings/users')
   })
 
-  test('regular user cannot see organization switcher', async ({ page }) => {
+  test('regular user sees their organization but cannot create one', async ({ page }) => {
     // Login as regular agent
     await page.goto('/login')
     await page.locator('input[type="email"]').fill('agent@test.com')
@@ -91,10 +91,14 @@ test.describe('Organization Switching (Super Admin)', () => {
     await page.locator('button[type="submit"]').click()
     await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 10000 })
 
-    // Regular user should NOT see organization switcher
-    await page.waitForTimeout(1000)
-    const orgSwitcher = page.locator('[data-testid="org-switcher"]')
-    await expect(orgSwitcher).not.toBeVisible()
+    // Everyone sees the current organization (logo + name) in the sidebar...
+    const trigger = page.locator('aside [data-testid="org-switcher"] button[popovertarget]')
+    await expect(trigger).toBeVisible({ timeout: 10000 })
+    await expect(trigger.locator('[data-org-logo]')).toBeVisible()
+
+    // ...but only users with organizations:write get the create item.
+    await trigger.click()
+    await expect(page.getByRole('menuitem', { name: /Create Organization/i })).toHaveCount(0)
   })
 
 })

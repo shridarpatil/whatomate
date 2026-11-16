@@ -714,6 +714,7 @@ export const organizationService = {
     meta_app_id?: string
     meta_config_id?: string
     meta_app_secret?: string
+    logo?: string
   }) => api.put('/org/settings', data),
   uploadOrgAudio: (file: File, type: 'hold_music' | 'ringback') => {
     const formData = new FormData()
@@ -730,6 +731,7 @@ export interface Organization {
   name: string
   slug?: string
   created_at: string
+  logo?: string
 }
 
 export const organizationsService = {

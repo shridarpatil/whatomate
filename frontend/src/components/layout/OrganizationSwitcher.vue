@@ -7,7 +7,8 @@ import Modal from '@/components/oat/Modal.vue'
 import { organizationsService } from '@/services/api'
 import { toast } from '@/lib/toast'
 import { filterOptions } from '@/components/oat/combobox'
-import { Plus, Check, ChevronsUpDown } from '@/lib/icons'
+import { Plus, Check } from '@/lib/icons'
+import { DEFAULT_LOGO } from '@/lib/org-logo'
 
 const { t } = useI18n()
 const organizationsStore = useOrganizationsStore()
@@ -16,16 +17,12 @@ const authStore = useAuthStore()
 const isSuperAdmin = computed(() => authStore.user?.is_super_admin || false)
 const canCreateOrg = computed(() => authStore.hasPermission('organizations', 'write'))
 
-const shouldShowSwitcher = computed(() =>
-  isSuperAdmin.value || organizationsStore.isMultiOrg
-)
-
 // Build the org list depending on user type
 const orgList = computed(() => {
   if (isSuperAdmin.value) {
-    return organizationsStore.organizations.map(org => ({ id: org.id, name: org.name }))
+    return organizationsStore.organizations.map(org => ({ id: org.id, name: org.name, logo: org.logo || DEFAULT_LOGO }))
   }
-  return organizationsStore.myOrganizations.map(org => ({ id: org.organization_id, name: org.name }))
+  return organizationsStore.myOrganizations.map(org => ({ id: org.organization_id, name: org.name, logo: org.logo || DEFAULT_LOGO }))
 })
 
 const currentOrgId = computed(() => {
@@ -65,14 +62,16 @@ const searchInput = ref<HTMLInputElement | null>(null)
 const query = ref('')
 
 const showSearch = computed(() => orgList.value.length > SEARCH_THRESHOLD)
-const currentOrgName = computed(() => orgList.value.find(o => o.id === currentOrgId.value)?.name || '')
+const currentOrg = computed(() => orgList.value.find(o => o.id === currentOrgId.value))
+const currentOrgName = computed(() => currentOrg.value?.name || authStore.user?.organization_name || '')
+const currentLogo = computed(() => currentOrg.value?.logo || DEFAULT_LOGO)
 const triggerLabel = computed(() => {
   if (currentOrgName.value) return currentOrgName.value
   if (organizationsStore.loading) return t('organizations.loading')
   return t('organizations.selectPlaceholder')
 })
 const filteredOrgs = computed(() =>
-  filterOptions(orgList.value.map(o => ({ value: o.id, label: o.name })), query.value),
+  filterOptions(orgList.value.map(o => ({ value: o.id, label: o.name, logo: o.logo })), query.value),
 )
 
 function onToggle(e: Event) {
@@ -157,28 +156,23 @@ async function submitCreateOrg() {
   }
 }
 
-const refreshOrgs = async () => {
-  if (isSuperAdmin.value) {
-    await organizationsStore.fetchOrganizations()
-  } else {
-    await organizationsStore.fetchMyOrganizations()
-  }
-}
+const refreshOrgs = () => organizationsStore.refresh(isSuperAdmin.value)
 </script>
 
 <template>
-  <div v-if="shouldShowSwitcher" class="vstack gap-2 p-4" data-testid="org-switcher">
+  <div class="vstack gap-2 w-100" data-testid="org-switcher">
     <ot-dropdown>
       <button
         type="button"
-        class="outline small w-100 justify-between"
+        class="ghost w-100"
+        data-org-trigger
         :popovertarget="menuId"
         aria-haspopup="menu"
         :aria-label="t('organizations.label') + ': ' + triggerLabel"
         :title="triggerLabel"
       >
-        <span class="truncate">{{ triggerLabel }}</span>
-        <ChevronsUpDown :size="14" aria-hidden="true" />
+        <img :src="currentLogo" alt="" data-org-logo>
+        <strong class="truncate flex-1">{{ triggerLabel }}</strong>
       </button>
       <div :id="menuId" ref="menu" popover class="picker" @toggle="onToggle">
         <input
@@ -201,8 +195,9 @@ const refreshOrgs = async () => {
             :title="org.label"
             @click="selectOrg(org.value)"
           >
+            <img :src="org.logo" alt="" data-org-logo="small">
+            <span class="truncate flex-1">{{ org.label }}</span>
             <Check v-if="org.value === currentOrgId" :size="14" aria-hidden="true" />
-            <span class="truncate">{{ org.label }}</span>
           </button>
           <p v-if="!filteredOrgs.length" role="status" class="text-light p-4">
             {{ organizationsStore.loading ? t('organizations.loading') : orgList.length ? t('common.noResults') : t('organizations.none') }}

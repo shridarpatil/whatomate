@@ -636,3 +636,87 @@ func TestApp_GetOrgCallingConfig_NonExistentOrg(t *testing.T) {
 	assert.Equal(t, 3600, maxDuration)
 	assert.Equal(t, 60, transferTimeout)
 }
+
+// --- Organization logo ---
+
+const testLogo = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUg=="
+
+func TestApp_UpdateOrganizationSettings_Logo(t *testing.T) {
+	t.Parallel()
+
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	role := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "settings-writer", []string{"settings.general:read", "settings.general:write"})
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
+
+	// Upload
+	req := testutil.NewJSONRequest(t, map[string]any{"logo": testLogo})
+	testutil.SetAuthContext(req, org.ID, user.ID)
+	require.NoError(t, app.UpdateOrganizationSettings(req))
+	require.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	// Returned by settings and the current-organization endpoint
+	req = testutil.NewGETRequest(t)
+	testutil.SetAuthContext(req, org.ID, user.ID)
+	require.NoError(t, app.GetOrganizationSettings(req))
+	var settings struct {
+		Data struct {
+			Settings struct {
+				Logo string `json:"logo"`
+			} `json:"settings"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(testutil.GetResponseBody(req), &settings))
+	assert.Equal(t, testLogo, settings.Data.Settings.Logo)
+
+	req = testutil.NewGETRequest(t)
+	testutil.SetAuthContext(req, org.ID, user.ID)
+	require.NoError(t, app.GetCurrentOrganization(req))
+	var current struct {
+		Data handlers.OrganizationResponse `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(testutil.GetResponseBody(req), &current))
+	assert.Equal(t, testLogo, current.Data.Logo)
+
+	// Remove
+	req = testutil.NewJSONRequest(t, map[string]any{"logo": ""})
+	testutil.SetAuthContext(req, org.ID, user.ID)
+	require.NoError(t, app.UpdateOrganizationSettings(req))
+	require.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+	var updated models.Organization
+	require.NoError(t, app.DB.Where("id = ?", org.ID).First(&updated).Error)
+	_, has := updated.Settings["logo"]
+	assert.False(t, has)
+}
+
+func TestApp_UpdateOrganizationSettings_LogoInvalid(t *testing.T) {
+	t.Parallel()
+
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	role := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "settings-writer", []string{"settings.general:write"})
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
+
+	req := testutil.NewJSONRequest(t, map[string]any{"logo": "data:image/svg+xml;base64,PHN2Zz4="})
+	testutil.SetAuthContext(req, org.ID, user.ID)
+	require.NoError(t, app.UpdateOrganizationSettings(req))
+	assert.Equal(t, fasthttp.StatusBadRequest, testutil.GetResponseStatusCode(req))
+}
+
+func TestApp_UpdateOrganizationSettings_LogoNeedsPermission(t *testing.T) {
+	t.Parallel()
+
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	role := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "settings-reader", []string{"settings.general:read"})
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
+
+	req := testutil.NewJSONRequest(t, map[string]any{"logo": testLogo})
+	testutil.SetAuthContext(req, org.ID, user.ID)
+	require.NoError(t, app.UpdateOrganizationSettings(req))
+	assert.Equal(t, fasthttp.StatusForbidden, testutil.GetResponseStatusCode(req))
+
+	var unchanged models.Organization
+	require.NoError(t, app.DB.Where("id = ?", org.ID).First(&unchanged).Error)
+	assert.Empty(t, unchanged.Settings["logo"])
+}

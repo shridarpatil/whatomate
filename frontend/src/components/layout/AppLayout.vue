@@ -126,15 +126,10 @@ const handleLogout = async () => {
     </header>
 
     <aside data-sidebar :aria-label="t('nav.sidebar')">
+      <!-- Current organization (logo + name); opens the organization menu -->
       <header>
-        <RouterLink to="/" class="hstack gap-2">
-          <MessageSquare :size="16" aria-hidden="true" />
-          <strong>Whatomate</strong>
-        </RouterLink>
+        <OrganizationSwitcher />
       </header>
-
-      <!-- Organization Switcher (Super Admin / multi-org only) -->
-      <OrganizationSwitcher />
 
       <nav :aria-label="t('nav.mainNavigation')">
         <ul>

@@ -44,6 +44,7 @@
   /* Popover pickers (emoji, templates, canned responses): fixed width, bounded list. */
   .picker { width: min(20rem, 100vw - 2rem); }
   .picker-list { max-height: 18rem; }
+  .picker [role=menuitem] { justify-content: flex-start; text-align: start; }
   .media-fit { max-width: 100%; max-height: 100%; object-fit: contain; }
   /* A floating pill centred over the top edge of a positioned area. */
   .overlay-top { position: absolute; inset-inline: 0; top: var(--space-2); z-index: 1; display: flex; justify-content: center; pointer-events: none; }

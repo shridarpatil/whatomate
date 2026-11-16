@@ -8,9 +8,12 @@ import { Settings, Bell, Globe, Phone, Upload, Play, Pause, Music } from '@/lib/
 import { usersService, organizationService } from '@/services/api'
 import { useAuthStore, type CallRingtone } from '@/stores/auth'
 import { previewRingtone } from '@/lib/ringtone'
+import { DEFAULT_LOGO, toLogoDataUrl } from '@/lib/org-logo'
+import { useOrganizationsStore } from '@/stores/organizations'
 
 const { t } = useI18n()
 const authStore = useAuthStore()
+const organizationsStore = useOrganizationsStore()
 
 // The active org may be overridden by the X-Organization-ID header
 // (localStorage.selected_organization_id) when a super admin switches orgs.
@@ -22,6 +25,42 @@ const orgID = computed(
 )
 const userID = computed(() => authStore.user?.id || '')
 const canWriteAccounts = computed(() => authStore.hasPermission('accounts', 'write'))
+const canWriteGeneral = computed(() => authStore.hasPermission('settings.general', 'write'))
+
+// Organization logo: saved as soon as it is picked or removed, then the sidebar refreshes.
+const orgLogo = ref('')
+const logoInput = ref<HTMLInputElement | null>(null)
+const isSavingLogo = ref(false)
+
+async function saveLogo(logo: string) {
+  isSavingLogo.value = true
+  try {
+    await organizationService.updateSettings({ logo })
+    orgLogo.value = logo
+    toast.success(t(logo ? 'settings.logoSaved' : 'settings.logoRemoved'))
+    refreshActivityLog(generalLogKey)
+    await organizationsStore.refresh(!!authStore.user?.is_super_admin)
+  } catch {
+    toast.error(t('common.failedSave', { resource: t('settings.organizationLogo') }))
+  } finally {
+    isSavingLogo.value = false
+  }
+}
+
+async function onLogoPicked(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+  let logo: string
+  try {
+    logo = await toLogoDataUrl(file)
+  } catch {
+    toast.error(t('settings.logoInvalid'))
+    return
+  }
+  await saveLogo(logo)
+}
 
 const isSubmitting = ref(false)
 const isLoading = ref(true)
@@ -95,6 +134,7 @@ onMounted(async () => {
         meta_app_secret: '',
         has_meta_app_secret: orgData.settings?.has_meta_app_secret || false
       }
+      orgLogo.value = orgData.settings?.logo || ''
       callingSettings.value = {
         calling_enabled: orgData.settings?.calling_enabled || false,
         max_call_duration: orgData.settings?.max_call_duration || 300,
@@ -148,6 +188,7 @@ async function saveGeneralSettings() {
       generalSettings.value.has_meta_app_secret = orgData.settings?.has_meta_app_secret || false
     }
     refreshActivityLog(generalLogKey)
+    organizationsStore.refresh(!!authStore.user?.is_super_admin)
   } catch (error) {
     toast.error(t('common.failedSave', { resource: t('resources.settings') }))
   } finally {
@@ -295,10 +336,32 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
                   </label>
                 </div>
               </div>
-              <div data-field>
-                <label class="hstack gap-1"><Globe :size="16" /> {{ $t('settings.language') }}</label>
-                <LanguageSwitcher />
-                <small data-hint>{{ $t('settings.languageDesc') }}</small>
+              <div class="row">
+                <div class="col-6">
+                  <div data-field>
+                    <label class="hstack gap-1"><Globe :size="16" /> {{ $t('settings.language') }}</label>
+                    <LanguageSwitcher />
+                    <small data-hint>{{ $t('settings.languageDesc') }}</small>
+                  </div>
+                </div>
+                <div class="col-6">
+                  <div data-field>
+                    <span>{{ $t('settings.organizationLogo') }}</span>
+                    <div class="hstack items-center gap-4">
+                      <img :src="orgLogo || DEFAULT_LOGO" alt="" data-org-logo="large">
+                      <template v-if="canWriteGeneral">
+                        <button type="button" class="outline small" :aria-busy="isSavingLogo" :disabled="isSavingLogo" @click="logoInput?.click()">
+                          <Upload :size="14" /> {{ $t('common.upload') }}
+                        </button>
+                        <button v-if="orgLogo" type="button" class="ghost small" :disabled="isSavingLogo" @click="saveLogo('')">
+                          {{ $t('common.remove') }}
+                        </button>
+                        <input ref="logoInput" type="file" accept="image/png,image/jpeg,image/webp" hidden :aria-label="$t('settings.organizationLogo')" @change="onLogoPicked">
+                      </template>
+                    </div>
+                    <small data-hint>{{ $t('settings.organizationLogoHint') }}</small>
+                  </div>
+                </div>
               </div>
               <hr>
             <label data-field>
