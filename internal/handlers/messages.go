@@ -785,10 +785,14 @@ func (a *App) SendTemplateMessage(r *fastglue.Request) error {
 		}
 		contact = c
 	} else {
-		// Find or create contact from phone number
+		// Find or create contact from phone number. Use Unscoped so a
+		// previously soft-deleted contact (same org+phone) is found and
+		// restored instead of triggering a unique-constraint violation on
+		// idx_contacts_org_phone, which is not partial on deleted_at. Mirrors
+		// the restore logic in CreateContact.
 		phoneNumber := req.PhoneNumber
 		var c models.Contact
-		err := a.DB.Where("phone_number = ? AND organization_id = ?", phoneNumber, orgID).First(&c).Error
+		err := a.DB.Unscoped().Where("phone_number = ? AND organization_id = ?", phoneNumber, orgID).First(&c).Error
 		if err != nil {
 			// Contact not found, create new one
 			c = models.Contact{
@@ -801,6 +805,15 @@ func (a *App) SendTemplateMessage(r *fastglue.Request) error {
 				return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create contact", nil, "")
 			}
 			a.Log.Info("Contact created from API", "contact_id", c.ID, "phone", phoneNumber)
+		} else if c.DeletedAt.Valid {
+			// Soft-deleted contact → restore it so the unique phone index and
+			// the template send both succeed.
+			if err := a.DB.Unscoped().Model(&c).Update("deleted_at", nil).Error; err != nil {
+				a.Log.Error("Failed to restore contact", "error", err, "phone", phoneNumber)
+				return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to restore contact", nil, "")
+			}
+			c.DeletedAt.Valid = false
+			a.Log.Info("Contact restored from API", "contact_id", c.ID, "phone", phoneNumber)
 		}
 		contact = &c
 	}
