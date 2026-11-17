@@ -288,3 +288,106 @@ func TestSLAEscalationFiresWhenNoAgentResponse(t *testing.T) {
 	assert.Equal(t, 1, updated.SLA.EscalationLevel, "escalation level should increase to 1")
 	require.NotNil(t, updated.SLA.EscalatedAt)
 }
+
+// --- backfillMissingDeadlines ---
+
+// TestBackfillMissingDeadlines_StampsTransfersOpenedBeforeSLA covers enabling SLA
+// on a deployment that already has open conversations. Those transfers carry no
+// deadlines, and every SLA check filters on "deadline IS NOT NULL", so without
+// the backfill they can never be auto-closed, escalated or marked breached.
+func TestBackfillMissingDeadlines_StampsTransfersOpenedBeforeSLA(t *testing.T) {
+	app := newSLATestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	contact := testutil.CreateTestContact(t, app.DB, org.ID)
+	agent := testutil.CreateTestUser(t, app.DB, org.ID)
+	account := testutil.CreateTestWhatsAppAccount(t, app.DB, org.ID)
+
+	// Opened three days ago, while SLA was still off: no deadlines at all.
+	transfer := createSLATestTransfer(t, app, org.ID, contact.ID, agent.ID, account.Name, models.SLATracking{})
+	createdAt := time.Now().Add(-72 * time.Hour)
+	require.NoError(t, app.DB.Model(transfer).Update("created_at", createdAt).Error)
+
+	settings := models.ChatbotSettings{
+		OrganizationID: org.ID,
+		SLA: models.SLAConfig{
+			Enabled:           true,
+			AutoCloseHours:    24,
+			EscalationMinutes: 30,
+			ResponseMinutes:   15,
+		},
+	}
+
+	proc := NewSLAProcessor(app, time.Minute)
+	proc.backfillMissingDeadlines(org.ID, settings)
+
+	var updated models.AgentTransfer
+	require.NoError(t, app.DB.Where("id = ?", transfer.ID).First(&updated).Error)
+
+	require.NotNil(t, updated.SLA.ExpiresAt, "expires_at must be stamped or auto-close can never see this transfer")
+	assert.WithinDuration(t, createdAt.Add(24*time.Hour), *updated.SLA.ExpiresAt, time.Minute)
+	require.NotNil(t, updated.SLA.EscalationAt)
+	assert.WithinDuration(t, createdAt.Add(30*time.Minute), *updated.SLA.EscalationAt, time.Minute)
+	require.NotNil(t, updated.SLA.ResponseDeadline)
+	assert.WithinDuration(t, createdAt.Add(15*time.Minute), *updated.SLA.ResponseDeadline, time.Minute)
+
+	assert.True(t, updated.SLA.ExpiresAt.Before(time.Now()),
+		"a transfer open for three days must land past its 24h deadline, ready to be closed")
+}
+
+// TestBackfillMissingDeadlines_LeavesExistingDeadlines guards idempotency: the
+// backfill runs on every tick, so it must never pull back a deadline that agent
+// activity already extended.
+func TestBackfillMissingDeadlines_LeavesExistingDeadlines(t *testing.T) {
+	app := newSLATestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	contact := testutil.CreateTestContact(t, app.DB, org.ID)
+	agent := testutil.CreateTestUser(t, app.DB, org.ID)
+	account := testutil.CreateTestWhatsAppAccount(t, app.DB, org.ID)
+
+	extended := time.Now().Add(12 * time.Hour)
+	transfer := createSLATestTransfer(t, app, org.ID, contact.ID, agent.ID, account.Name, models.SLATracking{
+		ExpiresAt: &extended,
+	})
+	require.NoError(t, app.DB.Model(transfer).Update("created_at", time.Now().Add(-72*time.Hour)).Error)
+
+	settings := models.ChatbotSettings{
+		OrganizationID: org.ID,
+		SLA:            models.SLAConfig{Enabled: true, AutoCloseHours: 24},
+	}
+
+	proc := NewSLAProcessor(app, time.Minute)
+	proc.backfillMissingDeadlines(org.ID, settings)
+
+	var updated models.AgentTransfer
+	require.NoError(t, app.DB.Where("id = ?", transfer.ID).First(&updated).Error)
+	require.NotNil(t, updated.SLA.ExpiresAt)
+	assert.WithinDuration(t, extended, *updated.SLA.ExpiresAt, time.Second,
+		"an already stamped deadline must survive the backfill untouched")
+}
+
+// TestBackfillMissingDeadlines_SkipsUnconfiguredWindows checks that a window left
+// at zero stays unset rather than collapsing to the transfer's creation time.
+func TestBackfillMissingDeadlines_SkipsUnconfiguredWindows(t *testing.T) {
+	app := newSLATestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	contact := testutil.CreateTestContact(t, app.DB, org.ID)
+	agent := testutil.CreateTestUser(t, app.DB, org.ID)
+	account := testutil.CreateTestWhatsAppAccount(t, app.DB, org.ID)
+
+	transfer := createSLATestTransfer(t, app, org.ID, contact.ID, agent.ID, account.Name, models.SLATracking{})
+
+	settings := models.ChatbotSettings{
+		OrganizationID: org.ID,
+		// Auto-close only; escalation and response windows disabled.
+		SLA: models.SLAConfig{Enabled: true, AutoCloseHours: 24},
+	}
+
+	proc := NewSLAProcessor(app, time.Minute)
+	proc.backfillMissingDeadlines(org.ID, settings)
+
+	var updated models.AgentTransfer
+	require.NoError(t, app.DB.Where("id = ?", transfer.ID).First(&updated).Error)
+	assert.NotNil(t, updated.SLA.ExpiresAt)
+	assert.Nil(t, updated.SLA.EscalationAt, "a disabled window must not be backfilled")
+	assert.Nil(t, updated.SLA.ResponseDeadline, "a disabled window must not be backfilled")
+}
