@@ -10,7 +10,8 @@ import (
 // Merges behaviors from both handler and worker implementations:
 //   - Normalizes phone (strips leading "+")
 //   - Tries both normalized and +prefix forms
-//   - Updates profile name if changed
+//   - Refreshes the profile name from WhatsApp, unless a user set it manually
+//     (Contact.NameManuallySet)
 //   - Handles race conditions on create by re-fetching
 //   - Restores soft-deleted contacts if found
 //
@@ -30,10 +31,7 @@ func GetOrCreateContact(db *gorm.DB, orgID uuid.UUID, phoneNumber, profileName s
 			db.Unscoped().Model(&contact).Update("deleted_at", nil)
 			contact.DeletedAt.Valid = false
 		}
-		// Update profile name if changed
-		if profileName != "" && contact.ProfileName != profileName {
-			db.Model(&contact).Update("profile_name", profileName)
-		}
+		refreshProfileName(db, &contact, profileName)
 		return &contact, false, nil
 	}
 
@@ -44,9 +42,7 @@ func GetOrCreateContact(db *gorm.DB, orgID uuid.UUID, phoneNumber, profileName s
 			db.Unscoped().Model(&contact).Update("deleted_at", nil)
 			contact.DeletedAt.Valid = false
 		}
-		if profileName != "" && contact.ProfileName != profileName {
-			db.Model(&contact).Update("profile_name", profileName)
-		}
+		refreshProfileName(db, &contact, profileName)
 		return &contact, false, nil
 	}
 
@@ -70,6 +66,21 @@ func GetOrCreateContact(db *gorm.DB, orgID uuid.UUID, phoneNumber, profileName s
 		return nil, false, err
 	}
 	return &contact, true, nil
+}
+
+// refreshProfileName syncs the stored profile name with the one WhatsApp reports.
+//
+// It is a no-op when the name was set manually (via the UI or an import): the
+// contact list is a place users curate, and GetOrCreateContact runs on every
+// inbound message, so without this guard a single reply from the contact would
+// silently revert any name a user had typed.
+func refreshProfileName(db *gorm.DB, contact *models.Contact, profileName string) {
+	if contact.NameManuallySet || profileName == "" || contact.ProfileName == profileName {
+		return
+	}
+	if err := db.Model(contact).Update("profile_name", profileName).Error; err == nil {
+		contact.ProfileName = profileName
+	}
 }
 
 // FindContact finds a contact for the given phone number with both forms (normalized and +prefix).

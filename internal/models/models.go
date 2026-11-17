@@ -344,9 +344,13 @@ func (a *WhatsAppAccount) DecryptSecrets(encryptionKey string) {
 // Contact represents a WhatsApp contact/profile
 type Contact struct {
 	BaseModel
-	OrganizationID     uuid.UUID  `gorm:"type:uuid;index;not null" json:"organization_id"`
-	PhoneNumber        string     `gorm:"size:50;not null" json:"phone_number"`
-	ProfileName        string     `gorm:"size:255" json:"profile_name"`
+	OrganizationID uuid.UUID `gorm:"type:uuid;index;not null" json:"organization_id"`
+	PhoneNumber    string    `gorm:"size:50;not null" json:"phone_number"`
+	ProfileName    string    `gorm:"size:255" json:"profile_name"`
+	// NameManuallySet marks ProfileName as edited by a user (via the UI or an
+	// import) rather than taken from the WhatsApp profile. When true, incoming
+	// webhooks must not overwrite it with the name WhatsApp reports.
+	NameManuallySet    bool       `gorm:"default:false" json:"name_manually_set"`
 	WhatsAppAccount    string     `gorm:"size:100;index" json:"whatsapp_account"` // References WhatsAppAccount.Name
 	AssignedUserID     *uuid.UUID `gorm:"type:uuid;index" json:"assigned_user_id,omitempty"`
 	LastMessageAt      *time.Time `json:"last_message_at,omitempty"`
