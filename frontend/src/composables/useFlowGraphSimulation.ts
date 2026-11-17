@@ -9,6 +9,7 @@ import type {
   UserInput,
 } from '@/types/flow-preview'
 import { useApiMocker } from './useApiMocker'
+import { buttonsExpectReply } from '@/lib/whatsappButtons'
 
 function generateId(): string {
   return Math.random().toString(36).substring(2, 9)
@@ -306,6 +307,8 @@ export function useFlowGraphSimulation(
     const body = interpolate(stringField(node, 'body', 'message', 'text') || node.label, state.variables)
     const buttons = (node.config?.buttons as ButtonConfig[] | undefined) || []
     addMessage('bot', body, { stepName: node.id, buttons })
+    // Mirror the backend runner: a CTA-only node has no reply to wait for.
+    if (buttons.length > 0 && !buttonsExpectReply(buttons)) return 'default'
     state.status = 'waiting_input'
     return '__yield__'
   }
