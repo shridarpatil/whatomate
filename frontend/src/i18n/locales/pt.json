@@ -148,7 +148,7 @@
     "logoutSuccess": "Desconectado com sucesso",
     "invalidCredentials": "Credenciais inválidas",
     "sessionExpired": "Sua sessão expirou. Por favor, entre novamente.",
-    "welcomeTitle": "Bem-vindo ao Whatomate",
+    "welcomeTitle": "Bem-vindo ao {name}",
     "welcomeSubtitle": "Digite suas credenciais para acessar sua conta",
     "emailPlaceholder": "nome{'@'}exemplo.com",
     "enterEmailPassword": "Digite seu e-mail e senha",

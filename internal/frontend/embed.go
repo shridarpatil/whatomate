@@ -2,6 +2,7 @@ package frontend
 
 import (
 	"embed"
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"net/http"
@@ -37,10 +38,16 @@ var distFS embed.FS
 // cachedIndexHTML stores the modified index.html with injected base path
 var cachedIndexHTML []byte
 
+// Branding is injected into index.html as window.__BRANDING__ for the login page.
+type Branding struct {
+	Name    string `json:"name"`
+	LogoURL string `json:"logo_url"`
+}
+
 // Handler returns a fasthttp handler that serves the embedded frontend files
 // basePath should be empty string for root deployment or "/subpath" for subdirectory
 // If frontend is not embedded, returns a handler that shows a helpful message
-func Handler(basePath string) fasthttp.RequestHandler {
+func Handler(basePath string, branding Branding) fasthttp.RequestHandler {
 	// Normalize base path
 	basePath = strings.TrimSuffix(basePath, "/")
 
@@ -65,9 +72,14 @@ func Handler(basePath string) fasthttp.RequestHandler {
 	baseTag := fmt.Sprintf(`<head><base href="%s">`, baseHref)
 	modifiedHTML := strings.Replace(string(indexContent), "<head>", baseTag, 1)
 
-	// Inject base path script before </head>
-	basePathScript := fmt.Sprintf(`<script>window.__BASE_PATH__ = "%s";</script></head>`, basePath)
-	cachedIndexHTML = []byte(strings.Replace(modifiedHTML, "</head>", basePathScript, 1))
+	// Inject base path and branding before </head>. json.Marshal escapes <, > and &,
+	// so config values cannot break out of the script tag.
+	brandingJSON, err := json.Marshal(branding)
+	if err != nil {
+		return notEmbeddedHandler("Failed to encode branding: " + err.Error())
+	}
+	headScript := fmt.Sprintf(`<script>window.__BASE_PATH__ = "%s"; window.__BRANDING__ = %s;</script></head>`, basePath, brandingJSON)
+	cachedIndexHTML = []byte(strings.Replace(modifiedHTML, "</head>", headScript, 1))
 
 	// Create file server
 	fileServer := http.FileServer(http.FS(distSubFS))
