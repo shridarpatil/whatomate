@@ -126,7 +126,7 @@
     "logoutSuccess": "வெற்றிகரமாக வெளியேறினீர்கள்",
     "invalidCredentials": "தவறான சான்றுகள்",
     "sessionExpired": "உங்கள் அமர்வு காலாவதியானது. மீண்டும் உள்நுழைக.",
-    "welcomeTitle": "வாட்ஸ்மேட்டுக்கு வரவேற்கிறோம்",
+    "welcomeTitle": "{name}-க்கு வரவேற்கிறோம்",
     "welcomeSubtitle": "உங்கள் கணக்கை அணுக உங்கள் சான்றுகளை உள்ளிடுக",
     "emailPlaceholder": "name{'@'}example.com",
     "enterEmailPassword": "மின்னஞ்சல் மற்றும் கடவுச்சொல்லை உள்ளிடுக",

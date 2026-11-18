@@ -148,7 +148,7 @@
     "logoutSuccess": "تم تسجيل الخروج بنجاح",
     "invalidCredentials": "بيانات الاعتماد غير صالحة",
     "sessionExpired": "انتهت صلاحية جلستك. يرجى تسجيل الدخول مرة أخرى.",
-    "welcomeTitle": "مرحباً بك في Whatomate",
+    "welcomeTitle": "مرحباً بك في {name}",
     "welcomeSubtitle": "أدخل بياناتك للوصول إلى حسابك",
     "emailPlaceholder": "name{'@'}example.com",
     "enterEmailPassword": "يرجى إدخال البريد الإلكتروني وكلمة السر",

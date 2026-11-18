@@ -9,6 +9,11 @@ import { MessageSquare } from '@/lib/icons'
 
 const { t } = useI18n()
 
+// Injected into index.html by the server from [app] config; absent in the Vite dev server.
+const branding: { name?: string; logo_url?: string } = (window as any).__BRANDING__ ?? {}
+const appName = branding.name || 'Whatomate'
+const logoUrl = branding.logo_url || ''
+
 interface SSOProvider {
   provider: string
   name: string
@@ -80,11 +85,12 @@ const initiateSSO = (provider: string) => {
 
 <template>
   <main class="flex items-center justify-center h-screen scroll-y p-4">
-    <div class="auth-panel">
+    <div class="auth-panel vstack gap-4">
         <article class="card">
           <header class="vstack gap-2 items-center align-center mb-6">
-            <MessageSquare :size="32" />
-            <h2>{{ $t('auth.welcomeTitle') }}</h2>
+            <img v-if="logoUrl" :src="logoUrl" :alt="appName" height="48" />
+            <MessageSquare v-else :size="32" />
+            <h2>{{ $t('auth.welcomeTitle', { name: appName }) }}</h2>
             <p class="text-light">{{ $t('auth.welcomeSubtitle') }}</p>
           </header>
 
@@ -141,6 +147,10 @@ const initiateSSO = (provider: string) => {
             </p>
           </footer>
         </article>
+        <p class="text-light align-center">
+          {{ $t('auth.poweredBy') }}
+          <a href="https://whatomate.io/" target="_blank" rel="noopener noreferrer">Whatomate</a>
+        </p>
     </div>
   </main>
 </template>

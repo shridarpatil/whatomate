@@ -126,7 +126,7 @@
     "logoutSuccess": "सफलतापूर्वक लॉगआउट किया गया",
     "invalidCredentials": "अमान्य क्रेडेंशियल",
     "sessionExpired": "आपका सत्र समाप्त हो गया है। कृपया फिर से लॉगिन करें।",
-    "welcomeTitle": "Whatomate में आपका स्वागत है",
+    "welcomeTitle": "{name} में आपका स्वागत है",
     "welcomeSubtitle": "अपने खाते तक पहुँचने के लिए क्रेडेंशियल दर्ज करें",
     "emailPlaceholder": "name@example.com",
     "enterEmailPassword": "कृपया ईमेल और पासवर्ड दर्ज करें",
