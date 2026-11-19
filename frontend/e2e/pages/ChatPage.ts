@@ -19,17 +19,17 @@ export class ChatPage extends BasePage {
 
   constructor(page: Page) {
     super(page)
-    this.contactList = page.locator('.contacts-list, [data-testid="contacts"]').first()
-    this.searchInput = page.locator('input[placeholder*="Search"]').first()
-    this.messageInput = page.locator('textarea[placeholder*="message"], input[placeholder*="message"]')
-    this.sendButton = page.getByRole('button').filter({ has: page.locator('.lucide-send') })
-    this.attachButton = page.getByRole('button').filter({ has: page.locator('.lucide-paperclip') })
-    this.emojiButton = page.getByRole('button').filter({ has: page.locator('.lucide-smile') })
+    this.contactList = page.locator('[data-testid="contacts"]')
+    this.searchInput = page.locator('main').getByRole('searchbox', { name: 'Search contacts' })
+    this.messageInput = page.getByRole('textbox', { name: 'Type a message' })
+    this.sendButton = page.locator('form button[type="submit"]')
+    this.attachButton = page.getByRole('button', { name: 'Attach file' })
+    this.emojiButton = page.getByRole('button', { name: 'Emoji', exact: true })
     this.cannedResponsesButton = page.locator('#canned-response-picker-button')
-    this.contactInfoPanel = page.locator('.contact-info, [data-testid="contact-info"]')
-    this.messageList = page.locator('.messages-container, [data-testid="messages"]')
-    this.assignDialog = page.locator('[role="dialog"][data-state="open"]')
-    this.mediaDialog = page.locator('[role="dialog"][data-state="open"]').filter({ hasText: /Send|Upload|Media/i })
+    this.contactInfoPanel = page.locator('[data-testid="contact-info"]')
+    this.messageList = page.locator('[data-testid="messages"]')
+    this.assignDialog = page.locator('dialog[open]')
+    this.mediaDialog = page.locator('dialog[open]').filter({ hasText: /Send|Upload|Media/i })
   }
 
   async goto(contactId?: string) {
@@ -48,12 +48,12 @@ export class ChatPage extends BasePage {
   }
 
   async selectContact(name: string) {
-    await this.page.locator('.contact-item, [data-testid="contact"]').filter({ hasText: name }).click()
+    await this.page.locator('[data-testid="contact"]').filter({ hasText: name }).click()
     await this.page.waitForLoadState('networkidle')
   }
 
   getContactItem(name: string): Locator {
-    return this.page.locator('.contact-item, [data-testid="contact"]').filter({ hasText: name })
+    return this.page.locator('[data-testid="contact"]').filter({ hasText: name })
   }
 
   // Message helpers
@@ -67,11 +67,11 @@ export class ChatPage extends BasePage {
   }
 
   getMessageBubble(text: string): Locator {
-    return this.messageList.locator('.message-bubble, [data-testid="message"]').filter({ hasText: text })
+    return this.messageList.locator('[data-testid="message"]').filter({ hasText: text })
   }
 
   async getLastMessage(): Promise<string> {
-    const messages = this.messageList.locator('.message-bubble, [data-testid="message"]')
+    const messages = this.messageList.locator('[data-testid="message"]')
     const lastMessage = messages.last()
     return await lastMessage.textContent() || ''
   }
@@ -92,7 +92,7 @@ export class ChatPage extends BasePage {
   }
 
   async selectEmoji(emoji: string) {
-    await this.page.locator(`button:has-text("${emoji}")`).click()
+    await this.page.locator(`[popover]:popover-open button:has-text("${emoji}")`).click()
   }
 
   // Canned responses helpers
@@ -101,12 +101,12 @@ export class ChatPage extends BasePage {
   }
 
   async selectCannedResponse(shortcut: string) {
-    await this.page.locator('[role="option"], .canned-item').filter({ hasText: shortcut }).click()
+    await this.getCannedPickerItem(shortcut).click()
   }
 
-  /** Picker items render as full-width buttons inside the popover. */
+  /** Picker items are [data-picker-item] buttons inside the picker popover. */
   getCannedPickerItem(name: string): Locator {
-    return this.page.locator('button.w-full.text-left').filter({ hasText: name })
+    return this.page.locator('[data-picker="canned-responses"] [data-picker-item]').filter({ hasText: name })
   }
 
   async selectCannedPickerItem(name: string) {
@@ -123,7 +123,7 @@ export class ChatPage extends BasePage {
   }
 
   get cannedDialogParamInputs(): Locator {
-    return this.cannedDialog.locator('input.canned-response-param')
+    return this.cannedDialog.locator('input[data-canned-param]')
   }
 
   cannedDialogParamInput(name: string): Locator {
@@ -152,17 +152,23 @@ export class ChatPage extends BasePage {
   }
 
   // Contact actions
+  get chatHeader(): Locator {
+    return this.page.locator('[data-chat-header]')
+  }
+
   async openContactInfo() {
-    await this.page.getByRole('button').filter({ has: this.page.locator('.lucide-info') }).click()
+    await this.page.locator('#info-button').click()
   }
 
   async assignContact() {
-    await this.page.getByRole('button').filter({ has: this.page.locator('.lucide-user-plus') }).click()
+    await this.chatHeader.getByRole('button', { name: 'Assign to agent' }).click()
     await this.assignDialog.waitFor({ state: 'visible' })
   }
 
+  /** Transfer lives in the header's "Contact Options" menu. */
   async transferToAgent() {
-    await this.page.getByRole('button', { name: /Transfer/i }).click()
+    await this.chatHeader.getByRole('button', { name: 'Contact Options' }).click()
+    await this.page.getByRole('menuitem', { name: /Transfer/i }).click()
   }
 
   async resumeChatbot() {
@@ -170,9 +176,9 @@ export class ChatPage extends BasePage {
   }
 
   // Assign dialog helpers
+  /** Toggling an agent's switch on assigns immediately and closes the dialog. */
   async selectAgentInAssignDialog(agentName: string) {
-    await this.assignDialog.locator('button[role="combobox"]').click()
-    await this.page.locator('[role="option"]').filter({ hasText: agentName }).click()
+    await this.assignDialog.getByRole('switch', { name: agentName }).click()
   }
 
   async confirmAssignment() {
@@ -180,7 +186,7 @@ export class ChatPage extends BasePage {
   }
 
   async cancelAssignment() {
-    await this.assignDialog.getByRole('button', { name: /Cancel/i }).click()
+    await this.assignDialog.getByRole('button', { name: 'Close' }).click()
     await this.assignDialog.waitFor({ state: 'hidden' })
   }
 
@@ -188,15 +194,15 @@ export class ChatPage extends BasePage {
   async reactToMessage(messageText: string, reaction: string) {
     const message = this.getMessageBubble(messageText)
     await message.hover()
-    await message.locator('button').filter({ has: this.page.locator('.lucide-smile') }).click()
-    await this.page.locator(`button:has-text("${reaction}")`).click()
+    await message.getByRole('button', { name: 'Add reaction' }).click()
+    await this.page.locator(`[popover]:popover-open button:has-text("${reaction}")`).click()
   }
 
   // Reply to message
   async replyToMessage(messageText: string, replyText: string) {
     const message = this.getMessageBubble(messageText)
     await message.hover()
-    await message.locator('button').filter({ has: this.page.locator('.lucide-reply') }).click()
+    await message.getByRole('button', { name: 'Reply', exact: true }).click()
     await this.sendMessage(replyText)
   }
 
@@ -235,20 +241,18 @@ export class ChatPage extends BasePage {
   }
 
   getNoteCard(content: string): Locator {
-    return this.notesPanel.locator('.group').filter({ hasText: content }).first()
+    return this.notesPanel.locator('[data-note]').filter({ hasText: content }).first()
   }
 
   async editNote(oldContent: string, newContent: string) {
     const noteCard = this.getNoteCard(oldContent)
     await noteCard.scrollIntoViewIfNeeded()
     await noteCard.hover()
-    // Action buttons use group-hover opacity — force click to bypass visibility check
-    const actionBtns = noteCard.locator('button.h-5.w-5')
-    await actionBtns.first().click({ force: true })
+    await noteCard.getByRole('button', { name: 'Edit' }).click()
     // After clicking edit, the text moves from <p> to textarea value,
     // so the hasText-based noteCard locator becomes stale.
     // Find the edit textarea + Save button directly in the panel.
-    const editCard = this.notesPanel.locator('.group').filter({ has: this.page.getByRole('button', { name: /Save/i }) })
+    const editCard = this.notesPanel.locator('[data-note]').filter({ has: this.page.getByRole('button', { name: /Save/i }) })
     const editTextarea = editCard.locator('textarea')
     await editTextarea.waitFor({ state: 'visible', timeout: 5000 })
     await editTextarea.fill(newContent)
@@ -259,30 +263,28 @@ export class ChatPage extends BasePage {
     const noteCard = this.getNoteCard(content)
     await noteCard.scrollIntoViewIfNeeded()
     await noteCard.hover()
-    // Action buttons use group-hover opacity — force click
-    const actionBtns = noteCard.locator('button.h-5.w-5')
-    await actionBtns.last().click({ force: true })
+    await noteCard.getByRole('button', { name: 'Delete' }).click()
   }
 
   // Account tabs helpers
   get accountTabsContainer(): Locator {
-    return this.page.locator('[class*="flex-shrink-0"]').filter({ has: this.page.locator('button') }).filter({ hasText: /.+/ }).last()
+    return this.page.getByRole('tablist', { name: 'WhatsApp Accounts' })
   }
 
   getAccountTab(accountName: string): Locator {
-    return this.page.locator('button.rounded-md.text-xs').filter({ hasText: accountName })
+    return this.accountTabsContainer.getByRole('tab', { name: accountName })
   }
 
   get accountTabs(): Locator {
-    return this.page.locator('button.rounded-md.text-xs.font-medium')
+    return this.accountTabsContainer.getByRole('tab')
   }
 
   get activeAccountTab(): Locator {
-    return this.page.locator('button.rounded-md.text-xs[class*="bg-emerald"]')
+    return this.accountTabsContainer.locator('[role="tab"][aria-selected="true"]')
   }
 
   get inactiveAccountTabs(): Locator {
-    return this.page.locator('button.rounded-md.text-xs:not([class*="bg-emerald"])')
+    return this.accountTabsContainer.locator('[role="tab"][aria-selected="false"]')
   }
 
   async switchAccount(accountName: string) {
@@ -291,9 +293,9 @@ export class ChatPage extends BasePage {
   }
 
   // Custom actions
+  /** Custom actions are icon buttons in the chat header, named by the action. */
   async executeCustomAction(actionName: string) {
-    await this.page.getByRole('button').filter({ has: this.page.locator('.lucide-zap') }).click()
-    await this.page.locator('[role="menuitem"], .action-item').filter({ hasText: actionName }).click()
+    await this.chatHeader.getByRole('button', { name: actionName }).click()
   }
 
   // Service window helpers
@@ -302,7 +304,8 @@ export class ChatPage extends BasePage {
   }
 
   get serviceWindowSendTemplateButton(): Locator {
-    return this.page.getByRole('button', { name: /Send Template/i })
+    // Scoped to the banner: the composer's template picker is also named "Send Template".
+    return this.page.getByRole('alert').filter({ hasText: '24-hour messaging window has expired' }).getByRole('button', { name: /Send Template/i })
   }
 
   async expectServiceWindowExpired() {
@@ -316,11 +319,11 @@ export class ChatPage extends BasePage {
 
   // Template picker helpers
   get templatePickerButton(): Locator {
-    return this.page.getByRole('button').filter({ has: this.page.locator('.lucide-layout-template-icon') })
+    return this.page.getByRole('button').filter({ has: this.page.locator('[data-icon="layout-template"]') })
   }
 
   get templatePopover(): Locator {
-    return this.page.locator('[data-radix-popper-content-wrapper], [data-state="open"][role="dialog"]').filter({ has: this.page.locator('input[placeholder*="earch template"]') })
+    return this.page.locator('[data-picker="templates"]')
   }
 
   get templateSearchInput(): Locator {
@@ -328,7 +331,7 @@ export class ChatPage extends BasePage {
   }
 
   get templateDialog(): Locator {
-    return this.page.locator('[role="dialog"][data-state="open"]').filter({ hasText: /Preview|Fill Parameters/i })
+    return this.page.locator('dialog[open]').filter({ hasText: /Preview|Fill Parameters/i })
   }
 
   get templateDialogSendButton(): Locator {
@@ -347,20 +350,20 @@ export class ChatPage extends BasePage {
   /** Wait for the loading spinner to disappear and at least one template item to appear */
   async waitForTemplatesLoaded() {
     // Wait for the loader to disappear (if it was shown)
-    const loader = this.templatePopover.locator('.animate-spin')
+    const loader = this.templatePopover.locator('[aria-busy="true"]')
     await loader.waitFor({ state: 'hidden', timeout: 15000 }).catch(() => {})
     // Wait for at least one template button to be visible
-    await this.templatePopover.locator('button.w-full.text-left').first().waitFor({ state: 'visible', timeout: 15000 })
+    await this.templatePopover.locator('[data-picker-item]').first().waitFor({ state: 'visible', timeout: 15000 })
   }
 
   async searchTemplates(term: string) {
     await this.templateSearchInput.fill(term)
     // Wait for filtered results to settle
-    await this.templatePopover.locator('button.w-full.text-left').first().waitFor({ state: 'visible', timeout: 10000 })
+    await this.templatePopover.locator('[data-picker-item]').first().waitFor({ state: 'visible', timeout: 10000 })
   }
 
   getTemplateItem(name: string): Locator {
-    return this.page.locator('button.w-full.text-left').filter({ hasText: name })
+    return this.templatePopover.locator('[data-picker-item]').filter({ hasText: name })
   }
 
   async selectTemplate(name: string) {
@@ -371,8 +374,7 @@ export class ChatPage extends BasePage {
   }
 
   async fillTemplateParam(paramName: string, value: string) {
-    const paramField = this.templateDialog.locator('.space-y-1').filter({ hasText: paramName }).locator('input')
-    await paramField.fill(value)
+    await this.templateDialog.locator(`[data-param="${paramName}"] input`).fill(value)
   }
 
   async sendTemplate() {
@@ -385,16 +387,16 @@ export class ChatPage extends BasePage {
   }
 
   getTemplatePreviewBubble(): Locator {
-    return this.templateDialog.locator('.chat-bubble')
+    return this.templateDialog.locator('[data-bubble]')
   }
 
   getTemplatePreviewButtons(): Locator {
-    return this.templateDialog.locator('.interactive-buttons > div')
+    return this.templateDialog.locator('[data-interactive-buttons] > *')
   }
 
   // Toast helpers
   async expectToast(text: string | RegExp) {
-    const toast = this.page.locator('[data-sonner-toast]').filter({ hasText: text })
+    const toast = this.page.locator('.toast-container output').filter({ hasText: text })
     await expect(toast).toBeVisible({ timeout: 5000 })
     return toast
   }

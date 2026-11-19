@@ -98,9 +98,7 @@ test.describe('Users Management', () => {
 
     // Update Full Name on the detail page
     const updatedName = 'Updated User Name'
-    const nameInput = page
-      .locator('div.space-y-1\\.5:has(> label:has-text("Full Name")) input')
-      .first()
+    const nameInput = page.getByLabel(/^Full Name/)
     await nameInput.fill(updatedName)
     await page.waitForTimeout(300)
 
@@ -189,7 +187,7 @@ test.describe('Users - Copy Invite Link', () => {
     await copyButton.click()
 
     // Should show success toast
-    const toast = page.locator('[data-sonner-toast]')
+    const toast = page.locator('.toast-container output')
     await expect(toast).toBeVisible({ timeout: 5000 })
 
     // Verify clipboard contains a registration URL with org param

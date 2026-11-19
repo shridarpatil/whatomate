@@ -126,7 +126,7 @@ test.describe('Tags Management', () => {
     await tagsPage.expectToast('created')
 
     // Wait for toast to disappear before clicking Add Tag again
-    await page.locator('[data-sonner-toast]').waitFor({ state: 'hidden', timeout: 10000 })
+    await page.locator('.toast-container output').waitFor({ state: 'hidden', timeout: 10000 })
 
     // Try to create duplicate
     await tagsPage.openCreateDialog()

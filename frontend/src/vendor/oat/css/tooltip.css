@@ -1,0 +1,53 @@
+@layer components {
+  .ot-tooltip {
+    /* top 0, -1 | bottom 0, 1 | left -1, 0 | right 1, 0 */
+    --_x: 0;
+    --_y: -1;
+    &[data-tooltip-placement="bottom"] { --_y: 1; }
+    &[data-tooltip-placement="left"] { --_x: -1; --_y: 0; }
+    &[data-tooltip-placement="right"] { --_x: 1; --_y: 0; }
+
+    position: fixed;
+    inset: auto;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    max-width: none;
+    max-height: none;
+    overflow: visible;
+    background: none;
+    pointer-events: none;
+    animation: ot-tooltip var(--transition-fast) 700ms both;
+
+    &::before, &::after {
+      content: '';
+      position: absolute;
+      left: calc((var(--_x) + 1) * 50%);
+      top: calc((var(--_y) + 1) * 50%);
+      translate: -50% -50%;
+      background: var(--foreground);
+    }
+    &::before {
+      width: 11px;
+      height: 11px;
+      transform: translate(calc(var(--_x) * 10px), calc(var(--_y) * 10px)) rotate(45deg);
+    }
+    &::after {
+      content: attr(data-tooltip);
+      transform: translate(calc(var(--_x) * (50% + 10px)), calc(var(--_y) * (50% + 10px)));
+      padding: var(--space-2) var(--space-3);
+      font-size: var(--text-7);
+      line-height: 1;
+      white-space: nowrap;
+      color: var(--background);
+      border-radius: var(--radius-medium);
+    }
+  }
+
+  @keyframes ot-tooltip {
+    from {
+      opacity: 0;
+      transform: translate(calc(var(--_x) * -4px), calc(var(--_y) * -4px));
+    }
+  }
+}

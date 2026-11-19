@@ -23,7 +23,7 @@ test.describe('WhatsApp Accounts - List View', () => {
     await page.goto('/settings/accounts/new')
     await page.waitForLoadState('networkidle')
     expect(page.url()).toContain('/settings/accounts/new')
-    await expect(page.locator('input').first()).toBeVisible()
+    await expect(page.locator('main').locator('input').first()).toBeVisible()
   })
 
   test('should show delete confirmation from list', async ({ page }) => {
@@ -33,7 +33,7 @@ test.describe('WhatsApp Accounts - List View', () => {
       test.skip(true, 'No accounts in list')
       return
     }
-    const deleteBtn = firstRow.locator('button.text-destructive, button:has(svg.text-destructive)').first()
+    const deleteBtn = firstRow.getByRole('button', { name: 'Delete' })
     if (!(await deleteBtn.isVisible({ timeout: 3000 }).catch(() => false))) {
       test.skip(true, 'No delete button found')
       return
@@ -61,8 +61,8 @@ test.describe('WhatsApp Accounts - Detail Page CRUD', () => {
     await page.goto('/settings/accounts/new')
     await page.waitForLoadState('networkidle')
 
-    await expect(page.locator('input').first()).toBeVisible()
-    await expect(page.locator('input[type="password"]').first()).toBeVisible()
+    await expect(page.locator('main').locator('input').first()).toBeVisible()
+    await expect(page.locator('main').locator('input[type="password"]').first()).toBeVisible()
   })
 
   test('should show validation error for empty required fields', async ({ page }) => {
@@ -70,7 +70,7 @@ test.describe('WhatsApp Accounts - Detail Page CRUD', () => {
     await page.waitForLoadState('networkidle')
 
     // Fill something to trigger hasChanges
-    const input = page.locator('input').first()
+    const input = page.locator('main').locator('input').first()
     if (await input.isDisabled()) { test.skip(true, 'No write permission'); return }
 
     await input.fill('test')
@@ -80,7 +80,7 @@ test.describe('WhatsApp Accounts - Detail Page CRUD', () => {
     const createBtn = page.getByRole('button', { name: /Create/i })
     if (await createBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
       await createBtn.click({ force: true })
-      const toast = page.locator('[data-sonner-toast]').first()
+      const toast = page.locator('.toast-container output').first()
       await expect(toast).toBeVisible({ timeout: 5000 })
     }
   })
@@ -139,13 +139,22 @@ test.describe('WhatsApp Accounts - Detail Page CRUD', () => {
     }
   })
 
-  test('should show activity log', async ({ page }) => {
-    await page.goto('/settings/accounts')
+  test('should show activity log', async ({ page, request }) => {
+    // Seed our own account (see "should show setup guide"): the first list row
+    // can be deleted by a parallel worker before the detail page loads.
+    const api = new ApiHelper(request)
+    await api.login(SUPER_ADMIN.email, SUPER_ADMIN.password)
+    const acc = await api.createWhatsAppAccount({
+      name: scope.name('activity-log').toLowerCase().replace(/\s/g, '-'),
+      phone_id: `phone-activity-${Date.now()}`,
+      business_id: `biz-activity-${Date.now()}`,
+      access_token: 'test-token-e2e',
+    })
+
+    await page.goto(`/settings/accounts/${acc.id}`)
     await page.waitForLoadState('networkidle')
 
-    if (await navigateToFirstItem(page)) {
-      await expectActivityLogVisible(page)
-    }
+    await expectActivityLogVisible(page)
   })
 
   test('should show setup guide', async ({ page, request }) => {

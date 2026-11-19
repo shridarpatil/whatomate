@@ -1,5 +1,6 @@
 import { Page, Locator, expect } from '@playwright/test'
 import { BasePage } from './BasePage'
+import { selectOptionMatching } from '../helpers/select'
 
 /**
  * Agent Transfers Page - Transfer queue management
@@ -23,8 +24,8 @@ export class AgentTransfersPage extends BasePage {
     this.queueTab = page.getByRole('tab', { name: /Queue/i })
     this.allActiveTab = page.getByRole('tab', { name: /All Active/i })
     this.historyTab = page.getByRole('tab', { name: /History/i })
-    this.teamFilterSelect = page.locator('button[role="combobox"]')
-    this.assignDialog = page.locator('[role="dialog"][data-state="open"]')
+    this.teamFilterSelect = page.locator('main').getByRole('combobox', { name: /Filter by team/i })
+    this.assignDialog = page.locator('dialog[open]')
     this.loadMoreButton = page.getByRole('button', { name: /Load More/i })
   }
 
@@ -56,8 +57,7 @@ export class AgentTransfersPage extends BasePage {
   }
 
   async filterByTeam(teamName: string) {
-    await this.teamFilterSelect.click()
-    await this.page.locator('[role="option"]').filter({ hasText: teamName }).click()
+    await selectOptionMatching(this.teamFilterSelect, new RegExp(teamName))
   }
 
   // Table helpers
@@ -67,14 +67,14 @@ export class AgentTransfersPage extends BasePage {
 
   async viewChat(contactName: string) {
     const row = this.getTransferRow(contactName)
-    await row.locator('button').filter({ has: this.page.locator('.lucide-message-square') }).click()
+    await row.locator('button').filter({ has: this.page.locator('[data-icon="message-square"]') }).click()
   }
 
   async resumeTransfer(contactName: string) {
     const row = this.getTransferRow(contactName)
-    await row.locator('button').filter({ has: this.page.locator('.lucide-play') }).click()
+    await row.locator('button').filter({ has: this.page.locator('[data-icon="play"]') }).click()
     // Handle the ConfirmDialog that appears after clicking resume
-    const alertDialog = this.page.locator('[role="alertdialog"]')
+    const alertDialog = this.page.getByRole('alertdialog')
     await alertDialog.waitFor({ state: 'visible' })
     await alertDialog.getByRole('button', { name: /confirm|resume|yes/i }).click()
     await alertDialog.waitFor({ state: 'hidden' })
@@ -82,19 +82,17 @@ export class AgentTransfersPage extends BasePage {
 
   async openAssignDialog(contactName: string) {
     const row = this.getTransferRow(contactName)
-    await row.locator('button').filter({ has: this.page.locator('.lucide-user-plus') }).click()
+    await row.locator('button').filter({ has: this.page.locator('[data-icon="user-plus"]') }).click()
     await this.assignDialog.waitFor({ state: 'visible' })
   }
 
   // Assign dialog helpers
   async selectTeamInDialog(teamName: string) {
-    await this.assignDialog.locator('button[role="combobox"]').first().click()
-    await this.page.locator('[role="option"]').filter({ hasText: teamName }).click()
+    await selectOptionMatching(this.assignDialog.getByRole('combobox').first(), new RegExp(teamName))
   }
 
   async selectAgentInDialog(agentName: string) {
-    await this.assignDialog.locator('button[role="combobox"]').last().click()
-    await this.page.locator('[role="option"]').filter({ hasText: agentName }).click()
+    await selectOptionMatching(this.assignDialog.getByRole('combobox').last(), new RegExp(agentName))
   }
 
   async saveAssignment() {
@@ -112,7 +110,7 @@ export class AgentTransfersPage extends BasePage {
 
   // Toast helpers
   async expectToast(text: string | RegExp) {
-    const toast = this.page.locator('[data-sonner-toast]').filter({ hasText: text })
+    const toast = this.page.locator('.toast-container output').filter({ hasText: text })
     await expect(toast).toBeVisible({ timeout: 5000 })
     return toast
   }
@@ -123,19 +121,19 @@ export class AgentTransfersPage extends BasePage {
   }
 
   async expectMyTransfersTabVisible() {
-    await expect(this.page.getByText('Contacts transferred to you')).toBeVisible()
+    await expect(this.page.getByRole('heading', { name: 'My Transfers' })).toBeVisible()
   }
 
   async expectQueueTabVisible() {
-    await expect(this.page.getByText('Unassigned transfers waiting')).toBeVisible()
+    await expect(this.page.getByRole('heading', { name: 'Transfer Queue' })).toBeVisible()
   }
 
   async expectAllActiveTabVisible() {
-    await expect(this.page.getByText('All currently active')).toBeVisible()
+    await expect(this.page.getByRole('heading', { name: 'All Active Transfers' })).toBeVisible()
   }
 
   async expectHistoryTabVisible() {
-    await expect(this.page.getByText('Resumed transfers')).toBeVisible()
+    await expect(this.page.getByRole('heading', { name: 'Transfer History' })).toBeVisible()
   }
 
   async expectEmptyMyTransfers() {

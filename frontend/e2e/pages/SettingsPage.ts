@@ -1,5 +1,6 @@
 import { Page, Locator, expect } from '@playwright/test'
 import { BasePage } from './BasePage'
+import { selectOptionMatching } from '../helpers/select'
 
 /**
  * Base class for settings pages that use cards/grid layout
@@ -18,9 +19,9 @@ export class CardGridPage extends BasePage {
     this.heading = page.locator('h1').filter({ hasText: options.headingText }).first()
     this.addButton = page.getByRole('button', { name: new RegExp(options.addButtonText, 'i') }).first()
     this.searchInput = page.locator('input[placeholder*="Search"]')
-    this.categoryFilter = page.locator('button[role="combobox"]').first()
-    this.dialog = page.locator('[role="dialog"][data-state="open"]')
-    this.alertDialog = page.locator('[role="alertdialog"]')
+    this.categoryFilter = page.locator('main').locator('select').first()
+    this.dialog = page.locator('dialog[open]')
+    this.alertDialog = page.getByRole('alertdialog')
   }
 
   async openCreateDialog() {
@@ -34,8 +35,7 @@ export class CardGridPage extends BasePage {
   }
 
   async filterByCategory(category: string) {
-    await this.categoryFilter.click()
-    await this.page.locator('[role="option"]').filter({ hasText: category }).click()
+    await this.categoryFilter.selectOption({ label: category })
     await this.page.waitForLoadState('networkidle')
   }
 
@@ -49,7 +49,7 @@ export class CardGridPage extends BasePage {
   }
 
   getDialogCombobox(): Locator {
-    return this.dialog.locator('button[role="combobox"]')
+    return this.dialog.locator('button[aria-haspopup="listbox"]')
   }
 
   async submitDialog(buttonText = 'Create') {
@@ -85,18 +85,9 @@ export class CardGridPage extends BasePage {
 
   // Toast helpers
   async expectToast(text: string | RegExp) {
-    const toast = this.page.locator('[data-sonner-toast]').filter({ hasText: text })
+    const toast = this.page.locator('.toast-container output').filter({ hasText: text })
     await expect(toast).toBeVisible({ timeout: 5000 })
     return toast
-  }
-
-  async dismissToast(text?: string | RegExp) {
-    const toast = text
-      ? this.page.locator('[data-sonner-toast]').filter({ hasText: text })
-      : this.page.locator('[data-sonner-toast]').first()
-    if (await toast.isVisible()) {
-      await toast.click()
-    }
   }
 
   // Assertions
@@ -131,8 +122,8 @@ export class TableSettingsPage extends BasePage {
     this.addButton = page.getByRole('button', { name: new RegExp(options.addButtonText, 'i') }).first()
     this.searchInput = page.locator('input[placeholder*="Search"]')
     this.table = page.locator('table')
-    this.dialog = page.locator('[role="dialog"][data-state="open"]')
-    this.alertDialog = page.locator('[role="alertdialog"]')
+    this.dialog = page.locator('dialog[open]')
+    this.alertDialog = page.getByRole('alertdialog')
   }
 
   async openCreateDialog() {
@@ -167,7 +158,7 @@ export class TableSettingsPage extends BasePage {
 
   async toggleRowSwitch(rowText: string) {
     const row = this.getRow(rowText)
-    await row.locator('button[role="switch"]').click()
+    await row.locator('[role="switch"]').click()
   }
 
   // Dialog helpers
@@ -205,18 +196,9 @@ export class TableSettingsPage extends BasePage {
 
   // Toast helpers
   async expectToast(text: string | RegExp) {
-    const toast = this.page.locator('[data-sonner-toast]').filter({ hasText: text })
+    const toast = this.page.locator('.toast-container output').filter({ hasText: text })
     await expect(toast).toBeVisible({ timeout: 5000 })
     return toast
-  }
-
-  async dismissToast(text?: string | RegExp) {
-    const toast = text
-      ? this.page.locator('[data-sonner-toast]').filter({ hasText: text })
-      : this.page.locator('[data-sonner-toast]').first()
-    if (await toast.isVisible()) {
-      await toast.click()
-    }
   }
 
   // Assertions
@@ -252,9 +234,9 @@ export class TableSettingsPage extends BasePage {
 
   async getSortDirection(columnName: string): Promise<'asc' | 'desc' | null> {
     const header = this.getColumnHeader(columnName)
-    // Lucide icons render with class like 'lucide-arrow-up-icon'
-    const arrowUp = header.locator('.lucide-arrow-up-icon')
-    const arrowDown = header.locator('.lucide-arrow-down-icon')
+    // Icons carry a data-icon attribute (see src/lib/icons.ts)
+    const arrowUp = header.locator('[data-icon="arrow-up"]')
+    const arrowDown = header.locator('[data-icon="arrow-down"]')
 
     if (await arrowUp.count() > 0) return 'asc'
     if (await arrowDown.count() > 0) return 'desc'
@@ -275,8 +257,8 @@ export class CannedResponsesPage extends TableSettingsPage {
 
   constructor(page: Page) {
     super(page, { headingText: 'Canned Responses', addButtonText: 'Add Response' })
-    // Category filter is the first combobox in the card header (search is an input)
-    this.categoryFilter = page.locator('button[role="combobox"]').first()
+    // Category filter is the first native select in the card header (search is an input)
+    this.categoryFilter = page.locator('main').locator('select').first()
   }
 
   async goto() {
@@ -290,8 +272,7 @@ export class CannedResponsesPage extends TableSettingsPage {
   }
 
   async filterByCategory(category: string) {
-    await this.categoryFilter.click()
-    await this.page.locator('[role="option"]').filter({ hasText: category }).click()
+    await this.categoryFilter.selectOption({ label: category })
     await this.page.waitForTimeout(300)
   }
 
@@ -306,9 +287,9 @@ export class CannedResponsesPage extends TableSettingsPage {
 
   /** Fill the detail-page form (works for both create and edit). */
   async fillResponseForm(name: string, content: string, shortcut?: string, category?: string) {
-    const nameInput = this.page.locator('div.space-y-1\\.5:has(> label:has-text("Name")) input').first()
-    const shortcutInput = this.page.locator('div.space-y-1\\.5:has(> label:has-text("Shortcut")) input').first()
-    const textarea = this.page.locator('div.space-y-1\\.5:has(> label:has-text("Content")) textarea').first()
+    const nameInput = this.page.getByLabel(/^Name/)
+    const shortcutInput = this.page.getByLabel(/^Shortcut/)
+    const textarea = this.page.getByLabel(/^Content/)
 
     await nameInput.fill(name)
     if (shortcut !== undefined) {
@@ -316,11 +297,7 @@ export class CannedResponsesPage extends TableSettingsPage {
     }
     await textarea.fill(content)
     if (category) {
-      await this.page
-        .locator('div.space-y-1\\.5:has(> label:has-text("Category")) button[role="combobox"]')
-        .first()
-        .click()
-      await this.page.locator('[role="option"]').filter({ hasText: category }).click()
+      await this.page.getByLabel(/^Category/).selectOption({ label: category })
     }
     // Let the watcher mark the form dirty and reveal the Save button.
     await this.page.waitForTimeout(300)
@@ -456,7 +433,7 @@ export class TagsPage extends TableSettingsPage {
 
   constructor(page: Page) {
     super(page, { headingText: 'Tags', addButtonText: 'Add Tag' })
-    this.colorSelect = page.locator('button[role="combobox"]')
+    this.colorSelect = page.locator('dialog[open] select')
   }
 
   async goto() {
@@ -467,18 +444,16 @@ export class TagsPage extends TableSettingsPage {
   async fillTagForm(name: string, color?: string) {
     await this.dialog.locator('input').first().fill(name)
     if (color) {
-      await this.dialog.locator('button[role="combobox"]').click()
-      await this.page.locator('[role="option"]').filter({ hasText: color }).click()
+      await this.dialog.locator('select').selectOption({ label: color })
     }
   }
 
   async selectColor(color: string) {
-    await this.dialog.locator('button[role="combobox"]').click()
-    await this.page.locator('[role="option"]').filter({ hasText: color }).click()
+    await this.dialog.locator('select').selectOption({ label: color })
   }
 
   async expectTagBadgeVisible(name: string) {
-    await expect(this.page.locator('span').filter({ hasText: name })).toBeVisible()
+    await expect(this.page.locator('tbody .badge').filter({ hasText: name })).toBeVisible()
   }
 }
 
@@ -492,7 +467,7 @@ export class ContactsPage extends TableSettingsPage {
   constructor(page: Page) {
     super(page, { headingText: 'Contacts', addButtonText: 'Add Contact' })
     this.importExportButton = page.getByRole('button', { name: /Import.*Export/i })
-    this.importExportDialog = page.locator('[role="dialog"][data-state="open"]')
+    this.importExportDialog = page.locator('dialog[open]')
   }
 
   async goto() {
@@ -507,8 +482,7 @@ export class ContactsPage extends TableSettingsPage {
       await this.dialog.locator('input').nth(1).fill(name)
     }
     if (account) {
-      await this.dialog.locator('button[role="combobox"]').first().click()
-      await this.page.locator('[role="option"]').filter({ hasText: account }).click()
+      await selectOptionMatching(this.dialog.getByLabel('WhatsApp Account'), new RegExp(account))
     }
   }
 
@@ -521,16 +495,11 @@ export class ContactsPage extends TableSettingsPage {
 
   // Tag selection in form
   async selectTags(tags: string[]) {
-    // Open tag selector popover
-    const tagButton = this.dialog.locator('button[role="combobox"]').last()
-    await tagButton.click()
-
+    // The tag Combobox adds a tag per selection and closes itself.
     for (const tag of tags) {
-      await this.page.locator('[role="option"]').filter({ hasText: tag }).click()
+      await this.dialog.getByLabel('Tags', { exact: true }).click()
+      await this.page.getByRole('option', { name: tag }).first().click()
     }
-
-    // Close by clicking outside
-    await this.dialog.locator('h2').click()
   }
 
   // Table helpers - buttons in order: chat, edit, delete
@@ -557,8 +526,8 @@ export class ContactsPage extends TableSettingsPage {
   async deleteContact(identifier: string) {
     const row = this.getContactRow(identifier)
     await expect(row).toBeVisible({ timeout: 10000 })
-    // Delete is third button in actions column
-    await row.locator('td:last-child button').nth(2).click()
+    // Actions column: Open chat (button), Edit (link), Delete (button)
+    await row.locator('td:last-child').getByRole('button', { name: 'Delete', exact: true }).click()
     await this.alertDialog.waitFor({ state: 'visible' })
   }
 
@@ -597,7 +566,7 @@ export class ContactsPage extends TableSettingsPage {
   }
 
   async toggleUpdateOnDuplicate() {
-    await this.importExportDialog.locator('button[role="checkbox"]').click()
+    await this.importExportDialog.locator('#update-dup').click()
   }
 
   async clickImportButton() {

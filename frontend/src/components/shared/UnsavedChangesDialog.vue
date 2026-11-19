@@ -1,14 +1,5 @@
 <script setup lang="ts">
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
+import Modal from '@/components/oat/Modal.vue'
 
 defineProps<{
   open: boolean
@@ -21,18 +12,16 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <AlertDialog :open="open">
-    <AlertDialogContent>
-      <AlertDialogHeader>
-        <AlertDialogTitle>{{ $t('common.unsavedChangesTitle', 'Unsaved Changes') }}</AlertDialogTitle>
-        <AlertDialogDescription>
-          {{ $t('common.unsavedChangesDesc', 'You have unsaved changes. Are you sure you want to leave? Your changes will be lost.') }}
-        </AlertDialogDescription>
-      </AlertDialogHeader>
-      <AlertDialogFooter>
-        <AlertDialogCancel @click="emit('stay')">{{ $t('common.stay', 'Stay') }}</AlertDialogCancel>
-        <AlertDialogAction @click="emit('leave')">{{ $t('common.leave', 'Leave') }}</AlertDialogAction>
-      </AlertDialogFooter>
-    </AlertDialogContent>
-  </AlertDialog>
+  <Modal
+    :open="open"
+    alert
+    :title="$t('common.unsavedChangesTitle', 'Unsaved Changes')"
+    @update:open="(v) => { if (!v) emit('stay') }"
+  >
+    <p>{{ $t('common.unsavedChangesDesc', 'You have unsaved changes. Are you sure you want to leave? Your changes will be lost.') }}</p>
+    <template #footer>
+      <button type="button" class="outline" @click="emit('stay')">{{ $t('common.stay', 'Stay') }}</button>
+      <button type="button" @click="emit('leave')">{{ $t('common.leave', 'Leave') }}</button>
+    </template>
+  </Modal>
 </template>

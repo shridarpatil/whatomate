@@ -80,18 +80,16 @@ test.describe('Queue Tab', () => {
   })
 
   test('should filter by team', async ({ page }) => {
-    await transfersPage.teamFilterSelect.click()
-    const options = page.locator('[role="option"]')
+    const options = transfersPage.teamFilterSelect.locator('option')
     const optionCount = await options.count()
     if (optionCount > 1) {
-      await options.nth(1).click()
-    } else {
-      await page.keyboard.press('Escape')
+      await transfersPage.teamFilterSelect.selectOption({ index: 1 })
     }
   })
 
   test('should show team queue counts', async ({ page }) => {
-    await expect(page.getByText(/General/i)).toBeVisible()
+    // The count badge reads "General: N"; the team filter <select> also has a "General Queue" option.
+    await expect(page.locator('main .badge').filter({ hasText: /General:\s*\d+/i })).toBeVisible()
   })
 })
 
@@ -177,7 +175,7 @@ test.describe('Transfer Actions', () => {
     const tableRows = await page.locator('tbody tr').count()
     if (tableRows > 0) {
       const firstRow = page.locator('tbody tr').first()
-      const assignBtn = firstRow.getByRole('button').filter({ has: page.locator('.lucide-user-plus') })
+      const assignBtn = firstRow.getByRole('button').filter({ has: page.locator('[data-icon="user-plus"]') })
       if (await assignBtn.isVisible()) {
         await assignBtn.click()
         await expect(transfersPage.assignDialog).toBeVisible()
@@ -201,7 +199,7 @@ test.describe('Assign Dialog', () => {
     const tableRows = await page.locator('tbody tr').count()
     if (tableRows > 0) {
       const firstRow = page.locator('tbody tr').first()
-      const assignBtn = firstRow.getByRole('button').filter({ has: page.locator('.lucide-user-plus') })
+      const assignBtn = firstRow.getByRole('button').filter({ has: page.locator('[data-icon="user-plus"]') })
       if (await assignBtn.isVisible()) {
         await assignBtn.click()
         await expect(transfersPage.assignDialog.getByText('Team Queue')).toBeVisible()
@@ -215,7 +213,7 @@ test.describe('Assign Dialog', () => {
     const tableRows = await page.locator('tbody tr').count()
     if (tableRows > 0) {
       const firstRow = page.locator('tbody tr').first()
-      const assignBtn = firstRow.getByRole('button').filter({ has: page.locator('.lucide-user-plus') })
+      const assignBtn = firstRow.getByRole('button').filter({ has: page.locator('[data-icon="user-plus"]') })
       if (await assignBtn.isVisible()) {
         await assignBtn.click()
         await expect(transfersPage.assignDialog.getByText('Assign to Agent')).toBeVisible()
@@ -229,7 +227,7 @@ test.describe('Assign Dialog', () => {
     const tableRows = await page.locator('tbody tr').count()
     if (tableRows > 0) {
       const firstRow = page.locator('tbody tr').first()
-      const assignBtn = firstRow.getByRole('button').filter({ has: page.locator('.lucide-user-plus') })
+      const assignBtn = firstRow.getByRole('button').filter({ has: page.locator('[data-icon="user-plus"]') })
       if (await assignBtn.isVisible()) {
         await assignBtn.click()
         await transfersPage.cancelAssignment()
@@ -267,7 +265,7 @@ test.describe('Tab Navigation', () => {
     await transfersPage.switchToQueue()
     await transfersPage.switchToMyTransfers()
     // Should be back on my transfers
-    await expect(transfersPage.myTransfersTab).toHaveAttribute('data-state', 'active')
+    await expect(transfersPage.myTransfersTab).toHaveAttribute('aria-selected', 'true')
   })
 })
 

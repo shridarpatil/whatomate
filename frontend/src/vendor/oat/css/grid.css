@@ -1,0 +1,70 @@
+@layer components {
+  :root {
+    --grid-cols: 12;
+    --grid-gap: 1.5rem;
+    --container-max: 1280px;
+    --container-pad: 1rem;
+  }
+
+  .container {
+    width: 100%;
+    max-width: var(--container-max);
+    margin-inline: auto;
+    padding-inline: var(--container-pad);
+  }
+
+  .row {
+    display: grid;
+    grid-template-columns: repeat(var(--grid-cols), 1fr);
+    gap: var(--grid-gap);
+    width: 100%;
+  }
+
+  /* Column spans */
+  .col, [class*="col-"] { grid-column-end: span calc(var(--span, var(--grid-cols)) + var(--offset, 0)); }
+
+  .col-1  { --span: 1; }
+  .col-2  { --span: 2; }
+  .col-3  { --span: 3; }
+  .col-4  { --span: 4; }
+  .col-5  { --span: 5; }
+  .col-6  { --span: 6; }
+  .col-7  { --span: 7; }
+  .col-8  { --span: 8; }
+  .col-9  { --span: 9; }
+  .col-10 { --span: 10; }
+  .col-11 { --span: 11; }
+  .col-12 { --span: 12; }
+
+  /* Offsets */
+  .offset-1  { --offset: 1; }
+  .offset-2  { --offset: 2; }
+  .offset-3  { --offset: 3; }
+  .offset-4  { --offset: 4; }
+  .offset-5  { --offset: 5; }
+  .offset-6  { --offset: 6; }
+
+  [class*="offset-"] {
+    margin-inline-start: calc(var(--offset) * (100% + var(--grid-gap)) / (var(--span) + var(--offset)));
+  }
+
+  .col-end {
+    grid-column-start: span var(--span, 1);
+    grid-column-end: -1;
+  }
+
+  /* Responsive: stack on mobile */
+  @media (max-width: 768px) {
+    .row {
+      --grid-cols: 4;
+      --grid-gap: 1rem;
+    }
+    .col, [class*="col-"] {
+      --span: 4;
+    }
+    [class*="offset-"] {
+      --offset: 0;
+      margin-inline-start: 0;
+    }
+  }
+}

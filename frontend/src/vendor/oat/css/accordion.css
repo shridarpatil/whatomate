@@ -1,0 +1,66 @@
+@layer components {
+  details {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-medium);
+    overflow: hidden;
+
+    & + details {
+      margin-top: -1px;
+      border-start-start-radius: 0;
+      border-start-end-radius: 0;
+    }
+
+    &:has(+ details) {
+      border-end-start-radius: 0;
+      border-end-end-radius: 0;
+    }
+
+    &[open] summary {
+      border-bottom: 1px solid var(--border);
+    }
+  }
+
+  summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    padding: var(--space-4);
+    font-weight: var(--font-medium);
+    cursor: pointer;
+    user-select: none;
+    transition: background-color var(--transition-fast);
+
+    &:hover {
+      background-color: var(--muted);
+    }
+
+    &::-webkit-details-marker, &::marker {
+      display: none;
+    }
+
+    &::after {
+      content: "";
+      width: 1em;
+      height: 1em;
+      flex-shrink: 0;
+      background-color: currentColor;
+      mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+      mask-size: contain;
+      mask-repeat: no-repeat;
+      transition: transform var(--transition);
+    }
+
+    details[open] &::after {
+      transform: rotate(180deg);
+    }
+  }
+
+  details > *:not(summary) {
+    margin: var(--space-4);
+  }
+
+  details[open] > *:not(summary) {
+    animation: fade-in-up 0.4s cubic-bezier(0.32, 0.72, 0, 1) both;
+  }
+}

@@ -12,6 +12,7 @@ export const useOrganizationsStore = defineStore('organizations', () => {
     slug: string
     role_name: string
     is_default: boolean
+    logo?: string
   }>>([])
   const selectedOrgId = ref<string | null>(null)
   const loading = ref(false)
@@ -55,6 +56,11 @@ export const useOrganizationsStore = defineStore('organizations', () => {
     }
   }
 
+  /** Re-fetches the lists the sidebar shows (after a name or logo change). */
+  async function refresh(isSuperAdmin: boolean): Promise<void> {
+    await Promise.all([fetchMyOrganizations(), isSuperAdmin ? fetchOrganizations() : Promise.resolve()])
+  }
+
   function selectOrganization(orgId: string | null) {
     selectedOrgId.value = orgId
     if (orgId) {
@@ -84,6 +90,7 @@ export const useOrganizationsStore = defineStore('organizations', () => {
     init,
     fetchOrganizations,
     fetchMyOrganizations,
+    refresh,
     selectOrganization,
     addMember
   }

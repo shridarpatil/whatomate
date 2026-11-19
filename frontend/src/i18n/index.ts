@@ -3,12 +3,15 @@ import en from './locales/en.json'
 
 export type MessageSchema = typeof en
 
-// Auto-discover available locales from the locales folder
-// Vite imports all JSON files at build time
-// Using import: 'default' to get JSON content directly (required for Vite 5+)
-const localeModules = import.meta.glob('./locales/*.json', { eager: true, import: 'default' }) as Record<string, MessageSchema>
+// English is bundled (it is also the fallback). Every other locale is split
+// into its own chunk and fetched only when a user actually selects it.
+const localeLoaders = import.meta.glob(['./locales/*.json', '!./locales/en.json'], {
+  import: 'default',
+}) as Record<string, () => Promise<MessageSchema>>
 
-// Build supported locales list from available files
+const codeFromPath = (path: string) => path.replace('./locales/', '').replace('.json', '')
+const availableCodes = ['en', ...Object.keys(localeLoaders).map(codeFromPath)]
+
 const localeNames: Record<string, { name: string; nativeName: string }> = {
   en: { name: 'English', nativeName: 'English' },
   es: { name: 'Spanish', nativeName: 'Español' },
@@ -35,54 +38,68 @@ const localeNames: Record<string, { name: string; nativeName: string }> = {
 }
 
 // Auto-generate SUPPORTED_LOCALES from available files
-export const SUPPORTED_LOCALES = Object.keys(localeModules).map(path => {
-  const code = path.replace('./locales/', '').replace('.json', '')
+export const SUPPORTED_LOCALES = availableCodes.map(code => {
   const names = localeNames[code] || { name: code, nativeName: code }
   return { code, ...names }
 })
 
 export type SupportedLocale = string
 
-// Build messages object from all locale files
-const messages: Record<string, MessageSchema> = {}
-for (const path in localeModules) {
-  const code = path.replace('./locales/', '').replace('.json', '')
-  messages[code] = localeModules[path]
-}
+const loadedLocales = new Set<string>(['en'])
 
 // Get saved locale or detect from browser
 function getDefaultLocale(): string {
-  // Check localStorage first
   const saved = localStorage.getItem('locale')
-  if (saved && messages[saved]) {
+  if (saved && availableCodes.includes(saved)) {
     return saved
   }
-
-  // Detect from browser
   const browserLang = navigator.language.split('-')[0]
-  if (messages[browserLang]) {
+  if (availableCodes.includes(browserLang)) {
     return browserLang
   }
-
   return 'en'
 }
 
 export const i18n = createI18n({
   legacy: false, // Use Composition API
-  locale: getDefaultLocale(),
+  locale: 'en',
   fallbackLocale: 'en',
-  messages,
+  messages: { en } as Record<string, MessageSchema>,
 })
 
-// Helper to change locale
-export function setLocale(locale: string) {
-  if (!messages[locale]) {
+// Fetch a locale's messages once and register them with vue-i18n.
+async function ensureLocaleLoaded(locale: string): Promise<boolean> {
+  if (loadedLocales.has(locale)) return true
+  const loader = localeLoaders[`./locales/${locale}.json`]
+  if (!loader) return false
+  i18n.global.setLocaleMessage(locale, await loader())
+  loadedLocales.add(locale)
+  return true
+}
+
+function applyLocale(locale: string) {
+  i18n.global.locale.value = locale
+  document.documentElement.setAttribute('lang', locale)
+}
+
+// Called once before the app mounts so the first render is in the user's language.
+export async function initLocale(): Promise<void> {
+  const locale = getDefaultLocale()
+  if (locale !== 'en' && !(await ensureLocaleLoaded(locale).catch(() => false))) {
+    applyLocale('en')
+    return
+  }
+  applyLocale(locale)
+}
+
+// Helper to change locale (loads the locale's messages on first use)
+export async function setLocale(locale: string): Promise<void> {
+  if (!(await ensureLocaleLoaded(locale))) {
     console.warn(`Locale '${locale}' not available`)
     return
   }
-  i18n.global.locale.value = locale
+  applyLocale(locale)
   localStorage.setItem('locale', locale)
-  document.documentElement.setAttribute('lang', locale)
 }
 
 // Get current locale

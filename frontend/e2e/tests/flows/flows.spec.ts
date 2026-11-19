@@ -29,14 +29,14 @@ test.describe('WhatsApp Flows Management', () => {
   test('should show validation error for empty flow name', async ({ page }) => {
     await flowsPage.openCreateDialog()
     await flowsPage.createDialog.getByRole('button', { name: /Create Flow/i }).click()
-    await expect(page.locator('[data-sonner-toast]')).toBeVisible({ timeout: 5000 })
+    await expect(page.locator('.toast-container output')).toBeVisible({ timeout: 5000 })
   })
 
   test('should have account selector in create dialog', async () => {
     await flowsPage.openCreateDialog()
     const dialog = flowsPage.createDialog
     await expect(dialog.locator('label').filter({ hasText: /Account/i }).first()).toBeVisible()
-    await expect(dialog.locator('button[role="combobox"]').first()).toBeVisible()
+    await expect(dialog.locator('select').first()).toBeVisible()
   })
 
   test('should have category selector in create dialog', async () => {
@@ -51,10 +51,9 @@ test.describe('WhatsApp Flows Management', () => {
     await flowsPage.expectDialogHidden()
   })
 
-  test('should filter flows by account', async ({ page }) => {
+  test('should filter flows by account', async () => {
     await expect(flowsPage.accountFilter).toBeVisible()
-    await flowsPage.accountFilter.click()
-    await expect(page.locator('[role="option"]').filter({ hasText: /All Accounts/i })).toBeVisible()
+    await expect(flowsPage.accountFilter.locator('option').filter({ hasText: /All Accounts/i })).toHaveCount(1)
   })
 })
 
@@ -196,13 +195,13 @@ test.describe('Chatbot Flows Management', () => {
   test('should display flow builder on create page', async () => {
     await chatbotFlowsPage.gotoNewFlow()
     await chatbotFlowsPage.expectFlowBuilderVisible()
-    await expect(chatbotFlowsPage.page.locator('input').first()).toBeVisible()
+    await expect(chatbotFlowsPage.page.locator('main').locator('input').first()).toBeVisible()
   })
 
   test('should show validation when saving empty flow', async ({ page }) => {
     await chatbotFlowsPage.gotoNewFlow()
     await page.getByRole('button', { name: /Save/i }).click()
-    await expect(page.locator('[data-sonner-toast]')).toBeVisible({ timeout: 5000 })
+    await expect(page.locator('.toast-container output')).toBeVisible({ timeout: 5000 })
   })
 
   test('should have step type options', async ({ page }) => {

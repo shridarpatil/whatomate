@@ -27,6 +27,6 @@ export class IVRFlowsPage {
   }
 
   async clickFlow(name: string) {
-    await this.page.locator('tbody tr').filter({ hasText: name }).click()
+    await this.page.locator('tbody tr').filter({ hasText: name }).getByRole('link', { name }).click()
   }
 }

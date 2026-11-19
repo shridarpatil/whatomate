@@ -1,19 +1,19 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { toast } from 'vue-sonner'
-import { User, Eye, EyeOff, Loader2 } from 'lucide-vue-next'
+import { toast } from '@/lib/toast'
+import { User, Eye, EyeOff } from '@/lib/icons'
 import { usersService } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { PageHeader } from '@/components/shared'
 import { getErrorMessage } from '@/lib/api-utils'
 
 const { t } = useI18n()
+
+const roleName = computed(() => {
+  const name = authStore.user?.role?.name || ''
+  return name.charAt(0).toUpperCase() + name.slice(1)
+})
 const authStore = useAuthStore()
 const isChangingPassword = ref(false)
 const showCurrentPassword = ref(false)
@@ -66,110 +66,107 @@ async function changePassword() {
       :title="$t('profile.title')"
       :description="$t('profile.description')"
       :icon="User"
-      icon-gradient="bg-gradient-to-br from-gray-500 to-gray-600 shadow-gray-500/20"
     />
 
-    <!-- Content -->
-    <ScrollArea class="flex-1">
-      <div class="p-6 space-y-6 max-w-2xl mx-auto">
+    <div class="flex-1 scroll-y p-4">
+      <div class="vstack gap-6">
         <!-- User Info -->
-        <Card>
-          <CardHeader>
-            <CardTitle>{{ $t('profile.accountInfo') }}</CardTitle>
-            <CardDescription>{{ $t('profile.accountInfoDesc') }}</CardDescription>
-          </CardHeader>
-          <CardContent class="space-y-4">
-            <div class="grid grid-cols-2 gap-4">
-              <div>
-                <Label class="text-muted-foreground">{{ $t('common.name') }}</Label>
-                <p class="font-medium">{{ authStore.user?.full_name }}</p>
-              </div>
-              <div>
-                <Label class="text-muted-foreground">{{ $t('common.email') }}</Label>
-                <p class="font-medium">{{ authStore.user?.email }}</p>
-              </div>
-              <div>
-                <Label class="text-muted-foreground">{{ $t('users.role') }}</Label>
-                <p class="font-medium capitalize">{{ authStore.user?.role?.name }}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <article class="card">
+          <header>
+            <h3>{{ $t('profile.accountInfo') }}</h3>
+          </header>
+          <div class="row">
+          <div class="col-4">
+            <small class="text-light">{{ $t('common.name') }}</small>
+            <p>{{ authStore.user?.full_name }}</p>
+          </div>
+          <div class="col-4">
+            <small class="text-light">{{ $t('common.email') }}</small>
+            <p>{{ authStore.user?.email }}</p>
+          </div>
+          <div class="col-4">
+            <small class="text-light">{{ $t('users.role') }}</small>
+            <p>{{ roleName }}</p>
+          </div>
+          </div>
+        </article>
 
         <!-- Change Password -->
-        <Card>
-          <CardHeader>
-            <CardTitle>{{ $t('profile.changePassword') }}</CardTitle>
-            <CardDescription>{{ $t('profile.changePasswordDesc') }}</CardDescription>
-          </CardHeader>
-          <CardContent class="space-y-4">
-            <div class="space-y-2">
-              <Label for="current_password">{{ $t('profile.currentPassword') }}</Label>
-              <div class="relative">
-                <Input
-                  id="current_password"
-                  v-model="passwordForm.current_password"
-                  :type="showCurrentPassword ? 'text' : 'password'"
-                  :placeholder="$t('profile.currentPasswordPlaceholder')"
-                />
-                <button
-                  type="button"
-                  class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  @click="showCurrentPassword = !showCurrentPassword"
-                >
-                  <Eye v-if="!showCurrentPassword" class="h-4 w-4" />
-                  <EyeOff v-else class="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-            <div class="space-y-2">
-              <Label for="new_password">{{ $t('profile.newPassword') }}</Label>
-              <div class="relative">
-                <Input
-                  id="new_password"
-                  v-model="passwordForm.new_password"
-                  :type="showNewPassword ? 'text' : 'password'"
-                  :placeholder="$t('profile.newPasswordPlaceholder')"
-                />
-                <button
-                  type="button"
-                  class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  @click="showNewPassword = !showNewPassword"
-                >
-                  <Eye v-if="!showNewPassword" class="h-4 w-4" />
-                  <EyeOff v-else class="h-4 w-4" />
-                </button>
-              </div>
-              <p class="text-xs text-muted-foreground">{{ $t('profile.passwordMinLength') }}</p>
-            </div>
-            <div class="space-y-2">
-              <Label for="confirm_password">{{ $t('profile.confirmNewPassword') }}</Label>
-              <div class="relative">
-                <Input
-                  id="confirm_password"
-                  v-model="passwordForm.confirm_password"
-                  :type="showConfirmPassword ? 'text' : 'password'"
-                  :placeholder="$t('profile.confirmNewPasswordPlaceholder')"
-                />
-                <button
-                  type="button"
-                  class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  @click="showConfirmPassword = !showConfirmPassword"
-                >
-                  <Eye v-if="!showConfirmPassword" class="h-4 w-4" />
-                  <EyeOff v-else class="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-            <div class="flex justify-end">
-              <Button variant="outline" size="sm" @click="changePassword" :disabled="isChangingPassword">
-                <Loader2 v-if="isChangingPassword" class="mr-2 h-4 w-4 animate-spin" />
-                {{ $t('profile.changePassword') }}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+        <article class="card">
+          <header>
+            <h3>{{ $t('profile.changePassword') }}</h3>
+          </header>
+        <div data-field>
+          <label for="current_password">{{ $t('profile.currentPassword') }}</label>
+          <div class="hstack">
+            <input
+              id="current_password"
+              v-model="passwordForm.current_password"
+              class="flex-1"
+              :type="showCurrentPassword ? 'text' : 'password'"
+              :placeholder="$t('profile.currentPasswordPlaceholder')"
+            />
+            <button
+              type="button"
+              class="ghost icon"
+              :aria-label="$t('profile.togglePasswordVisibility')"
+              @click="showCurrentPassword = !showCurrentPassword"
+            >
+              <Eye v-if="!showCurrentPassword" />
+              <EyeOff v-else />
+            </button>
+          </div>
+        </div>
+        <div data-field>
+          <label for="new_password">{{ $t('profile.newPassword') }}</label>
+          <div class="hstack">
+            <input
+              id="new_password"
+              v-model="passwordForm.new_password"
+              class="flex-1"
+              :type="showNewPassword ? 'text' : 'password'"
+              :placeholder="$t('profile.newPasswordPlaceholder')"
+            />
+            <button
+              type="button"
+              class="ghost icon"
+              :aria-label="$t('profile.togglePasswordVisibility')"
+              @click="showNewPassword = !showNewPassword"
+            >
+              <Eye v-if="!showNewPassword" />
+              <EyeOff v-else />
+            </button>
+          </div>
+          <small data-hint>{{ $t('profile.passwordMinLength') }}</small>
+        </div>
+        <div data-field>
+          <label for="confirm_password">{{ $t('profile.confirmNewPassword') }}</label>
+          <div class="hstack">
+            <input
+              id="confirm_password"
+              v-model="passwordForm.confirm_password"
+              class="flex-1"
+              :type="showConfirmPassword ? 'text' : 'password'"
+              :placeholder="$t('profile.confirmNewPasswordPlaceholder')"
+            />
+            <button
+              type="button"
+              class="ghost icon"
+              :aria-label="$t('profile.togglePasswordVisibility')"
+              @click="showConfirmPassword = !showConfirmPassword"
+            >
+              <Eye v-if="!showConfirmPassword" />
+              <EyeOff v-else />
+            </button>
+          </div>
+        </div>
+          <footer class="flex justify-end">
+            <button type="button" class="outline small" :disabled="isChangingPassword" :aria-busy="isChangingPassword" @click="changePassword">
+              {{ $t('profile.changePassword') }}
+            </button>
+          </footer>
+        </article>
       </div>
-    </ScrollArea>
+    </div>
   </div>
 </template>

@@ -884,6 +884,7 @@ type MyOrganizationResponse struct {
 	RoleID         *uuid.UUID `json:"role_id,omitempty"`
 	RoleName       string     `json:"role_name,omitempty"`
 	IsDefault      bool       `json:"is_default"`
+	Logo           string     `json:"logo,omitempty"`
 }
 
 // ListMyOrganizations returns all organizations the current user belongs to
@@ -912,6 +913,7 @@ func (a *App) ListMyOrganizations(r *fastglue.Request) error {
 		if uo.Organization != nil {
 			item.Name = uo.Organization.Name
 			item.Slug = uo.Organization.Slug
+			item.Logo = orgLogo(uo.Organization.Settings)
 		}
 		if uo.Role != nil {
 			item.RoleName = uo.Role.Name

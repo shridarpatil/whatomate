@@ -2,17 +2,12 @@
 import { ref, onMounted, watch, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Switch } from '@/components/ui/switch'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { chatbotService } from '@/services/api'
-import { toast } from 'vue-sonner'
+import { toast } from '@/lib/toast'
 import { PageHeader, DataTable, DeleteConfirmDialog, SearchInput, IconButton, ErrorState, type Column } from '@/components/shared'
 import { getErrorMessage } from '@/lib/api-utils'
-import { Plus, Pencil, Trash2, Workflow } from 'lucide-vue-next'
-import { useDebounceFn } from '@vueuse/core'
+import { Plus, Pencil, Trash2, Workflow } from '@/lib/icons'
+import { debounce } from '@/lib/utils'
 
 const { t } = useI18n()
 
@@ -78,7 +73,7 @@ async function fetchFlows() {
 }
 
 // Debounced search
-const debouncedSearch = useDebounceFn(() => {
+const debouncedSearch = debounce(() => {
   currentPage.value = 1
   fetchFlows()
 }, 300)
@@ -98,12 +93,13 @@ function editFlow(flow: ChatbotFlow) {
   router.push(`/chatbot/flows/${flow.id}/edit`)
 }
 
-async function toggleFlow(flow: ChatbotFlow) {
+async function toggleFlow(flow: ChatbotFlow, event?: Event) {
   try {
     await chatbotService.updateFlow(flow.id, { enabled: !flow.enabled })
     flow.enabled = !flow.enabled
     toast.success(flow.enabled ? t('common.enabledSuccess', { resource: t('resources.Flow') }) : t('common.disabledSuccess', { resource: t('resources.Flow') }))
   } catch (error: any) {
+    if (event?.target instanceof HTMLInputElement) event.target.checked = flow.enabled
     toast.error(getErrorMessage(error, t('common.failedToggle', { resource: t('resources.flow') })))
   }
 }
@@ -132,104 +128,88 @@ async function confirmDeleteFlow() {
 </script>
 
 <template>
-  <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
+  <div class="flex flex-col h-full">
     <PageHeader
       :title="$t('chatbotFlows.title')"
       :icon="Workflow"
-      icon-gradient="bg-gradient-to-br from-purple-500 to-pink-600 shadow-purple-500/20"
       back-link="/chatbot"
       :breadcrumbs="[{ label: $t('chatbotFlows.backToChatbot'), href: '/chatbot' }, { label: $t('nav.flows') }]"
     >
       <template #actions>
-        <Button variant="outline" size="sm" @click="createFlow">
-          <Plus class="h-4 w-4 mr-2" />
+        <button type="button" class="outline small" @click="createFlow">
+          <Plus :size="16" />
           {{ $t('chatbotFlows.createFlow') }}
-        </Button>
+        </button>
       </template>
     </PageHeader>
 
-    <ScrollArea class="flex-1">
-      <div class="p-6">
-        <div>
-          <Card>
-            <CardHeader>
-              <div class="flex items-center justify-between flex-wrap gap-4">
-                <div>
-                  <CardTitle>{{ $t('chatbotFlows.yourFlows') }}</CardTitle>
-                  <CardDescription>{{ $t('chatbotFlows.yourFlowsDesc') }}</CardDescription>
-                </div>
-                <SearchInput v-model="searchQuery" :placeholder="$t('chatbotFlows.searchFlows') + '...'" class="w-64" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <ErrorState
-                v-if="error"
-                :title="$t('common.loadErrorTitle')"
-                :description="error"
-                :retry-label="$t('common.retry')"
-                @retry="fetchFlows"
-              />
-              <DataTable
-                v-else
-                :items="flows"
-                :columns="columns"
-                :is-loading="isLoading"
-                :empty-icon="Workflow"
-                :empty-title="searchQuery ? $t('chatbotFlows.noMatchingFlows') : $t('chatbotFlows.noFlowsYet')"
-                :empty-description="searchQuery ? $t('chatbotFlows.noMatchingFlowsDesc') : $t('chatbotFlows.noFlowsYetDesc')"
-                server-pagination
-                :current-page="currentPage"
-                :total-items="totalItems"
-                :page-size="pageSize"
-                item-name="flows"
-                @page-change="handlePageChange"
-                v-model:sort-key="sortKey"
-                v-model:sort-direction="sortDirection"
-              >
-                <template #cell-name="{ item: flow }">
-                  <span class="font-medium">{{ flow.name }}</span>
-                </template>
-                <template #cell-description="{ item: flow }">
-                  <span class="text-muted-foreground max-w-[200px] truncate block">{{ flow.description || $t('chatbotFlows.noDescription') }}</span>
-                </template>
-                <template #cell-trigger_keywords="{ item: flow }">
-                  <div class="flex flex-wrap gap-1">
-                    <Badge v-for="keyword in flow.trigger_keywords?.slice(0, 2)" :key="keyword" variant="secondary" class="text-xs">
-                      {{ keyword }}
-                    </Badge>
-                    <Badge v-if="flow.trigger_keywords?.length > 2" variant="outline" class="text-xs">
-                      +{{ flow.trigger_keywords.length - 2 }}
-                    </Badge>
-                    <span v-if="!flow.trigger_keywords?.length" class="text-muted-foreground text-sm">—</span>
-                  </div>
-                </template>
-                <template #cell-steps_count="{ item: flow }">
-                  <span class="text-muted-foreground">{{ flow.steps_count }}</span>
-                </template>
-                <template #cell-status="{ item: flow }">
-                  <div class="flex items-center gap-2">
-                    <Switch :checked="flow.enabled" @update:checked="toggleFlow(flow)" />
-                    <span class="text-sm text-muted-foreground">{{ flow.enabled ? $t('chatbotFlows.active') : $t('chatbotFlows.inactive') }}</span>
-                  </div>
-                </template>
-                <template #cell-actions="{ item: flow }">
-                  <div class="flex items-center justify-end gap-1">
-                    <IconButton :icon="Pencil" :label="$t('chatbotFlows.editFlowLabel')" class="h-8 w-8" @click="editFlow(flow)" />
-                    <IconButton :icon="Trash2" :label="$t('chatbotFlows.deleteFlowLabel')" class="h-8 w-8 text-destructive" @click="openDeleteDialog(flow)" />
-                  </div>
-                </template>
-                <template #empty-action>
-                  <Button v-if="!searchQuery" variant="outline" size="sm" @click="createFlow">
-                    <Plus class="h-4 w-4 mr-2" />
-                    {{ $t('chatbotFlows.createFlow') }}
-                  </Button>
-                </template>
-              </DataTable>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    </ScrollArea>
+    <div class="flex-1 scroll-y p-4">
+      <article class="card">
+        <header class="hstack justify-between flex-wrap gap-4">
+          <h3>{{ $t('chatbotFlows.yourFlows') }}</h3>
+          <SearchInput v-model="searchQuery" :placeholder="$t('chatbotFlows.searchFlows') + '...'" />
+        </header>
+        <ErrorState
+          v-if="error"
+          :title="$t('common.loadErrorTitle')"
+          :description="error"
+          :retry-label="$t('common.retry')"
+          @retry="fetchFlows"
+        />
+        <DataTable
+          v-else
+          :items="flows"
+          :columns="columns"
+          :is-loading="isLoading"
+          :empty-icon="Workflow"
+          :empty-title="searchQuery ? $t('chatbotFlows.noMatchingFlows') : $t('chatbotFlows.noFlowsYet')"
+          :empty-description="searchQuery ? $t('chatbotFlows.noMatchingFlowsDesc') : $t('chatbotFlows.noFlowsYetDesc')"
+          server-pagination
+          :current-page="currentPage"
+          :total-items="totalItems"
+          :page-size="pageSize"
+          item-name="flows"
+          @page-change="handlePageChange"
+          v-model:sort-key="sortKey"
+          v-model:sort-direction="sortDirection"
+        >
+          <template #cell-name="{ item: flow }">
+            <strong>{{ flow.name }}</strong>
+          </template>
+          <template #cell-description="{ item: flow }">
+            <span class="text-light truncate">{{ flow.description || $t('chatbotFlows.noDescription') }}</span>
+          </template>
+          <template #cell-trigger_keywords="{ item: flow }">
+            <div class="hstack gap-1 flex-wrap">
+              <span v-for="keyword in flow.trigger_keywords?.slice(0, 2)" :key="keyword" class="badge" data-variant="secondary">{{ keyword }}</span>
+              <span v-if="flow.trigger_keywords?.length > 2" class="badge outline">+{{ flow.trigger_keywords.length - 2 }}</span>
+              <small v-if="!flow.trigger_keywords?.length" class="text-light">—</small>
+            </div>
+          </template>
+          <template #cell-steps_count="{ item: flow }">
+            <span class="text-light">{{ flow.steps_count }}</span>
+          </template>
+          <template #cell-status="{ item: flow }">
+            <label class="hstack gap-2">
+              <input type="checkbox" role="switch" :checked="flow.enabled" :aria-label="$t('chatbotFlows.status')" @change="toggleFlow(flow, $event)">
+              <small class="text-light">{{ flow.enabled ? $t('chatbotFlows.active') : $t('chatbotFlows.inactive') }}</small>
+            </label>
+          </template>
+          <template #cell-actions="{ item: flow }">
+            <div class="hstack gap-1 justify-end">
+              <IconButton :icon="Pencil" :label="$t('chatbotFlows.editFlowLabel')" @click="editFlow(flow)" />
+              <IconButton :icon="Trash2" :label="$t('chatbotFlows.deleteFlowLabel')" @click="openDeleteDialog(flow)" />
+            </div>
+          </template>
+          <template #empty-action>
+            <button v-if="!searchQuery" type="button" class="outline small" @click="createFlow">
+              <Plus :size="16" />
+              {{ $t('chatbotFlows.createFlow') }}
+            </button>
+          </template>
+        </DataTable>
+      </article>
+    </div>
 
     <DeleteConfirmDialog
       v-model:open="deleteDialogOpen"
