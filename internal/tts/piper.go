@@ -40,9 +40,15 @@ func (p *PiperTTS) Generate(text string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
+	// Keep each conversion separate, on the same filesystem as the cached output.
+	tempDir, err := os.MkdirTemp(p.AudioDir, ".tts-*")
+	if err != nil {
+		return "", fmt.Errorf("failed to create temporary audio directory: %w", err)
+	}
+	defer func() { _ = os.RemoveAll(tempDir) }()
+
 	// Step 1: Generate WAV using piper
-	wavPath := outPath + ".tmp.wav"
-	defer func() { _ = os.Remove(wavPath) }() // clean up temp WAV
+	wavPath := filepath.Join(tempDir, "speech.wav")
 
 	piperCmd := exec.CommandContext(ctx, p.BinaryPath,
 		"--model", p.ModelPath,
@@ -70,8 +76,7 @@ func (p *PiperTTS) Generate(text string) (string, error) {
 	}
 
 	// Write to a temp file first, then rename for atomicity
-	tmpOgg := outPath + ".tmp.ogg"
-	defer func() { _ = os.Remove(tmpOgg) }() // clean up on error
+	tmpOgg := filepath.Join(tempDir, "speech.ogg")
 
 	encCmd := exec.CommandContext(ctx, opusenc,
 		"--bitrate", "24",
