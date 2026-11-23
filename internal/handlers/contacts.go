@@ -1162,7 +1162,7 @@ func (a *App) AssignContact(r *fastglue.Request) error {
 	// If assigning to a user, verify they exist in the same org
 	if req.UserID != nil {
 		var user models.User
-		if err := a.DB.Where("id = ? AND organization_id = ?", req.UserID, orgID).First(&user).Error; err != nil {
+		if err := models.ActiveUsersInOrganization(a.DB, orgID).Where("id = ?", req.UserID).First(&user).Error; err != nil {
 			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "User not found", nil, "")
 		}
 	}
@@ -1513,7 +1513,7 @@ func (a *App) UpdateContact(r *fastglue.Request) error {
 		updates["assigned_user_id"] = nil
 	} else if req.AssignedUserID != nil {
 		var user models.User
-		if err := a.DB.Where("id = ? AND organization_id = ?", req.AssignedUserID, orgID).First(&user).Error; err != nil {
+		if err := models.ActiveUsersInOrganization(a.DB, orgID).Where("id = ?", req.AssignedUserID).First(&user).Error; err != nil {
 			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Assigned user not found", nil, "")
 		}
 		updates["assigned_user_id"] = req.AssignedUserID

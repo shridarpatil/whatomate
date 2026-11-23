@@ -402,7 +402,7 @@ func (a *App) AddTeamMember(r *fastglue.Request) error {
 	}
 
 	// Verify user exists in org
-	user, err := findByIDAndOrg[models.User](a.DB, r, memberUserID, orgID, "User")
+	user, err := findActiveOrgUser(a.DB, r, memberUserID, orgID, "User")
 	if err != nil {
 		return nil
 	}

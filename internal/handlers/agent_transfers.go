@@ -459,7 +459,7 @@ func (a *App) CreateAgentTransfer(r *fastglue.Request) error {
 			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid agent_id", nil, "")
 		}
 		// Verify agent exists and is available
-		agent, err := findByIDAndOrg[models.User](a.DB, r, parsedAgentID, orgID, "Agent")
+		agent, err := findActiveOrgUser(a.DB, r, parsedAgentID, orgID, "Agent")
 		if err != nil {
 			return nil
 		}
@@ -473,7 +473,8 @@ func (a *App) CreateAgentTransfer(r *fastglue.Request) error {
 	} else if settings != nil && settings.AgentAssignment.AssignToSameAgent && contact.AssignedUserID != nil {
 		// Auto-assign to contact's existing assigned agent (if setting enabled and agent is available)
 		var assignedAgent models.User
-		if a.DB.Where("id = ?", contact.AssignedUserID).First(&assignedAgent).Error == nil && assignedAgent.IsAvailable {
+		if models.ActiveUsersInOrganization(a.DB, orgID).
+			First(&assignedAgent, "id = ? AND is_available = ?", contact.AssignedUserID, true).Error == nil {
 			agentID = contact.AssignedUserID
 		}
 		// If agent is not available, falls through to queue (agentID remains nil)
@@ -724,7 +725,7 @@ func (a *App) AssignAgentTransfer(r *fastglue.Request) error {
 		}
 
 		// Verify agent exists and is available
-		agent, err := findByIDAndOrg[models.User](a.DB, r, parsedAgentID, orgID, "Agent")
+		agent, err := findActiveOrgUser(a.DB, r, parsedAgentID, orgID, "Agent")
 		if err != nil {
 			return nil
 		}
@@ -734,6 +735,9 @@ func (a *App) AssignAgentTransfer(r *fastglue.Request) error {
 		targetAgentID = &parsedAgentID
 	} else if req.AgentID == nil && !hasWriteAccess {
 		// User without write permission self-assigning (null means "assign to me")
+		if _, err := findActiveOrgUser(a.DB, r, userID, orgID, "Agent"); err != nil {
+			return nil
+		}
 		targetAgentID = &userID
 	}
 
@@ -861,6 +865,10 @@ func (a *App) PickNextTransfer(r *fastglue.Request) error {
 	// Users without full access need pickup permission
 	if !hasFullAccess && !hasPickupPermission {
 		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "You don't have permission to pick up transfers", nil, "")
+	}
+
+	if _, err := findActiveOrgUser(a.DB, r, userID, orgID, "Agent"); err != nil {
+		return nil
 	}
 
 	// Get optional team filter
@@ -1281,7 +1289,8 @@ func (a *App) createTransferFromKeyword(account *models.WhatsAppAccount, contact
 	var agentID *uuid.UUID
 	if settings != nil && settings.AgentAssignment.AssignToSameAgent && contact.AssignedUserID != nil {
 		var assignedAgent models.User
-		if a.DB.Where("id = ?", contact.AssignedUserID).First(&assignedAgent).Error == nil && assignedAgent.IsAvailable {
+		if models.ActiveUsersInOrganization(a.DB, account.OrganizationID).
+			First(&assignedAgent, "id = ? AND is_available = ?", contact.AssignedUserID, true).Error == nil {
 			agentID = contact.AssignedUserID
 		}
 	}

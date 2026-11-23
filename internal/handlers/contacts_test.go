@@ -1853,3 +1853,48 @@ func TestApp_AssignContact_AssignUserFromDifferentOrg(t *testing.T) {
 	// User from a different org should not be found
 	assert.Equal(t, fasthttp.StatusBadRequest, testutil.GetResponseStatusCode(req))
 }
+
+func TestContactAssignmentOrganizationMembership(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	home := testutil.CreateTestOrganization(t, app.DB)
+	adminRole := testutil.CreateAdminRole(t, app.DB, org.ID)
+	admin := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&adminRole.ID))
+	agent := testutil.CreateTestUser(t, app.DB, home.ID)
+	link := &models.UserOrganization{UserID: agent.ID, OrganizationID: org.ID}
+
+	check := func(t *testing.T, status int) {
+		t.Helper()
+		for _, endpoint := range []struct {
+			field  string
+			handle func(*fastglue.Request) error
+		}{
+			{"user_id", app.AssignContact},
+			{"assigned_user_id", app.UpdateContact},
+		} {
+			contact := testutil.CreateTestContact(t, app.DB, org.ID)
+			req := testutil.NewJSONRequest(t, map[string]any{endpoint.field: agent.ID})
+			testutil.SetAuthContext(req, org.ID, admin.ID)
+			testutil.SetPathParam(req, "id", contact.ID.String())
+			require.NoError(t, endpoint.handle(req))
+			require.Equal(t, status, testutil.GetResponseStatusCode(req), endpoint.field)
+			require.NoError(t, app.DB.First(contact, "id = ?", contact.ID).Error)
+			if status == fasthttp.StatusOK {
+				require.Equal(t, &agent.ID, contact.AssignedUserID)
+			} else {
+				require.Nil(t, contact.AssignedUserID)
+			}
+		}
+	}
+	t.Run("no membership", func(t *testing.T) { check(t, fasthttp.StatusBadRequest) })
+	require.NoError(t, app.DB.Create(link).Error)
+	t.Run("secondary membership", func(t *testing.T) { check(t, fasthttp.StatusOK) })
+	require.NoError(t, app.DB.Delete(link).Error)
+	t.Run("removed membership", func(t *testing.T) { check(t, fasthttp.StatusBadRequest) })
+	require.NoError(t, app.DB.Unscoped().Model(link).Update("deleted_at", nil).Error)
+	require.NoError(t, app.DB.Model(agent).Update("is_active", false).Error)
+	t.Run("inactive member", func(t *testing.T) { check(t, fasthttp.StatusBadRequest) })
+	require.NoError(t, app.DB.Model(agent).Update("is_active", true).Error)
+	require.NoError(t, app.DB.Delete(agent).Error)
+	t.Run("deleted member", func(t *testing.T) { check(t, fasthttp.StatusBadRequest) })
+}

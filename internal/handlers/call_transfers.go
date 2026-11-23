@@ -117,6 +117,10 @@ func (a *App) ConnectCallTransfer(r *fastglue.Request) error {
 	// This avoids claiming and then reverting, which creates a window where
 	// the transfer is stuck as "connected" with no agent.
 
+	if _, err := findActiveOrgUser(a.DB, r, userID, orgID, "Agent"); err != nil {
+		return nil
+	}
+
 	// If transfer is directed to a specific agent (no team), reject other agents.
 	// For team transfers with rotation, any team member can accept — the atomic
 	// UPDATE below is the sole concurrency guard.
@@ -300,6 +304,9 @@ func (a *App) InitiateAgentTransfer(r *fastglue.Request) error {
 		agentID, err := uuid.Parse(req.AgentID)
 		if err != nil {
 			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid agent_id", nil, "")
+		}
+		if _, err := findActiveOrgUser(a.DB, r, agentID, orgID, "Agent"); err != nil {
+			return nil
 		}
 		// Verify agent is a member of the team
 		var memberCount int64

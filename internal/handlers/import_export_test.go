@@ -1,7 +1,10 @@
 package handlers_test
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
+	"mime/multipart"
 	"strings"
 	"testing"
 
@@ -296,4 +299,43 @@ func TestApp_ExportData_CSVInjectionEscaped(t *testing.T) {
 	// The dangerous cell must be prefixed with a single quote.
 	assert.Contains(t, csv, "'=cmd",
 		"cells starting with '=' must be prefixed with a single quote to defuse CSV injection")
+}
+
+func TestApp_ImportData_AssigneeMembership(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	home := testutil.CreateTestOrganization(t, app.DB)
+	role := contactsExportRole(t, app.DB, org.ID)
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
+	agent := testutil.CreateTestUser(t, app.DB, home.ID)
+	outsider := testutil.CreateTestUser(t, app.DB, home.ID)
+	require.NoError(t, app.DB.Create(&models.UserOrganization{UserID: agent.ID, OrganizationID: org.ID}).Error)
+
+	var body bytes.Buffer
+	form := multipart.NewWriter(&body)
+	require.NoError(t, form.WriteField("table", "contacts"))
+	require.NoError(t, form.WriteField("update_on_duplicate", "true"))
+	file, err := form.CreateFormFile("file", "contacts.csv")
+	require.NoError(t, err)
+	// An invalid update to the same phone must preserve the first row's assignee.
+	_, err = fmt.Fprintf(file, "phone_number,assigned_user_id\n15550001234,%s\n15550001234,%s\n", agent.ID, outsider.ID)
+	require.NoError(t, err)
+	require.NoError(t, form.Close())
+
+	req := testutil.NewRequest(t)
+	req.RequestCtx.Request.Header.SetContentType(form.FormDataContentType())
+	req.RequestCtx.Request.SetBody(body.Bytes())
+	testutil.SetAuthContext(req, org.ID, user.ID)
+	require.NoError(t, app.ImportData(req))
+	require.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+	var result struct {
+		Data struct{ Created, Updated, Errors int }
+	}
+	require.NoError(t, json.Unmarshal(testutil.GetResponseBody(req), &result))
+	require.Equal(t, 1, result.Data.Created)
+	require.Equal(t, 0, result.Data.Updated)
+	require.Equal(t, 1, result.Data.Errors)
+	var contact models.Contact
+	require.NoError(t, app.DB.First(&contact, "organization_id = ? AND phone_number = ?", org.ID, "15550001234").Error)
+	require.Equal(t, &agent.ID, contact.AssignedUserID)
 }
