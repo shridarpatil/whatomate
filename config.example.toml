@@ -52,6 +52,10 @@ s3_region = ""
 # (env vars, shared config, EKS IRSA, ECS task role, EC2 instance profile).
 s3_key = ""
 s3_secret = ""
+# Optional S3-compatible endpoint (for example, https://<account-id>.r2.cloudflarestorage.com).
+# s3_endpoint = ""
+# Set to true if your provider requires the bucket name in the URL path.
+# s3_use_path_style = false
 
 [whatsapp]
 webhook_verify_token = "random-string-change-this"

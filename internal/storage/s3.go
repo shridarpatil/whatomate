@@ -44,7 +44,13 @@ func NewS3Client(cfg *config.StorageConfig) (*S3Client, error) {
 		return nil, fmt.Errorf("load aws config: %w", err)
 	}
 
-	return &S3Client{client: s3.NewFromConfig(awsCfg), bucket: cfg.S3Bucket}, nil
+	client := s3.NewFromConfig(awsCfg, func(options *s3.Options) {
+		if cfg.S3Endpoint != "" {
+			options.BaseEndpoint = aws.String(cfg.S3Endpoint)
+		}
+		options.UsePathStyle = cfg.S3UsePathStyle
+	})
+	return &S3Client{client: client, bucket: cfg.S3Bucket}, nil
 }
 
 // Upload uploads a file to S3 at the given key.
