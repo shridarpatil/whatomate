@@ -330,14 +330,14 @@ func TestGetAvailableAgents_ReturnsAvailableMinusExcluded(t *testing.T) {
 
 	setUnavailable(t, db, agents[1].ID)
 
-	got := a.GetAvailableAgents(team.ID, []uuid.UUID{agents[2].ID})
+	got := a.GetAvailableAgents(team.ID, org.ID, []uuid.UUID{agents[2].ID})
 	// agents[0] available, [1] unavailable, [2] excluded, [3] available → expect [0] and [3].
 	assert.ElementsMatch(t, []uuid.UUID{agents[0].ID, agents[3].ID}, got)
 }
 
 func TestGetAvailableAgents_NonexistentTeamReturnsNil(t *testing.T) {
 	a, _ := newAssigner(t)
-	assert.Nil(t, a.GetAvailableAgents(uuid.New(), nil))
+	assert.Nil(t, a.GetAvailableAgents(uuid.New(), uuid.New(), nil))
 }
 
 // --- ResolvePerAgentTimeout ---
@@ -463,4 +463,21 @@ func TestCallLoadCounter_OnlyWaitingAndConnected(t *testing.T) {
 
 	loads := assignment.CallLoadCounter(db, org.ID, []uuid.UUID{agent.ID})
 	assert.Equal(t, int64(2), loads[agent.ID], "only waiting + connected should be counted")
+}
+
+func TestAssignToTeamChecksCurrentMembership(t *testing.T) {
+	a, db := newAssigner(t)
+	org := testutil.CreateTestOrganization(t, db)
+	home := testutil.CreateTestOrganization(t, db)
+	agent := testutil.CreateTestUser(t, db, home.ID)
+	link := &models.UserOrganization{UserID: agent.ID, OrganizationID: org.ID}
+	require.NoError(t, db.Create(link).Error)
+	team, _ := createTeam(t, db, org.ID, models.AssignmentStrategyRoundRobin, 0, 0)
+	require.NoError(t, db.Create(&models.TeamMember{TeamID: team.ID, UserID: agent.ID, Role: models.TeamRoleAgent}).Error)
+	require.Equal(t, &agent.ID, a.AssignToTeam(team.ID, org.ID, nil, assignment.ChatLoadCounter))
+
+	// The team member is still cached after the organization membership is revoked.
+	require.NoError(t, db.Delete(link).Error)
+	require.Nil(t, a.AssignToTeam(team.ID, org.ID, nil, assignment.ChatLoadCounter))
+	require.Empty(t, a.GetAvailableAgents(team.ID, org.ID, nil))
 }

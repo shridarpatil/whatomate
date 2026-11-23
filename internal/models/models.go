@@ -130,6 +130,17 @@ func (User) TableName() string {
 	return "users"
 }
 
+// UsersInOrganization scopes users to their current organization memberships.
+func UsersInOrganization(db *gorm.DB, orgID uuid.UUID) *gorm.DB {
+	members := db.Model(&UserOrganization{}).Select("user_id").Where("organization_id = ?", orgID)
+	return db.Model(&User{}).Where("users.id IN (?)", members)
+}
+
+// ActiveUsersInOrganization returns eligible assignment targets, including agents marked away.
+func ActiveUsersInOrganization(db *gorm.DB, orgID uuid.UUID) *gorm.DB {
+	return UsersInOrganization(db, orgID).Where("users.is_active = ?", true)
+}
+
 // UserOrganization represents a many-to-many relationship between users and organizations
 type UserOrganization struct {
 	BaseModel

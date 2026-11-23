@@ -97,6 +97,15 @@ func findByIDAndOrg[T any](db *gorm.DB, r *fastglue.Request, id, orgID uuid.UUID
 	return &model, nil
 }
 
+func findActiveOrgUser(db *gorm.DB, r *fastglue.Request, id, orgID uuid.UUID, label string) (*models.User, error) {
+	var user models.User
+	if err := models.ActiveUsersInOrganization(db, orgID).First(&user, "id = ?", id).Error; err != nil {
+		_ = r.SendErrorEnvelope(fasthttp.StatusNotFound, label+" not found", nil, "")
+		return nil, errEnvelopeSent
+	}
+	return &user, nil
+}
+
 // logAudit records an audit-log entry for a resource mutation, resolving the
 // actor's display name automatically. It wraps audit.LogAudit to remove the
 // repeated a.DB + GetUserName boilerplate at call sites.

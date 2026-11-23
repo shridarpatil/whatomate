@@ -111,7 +111,7 @@ func (m *Manager) initiateTransfer(session *CallSession, waAccount string, teamT
 		var contact models.Contact
 		if m.db.Select("assigned_user_id").Where("id = ?", session.ContactID).First(&contact).Error == nil && contact.AssignedUserID != nil {
 			var agent models.User
-			if m.db.Where("id = ? AND is_available = ?", contact.AssignedUserID, true).First(&agent).Error == nil {
+			if models.ActiveUsersInOrganization(m.db, session.OrganizationID).Where("id = ? AND is_available = ?", contact.AssignedUserID, true).First(&agent).Error == nil {
 				assignedAgentID = contact.AssignedUserID
 				m.log.Info("Routing call to assigned agent (relationship manager)",
 					"call_id", session.ID, "agent_id", assignedAgentID, "contact_id", session.ContactID)
@@ -1010,7 +1010,7 @@ func (m *Manager) runTransferRotation(session *CallSession, transfer models.Call
 	}
 
 	// Fallback: broadcast to all remaining available AND online team members
-	remaining := m.assigner.GetAvailableAgents(teamID, triedAgents)
+	remaining := m.assigner.GetAvailableAgents(teamID, orgID, triedAgents)
 	remaining = m.wsHub.FilterOnlineUsers(orgID, remaining)
 	if len(remaining) == 0 {
 		// No agents online — go straight to no_answer instead of

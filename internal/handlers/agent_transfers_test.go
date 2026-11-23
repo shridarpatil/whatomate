@@ -274,7 +274,9 @@ func TestApp_CreateAgentTransfer_WithAgent(t *testing.T) {
 	account := testutil.CreateTestWhatsAppAccount(t, app.DB, org.ID)
 
 	contact := testutil.CreateTestContact(t, app.DB, org.ID)
-	agent := createTestAgent(t, app, org.ID)
+	home := testutil.CreateTestOrganization(t, app.DB)
+	agent := createTestAgent(t, app, home.ID)
+	require.NoError(t, app.DB.Create(&models.UserOrganization{UserID: agent.ID, OrganizationID: org.ID}).Error)
 
 	req := testutil.NewJSONRequest(t, map[string]any{
 		"contact_id":       contact.ID.String(),

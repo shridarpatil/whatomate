@@ -613,7 +613,7 @@ func (a *App) resolveStickyRoute(ctx context.Context, rawPayload string, orgID u
 
 	// Cross-org ids never belong to this call, so they don't make it sticky.
 	var user models.User
-	if err := a.DB.Where("id = ? AND organization_id = ?", agentID, orgID).First(&user).Error; err != nil {
+	if err := models.UsersInOrganization(a.DB, orgID).Where("id = ?", agentID).First(&user).Error; err != nil {
 		a.Log.Info("Sticky-route ignored: agent not in this org",
 			"agent_id", agentID, "org_id", orgID)
 		return nil
@@ -634,7 +634,7 @@ func (a *App) resolveStickyRoute(ctx context.Context, rawPayload string, orgID u
 func (a *App) stickyRouteForCall(ctx context.Context, rawPayload string, orgID uuid.UUID, callerPhone string, callLog *models.CallLog) *stickyRoute {
 	if callLog.StickyAgentID != nil {
 		var user models.User
-		if err := a.DB.Where("id = ? AND organization_id = ?", *callLog.StickyAgentID, orgID).First(&user).Error; err == nil {
+		if err := models.UsersInOrganization(a.DB, orgID).Where("id = ?", *callLog.StickyAgentID).First(&user).Error; err == nil {
 			return &stickyRoute{AgentID: user.ID, Eligible: a.isStickyAgentReachable(user, orgID)}
 		}
 	}

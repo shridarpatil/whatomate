@@ -544,6 +544,15 @@ func (a *App) ImportData(r *fastglue.Request) error {
 			continue
 		}
 
+		if assignee, ok := recordMap["assigned_user_id"]; ok {
+			var user models.User
+			if err := models.ActiveUsersInOrganization(a.DB, orgID).First(&user, "id = ?", assignee).Error; err != nil {
+				errors++
+				errorMessages = append(errorMessages, fmt.Sprintf("Row %d: assigned user not found", rowNum))
+				continue
+			}
+		}
+
 		// Check for duplicate based on unique column
 		if config.UniqueColumn != "" {
 			uniqueVal := recordMap[config.UniqueColumn]

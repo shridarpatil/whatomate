@@ -54,19 +54,19 @@ func (a *Assigner) AssignToTeam(teamID, orgID uuid.UUID, excludeAgentIDs []uuid.
 // GetAvailableAgents returns the user IDs of available agents in the team,
 // excluding the given IDs. Used for broadcast fallback after rotation exhausts
 // individual agents.
-func (a *Assigner) GetAvailableAgents(teamID uuid.UUID, excludeAgentIDs []uuid.UUID) []uuid.UUID {
+func (a *Assigner) GetAvailableAgents(teamID, orgID uuid.UUID, excludeAgentIDs []uuid.UUID) []uuid.UUID {
 	cfg := a.GetTeamConfig(teamID)
 	if cfg == nil {
 		return nil
 	}
 
-	return a.filterAvailable(cfg.MemberIDs, excludeAgentIDs)
+	return a.filterAvailable(orgID, cfg.MemberIDs, excludeAgentIDs)
 }
 
 // assignRoundRobin selects the available agent with the oldest last_assigned_at
 // from the cached member list and updates their timestamp.
 func (a *Assigner) assignRoundRobin(teamID, orgID uuid.UUID, memberIDs []uuid.UUID, excludeAgentIDs []uuid.UUID) *uuid.UUID {
-	available := a.filterAvailable(memberIDs, excludeAgentIDs)
+	available := a.filterAvailable(orgID, memberIDs, excludeAgentIDs)
 	if len(available) == 0 {
 		a.log.Debug("No available agents for round-robin", "team_id", teamID)
 		return nil
@@ -94,7 +94,7 @@ func (a *Assigner) assignRoundRobin(teamID, orgID uuid.UUID, memberIDs []uuid.UU
 // assignLoadBalanced selects the available agent with the fewest active items
 // as counted by the provided LoadCounter.
 func (a *Assigner) assignLoadBalanced(orgID uuid.UUID, memberIDs []uuid.UUID, excludeAgentIDs []uuid.UUID, loadCounter LoadCounter) *uuid.UUID {
-	available := a.filterAvailable(memberIDs, excludeAgentIDs)
+	available := a.filterAvailable(orgID, memberIDs, excludeAgentIDs)
 	if len(available) == 0 {
 		a.log.Debug("No available agents for load-balanced")
 		return nil
@@ -121,7 +121,7 @@ func (a *Assigner) assignLoadBalanced(orgID uuid.UUID, memberIDs []uuid.UUID, ex
 
 // filterAvailable returns user IDs from memberIDs that are active, available,
 // and not in the exclude list.
-func (a *Assigner) filterAvailable(memberIDs []uuid.UUID, excludeAgentIDs []uuid.UUID) []uuid.UUID {
+func (a *Assigner) filterAvailable(orgID uuid.UUID, memberIDs []uuid.UUID, excludeAgentIDs []uuid.UUID) []uuid.UUID {
 	if len(memberIDs) == 0 {
 		return nil
 	}
@@ -145,9 +145,8 @@ func (a *Assigner) filterAvailable(memberIDs []uuid.UUID, excludeAgentIDs []uuid
 
 	// Query DB for availability (this changes frequently, not cached)
 	var availableIDs []uuid.UUID
-	a.db.Model(&models.User{}).
-		Select("id").
-		Where("id IN ? AND is_available = ? AND is_active = ?", candidates, true, true).
+	models.ActiveUsersInOrganization(a.db, orgID).
+		Where("id IN ? AND is_available = ?", candidates, true).
 		Pluck("id", &availableIDs)
 
 	return availableIDs
