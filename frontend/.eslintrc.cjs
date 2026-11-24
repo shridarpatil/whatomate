@@ -12,7 +12,7 @@ module.exports = {
   parserOptions: {
     ecmaVersion: 'latest'
   },
-  ignorePatterns: ['dist/', 'node_modules/', 'playwright-report/', 'test-results/'],
+  ignorePatterns: ['dist/', 'node_modules/', 'playwright-report/', 'test-results/', 'src/vendor/'],
   rules: {
     'vue/multi-word-component-names': 'off',
     '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
@@ -21,7 +21,7 @@ module.exports = {
   },
   overrides: [
     {
-      files: ['*.cjs', 'postcss.config.cjs', 'tailwind.config.cjs'],
+      files: ['*.cjs', 'scripts/*.mjs'],
       env: {
         node: true,
         commonjs: true

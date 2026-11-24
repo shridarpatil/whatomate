@@ -1,26 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
 import type { MockApiResponse, FlowStep } from '@/types/flow-preview'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import { Globe, AlertCircle } from 'lucide-vue-next'
+import Modal from '@/components/oat/Modal.vue'
 
 const props = defineProps<{
   open: boolean
@@ -118,105 +99,69 @@ function handleSubmit() {
 </script>
 
 <template>
-  <Dialog :open="open" @update:open="handleClose">
-    <DialogContent class="sm:max-w-[500px]">
-      <DialogHeader>
-        <DialogTitle class="flex items-center gap-2">
-          <Globe class="h-5 w-5 text-blue-500" />
-          Configure API Mock
-        </DialogTitle>
-        <DialogDescription>
-          Configure the mock response for this API step. The response will be used to simulate the API call.
-        </DialogDescription>
-      </DialogHeader>
+  <Modal
+    :open="open"
+    :title="$t('flowBuilder.configureApiMock')"
+    description="Configure the mock response for this API step. The response will be used to simulate the API call."
+    @update:open="(v) => { if (!v) handleClose() }"
+  >
+    <form id="api-mock-form" class="vstack gap-4" @submit.prevent="handleSubmit">
+      <!-- API Info -->
+      <article v-if="step" class="card p-4 vstack gap-1">
+        <strong>{{ step.step_name }}</strong>
+        <small class="text-light"><code>{{ step.api_config?.method || 'GET' }} {{ step.api_config?.url || 'N/A' }}</code></small>
+      </article>
 
-      <div class="space-y-4 py-4">
-        <!-- API Info -->
-        <div v-if="step" class="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg text-sm">
-          <div class="font-medium text-gray-700 dark:text-gray-300 mb-1">
-            {{ step.step_name }}
-          </div>
-          <div class="text-gray-500 dark:text-gray-400 font-mono text-xs">
-            {{ step.api_config?.method || 'GET' }} {{ step.api_config?.url || 'N/A' }}
-          </div>
-        </div>
-
-        <!-- Response Mapping Info -->
-        <div v-if="responseMappingInfo.length > 0" class="text-xs">
-          <Label class="text-gray-500">Variables to extract:</Label>
-          <div class="mt-1 flex flex-wrap gap-2">
-            <span
-              v-for="mapping in responseMappingInfo"
-              :key="mapping.varName"
-              class="px-2 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 rounded font-mono"
-            >
-              {{ mapping.varName }} ← {{ mapping.path }}
-            </span>
-          </div>
-        </div>
-
-        <!-- Status Code -->
-        <div class="grid grid-cols-2 gap-4">
-          <div class="space-y-2">
-            <Label>Status Code</Label>
-            <Select v-model="statusCode">
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="200">200 OK</SelectItem>
-                <SelectItem value="201">201 Created</SelectItem>
-                <SelectItem value="400">400 Bad Request</SelectItem>
-                <SelectItem value="401">401 Unauthorized</SelectItem>
-                <SelectItem value="404">404 Not Found</SelectItem>
-                <SelectItem value="500">500 Server Error</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div class="space-y-2">
-            <Label>Delay (ms)</Label>
-            <Input
-              v-model="delay"
-              type="number"
-              min="0"
-              max="5000"
-              step="100"
-            />
-          </div>
-        </div>
-
-        <!-- Response Body -->
-        <div class="space-y-2">
-          <div class="flex items-center justify-between">
-            <Label>Response Body (JSON)</Label>
-            <span
-              v-if="parseError"
-              class="text-xs text-red-500 flex items-center gap-1"
-            >
-              <AlertCircle class="h-3 w-3" />
-              {{ parseError }}
-            </span>
-          </div>
-          <Textarea
-            v-model="responseBody"
-            :class="'font-mono text-sm min-h-[150px]' + (parseError ? ' border-red-500' : '')"
-            placeholder='{"key": "value"}'
-          />
+      <!-- Response Mapping Info -->
+      <div v-if="responseMappingInfo.length > 0" class="vstack gap-1">
+        <small class="text-light">Variables to extract:</small>
+        <div class="hstack gap-2 flex-wrap">
+          <code v-for="mapping in responseMappingInfo" :key="mapping.varName">
+            {{ mapping.varName }} ← {{ mapping.path }}
+          </code>
         </div>
       </div>
 
-      <DialogFooter>
-        <Button variant="outline" @click="handleClose">
-          Cancel
-        </Button>
-        <Button
-          :disabled="!!parseError || !parsedResponse"
-          @click="handleSubmit"
-        >
-          Use Mock Response
-        </Button>
-      </DialogFooter>
-    </DialogContent>
-  </Dialog>
+      <div class="row">
+        <label data-field class="col-6">
+          Status Code
+          <select v-model="statusCode">
+            <option value="200">200 OK</option>
+            <option value="201">201 Created</option>
+            <option value="400">400 Bad Request</option>
+            <option value="401">401 Unauthorized</option>
+            <option value="404">404 Not Found</option>
+            <option value="500">500 Server Error</option>
+          </select>
+        </label>
+
+        <label data-field class="col-6">
+          Delay (ms)
+          <input v-model="delay" type="number" min="0" max="5000" step="100">
+        </label>
+      </div>
+
+      <!-- Response Body -->
+      <label data-field>
+        Response Body (JSON)
+        <textarea
+          v-model="responseBody"
+          rows="8"
+          placeholder='{"key": "value"}'
+          :aria-invalid="parseError ? 'true' : undefined"
+          aria-describedby="api-mock-json-error"
+        />
+        <div id="api-mock-json-error" class="error" role="status">{{ parseError }}</div>
+      </label>
+    </form>
+
+    <template #footer>
+      <button type="button" class="outline" @click="handleClose">
+        Cancel
+      </button>
+      <button type="submit" form="api-mock-form" :disabled="!!parseError || !parsedResponse">
+        Use Mock Response
+      </button>
+    </template>
+  </Modal>
 </template>

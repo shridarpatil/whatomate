@@ -9,7 +9,7 @@ vi.mock('@/services/api', () => ({
   callTransfersService: { connect: (...args: unknown[]) => connectMock(...args) },
   outgoingCallsService: { getICEServers: vi.fn(async () => ({ data: { ice_servers: [] } })) },
 }))
-vi.mock('vue-sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 vi.mock('@/i18n', () => ({ i18n: { global: { t: (k: string) => k } } }))
 
 class MockPeerConnection {

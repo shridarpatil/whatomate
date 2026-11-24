@@ -99,7 +99,8 @@ type CallingConfig struct {
 }
 
 type AppConfig struct {
-	Name          string `koanf:"name"`
+	Name          string `koanf:"name"`     // Shown on the login page ("Welcome to <name>")
+	LogoURL       string `koanf:"logo_url"` // Login page logo; empty uses the default icon
 	Environment   string `koanf:"environment"` // development, staging, production
 	Debug         bool   `koanf:"debug"`
 	EncryptionKey string `koanf:"encryption_key"` // AES-256 key for encrypting secrets at rest

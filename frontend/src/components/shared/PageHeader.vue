@@ -1,62 +1,30 @@
 <script setup lang="ts">
-import { Button } from '@/components/ui/button'
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from '@/components/ui/breadcrumb'
-import { ArrowLeft } from 'lucide-vue-next'
+import { ArrowLeft } from '@/lib/icons'
 import type { Component } from 'vue'
 
 defineProps<{
   title: string
   description?: string
   icon?: Component
+  // Kept for call-site compatibility; every page uses the classic emerald icon tile.
   iconGradient?: string
   backLink?: string
+  // Kept for call-site compatibility; breadcrumbs are intentionally not shown (the sidebar shows location).
   breadcrumbs?: Array<{ label: string; href?: string }>
 }>()
 </script>
 
 <template>
-  <header class="border-b border-white/[0.08] light:border-gray-200 bg-[#0a0a0b]/95 light:bg-white/95 backdrop-blur">
-    <div class="flex h-16 items-center px-6">
-      <RouterLink v-if="backLink" :to="backLink">
-        <Button variant="ghost" size="icon" class="mr-3">
-          <ArrowLeft class="h-5 w-5" />
-        </Button>
-      </RouterLink>
-      <div
-        v-if="icon"
-        class="h-8 w-8 rounded-lg flex items-center justify-center mr-3 shadow-lg"
-        :class="iconGradient || 'bg-gradient-to-br from-blue-500 to-indigo-600 shadow-blue-500/20'"
-      >
-        <component :is="icon" class="h-4 w-4 text-white" />
-      </div>
-      <div class="flex-1">
-        <h1 class="text-xl font-semibold text-white light:text-gray-900">{{ title }}</h1>
-        <template v-if="breadcrumbs?.length">
-          <Breadcrumb>
-            <BreadcrumbList>
-              <template v-for="(crumb, index) in breadcrumbs" :key="index">
-                <BreadcrumbItem>
-                  <BreadcrumbLink v-if="crumb.href" :href="crumb.href">
-                    {{ crumb.label }}
-                  </BreadcrumbLink>
-                  <BreadcrumbPage v-else>{{ crumb.label }}</BreadcrumbPage>
-                </BreadcrumbItem>
-                <BreadcrumbSeparator v-if="index < breadcrumbs.length - 1" />
-              </template>
-            </BreadcrumbList>
-          </Breadcrumb>
-        </template>
-        <p v-else-if="description" class="text-sm text-white/50 light:text-gray-500">
-          {{ description }}
-        </p>
-      </div>
+  <header class="hstack items-center gap-4" data-page-header>
+    <RouterLink v-if="backLink" :to="backLink" class="button ghost icon" :title="$t('common.back', 'Back')" :aria-label="$t('common.back', 'Back')">
+      <ArrowLeft />
+    </RouterLink>
+    <span v-if="icon" data-page-icon aria-hidden="true"><component :is="icon" :size="16" /></span>
+    <div class="flex-1 min-w-0">
+      <h1>{{ title }}</h1>
+      <p v-if="description" data-page-description>{{ description }}</p>
+    </div>
+    <div v-if="$slots.actions" class="hstack items-center" data-page-actions>
       <slot name="actions" />
     </div>
   </header>

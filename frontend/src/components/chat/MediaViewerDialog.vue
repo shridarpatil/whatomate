@@ -2,18 +2,16 @@
 // In-app media viewer (lightbox) for chat attachments: images, stickers, video
 // and PDF/documents. Replaces the old "open in a new browser tab" behaviour.
 //
-// Built on the existing ui/dialog primitives, so teleport-to-body, the dark
-// backdrop, ESC-to-close and focus-trap all come for free. Images and video
+// Built on the shared Oat Modal (native <dialog>), so the top layer, backdrop,
+// ESC-to-close and focus containment all come for free. Images and video
 // load straight from the auth-cookie-gated /api/media/{id} endpoint. PDFs are
 // the tricky case: the backend sets a global `X-Frame-Options: DENY`, so a
 // direct <iframe src="/api/media/{id}"> is blocked even same-origin. We work
 // around it WITHOUT touching the backend by fetch()ing the bytes (the cookie
 // rides along) and framing an object-URL blob, which carries no such header.
-import { ref, computed, watch, onBeforeUnmount } from 'vue'
-import { onKeyStroke } from '@vueuse/core'
-import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog'
+import { ref, computed, watch, onBeforeUnmount, onMounted, onUnmounted } from 'vue'
+import Modal from '@/components/oat/Modal.vue'
 import IconButton from '@/components/shared/IconButton.vue'
-import { Button } from '@/components/ui/button'
 import {
   Download,
   ExternalLink,
@@ -22,8 +20,7 @@ import {
   ChevronLeft,
   ChevronRight,
   FileText,
-  Loader2,
-} from 'lucide-vue-next'
+} from '@/lib/icons'
 import type { Message } from '@/stores/contacts'
 
 const props = defineProps<{ items: Message[] }>()
@@ -58,8 +55,13 @@ const filename = computed(() => current.value?.media_filename || '')
 // --- Navigation ---------------------------------------------------------
 function prev() { if (hasPrev.value) index.value -= 1 }
 function next() { if (hasNext.value) index.value += 1 }
-onKeyStroke('ArrowLeft', () => { if (open.value) prev() })
-onKeyStroke('ArrowRight', () => { if (open.value) next() })
+function onKeydown(e: KeyboardEvent) {
+  if (!open.value) return
+  if (e.key === 'ArrowLeft') prev()
+  else if (e.key === 'ArrowRight') next()
+}
+onMounted(() => window.addEventListener('keydown', onKeydown))
+onUnmounted(() => window.removeEventListener('keydown', onKeydown))
 
 function openInTab() { if (currentUrl.value) window.open(currentUrl.value, '_blank') }
 
@@ -163,148 +165,128 @@ function closeOnBackdrop() { open.value = false }
 </script>
 
 <template>
-  <Dialog v-model:open="open">
-    <!-- text-white on the content itself, not just the toolbar: DialogContent's
-         built-in close X is a sibling of the toolbar and inherits its colour
-         from here, so without it the X renders near-black on this dark backdrop
-         in light theme. -->
-    <DialogContent
-      class="max-w-none w-screen h-screen p-0 gap-0 border-0 rounded-none sm:rounded-none bg-black/95 text-white shadow-none ring-0 flex flex-col"
-    >
-      <!-- Screen-reader only: satisfies aria-describedby without visible chrome. -->
-      <DialogDescription class="sr-only">{{ $t('chat.mediaViewer.description') }}</DialogDescription>
-
-      <!-- Toolbar (pr-14 leaves room for DialogContent's built-in close X) -->
-      <div class="flex items-center gap-1 shrink-0 px-3 py-2 pr-14 text-white">
-        <!-- The filename doubles as the dialog's accessible name (inbound images
-             carry no filename, hence the generic fallback). -->
-        <DialogTitle class="text-sm font-normal truncate max-w-[40vw]" :title="filename">
-          {{ filename || $t('chat.mediaViewer.title') }}
-        </DialogTitle>
-        <span v-if="total > 1" class="text-xs text-white/60 ml-1">{{ index + 1 }} / {{ total }}</span>
-        <div class="ml-auto flex items-center gap-1">
+  <Modal v-model:open="open" class="modal-wide" :title="filename || $t('chat.mediaViewer.title')">
+    <div class="vstack gap-2">
+      <!-- Toolbar -->
+      <div class="hstack justify-between">
+        <small class="text-light">
+          <template v-if="total > 1">{{ index + 1 }} / {{ total }}</template>
+        </small>
+        <div class="hstack gap-1">
           <template v-if="currentKind === 'image'">
-            <IconButton
-              :icon="ZoomOut"
-              :label="$t('chat.mediaViewer.zoomOut')"
-              class="text-white hover:text-white hover:bg-white/20"
-              :disabled="scale <= 1"
-              @click="zoomOut"
-            />
-            <IconButton
-              :icon="ZoomIn"
-              :label="$t('chat.mediaViewer.zoomIn')"
-              class="text-white hover:text-white hover:bg-white/20"
-              @click="zoomIn"
-            />
+            <IconButton :icon="ZoomOut" :label="$t('chat.mediaViewer.zoomOut')" :disabled="scale <= 1" @click="zoomOut" />
+            <IconButton :icon="ZoomIn" :label="$t('chat.mediaViewer.zoomIn')" @click="zoomIn" />
           </template>
           <a
             v-if="currentUrl"
             :href="currentUrl"
             :download="filename || 'file'"
-            class="inline-flex items-center justify-center h-9 w-9 rounded-md text-white hover:bg-white/20 transition-colors"
+            class="button ghost icon"
             :title="$t('chat.mediaViewer.download')"
             :aria-label="$t('chat.mediaViewer.download')"
           >
-            <Download class="h-4 w-4" />
+            <Download />
           </a>
-          <IconButton
-            :icon="ExternalLink"
-            :label="$t('chat.mediaViewer.openInTab')"
-            class="text-white hover:text-white hover:bg-white/20"
-            @click="openInTab"
-          />
+          <IconButton :icon="ExternalLink" :label="$t('chat.mediaViewer.openInTab')" @click="openInTab" />
         </div>
       </div>
 
-      <!-- Stage: click empty space to close -->
-      <div
-        class="relative flex-1 min-h-0 flex items-center justify-center overflow-hidden select-none"
-        @click.self="closeOnBackdrop"
-      >
-        <!-- Prev / Next -->
+      <div class="flex items-center gap-2">
+        <!-- Prev -->
         <button
-          v-if="hasPrev"
+          v-if="total > 1"
           type="button"
-          class="absolute left-2 z-10 inline-flex items-center justify-center h-11 w-11 rounded-full bg-black/40 text-white hover:bg-black/70 transition-colors"
+          class="outline icon shrink-0"
+          :disabled="!hasPrev"
           :aria-label="$t('chat.mediaViewer.previous')"
+          :title="$t('chat.mediaViewer.previous')"
           @click="prev"
         >
-          <ChevronLeft class="h-6 w-6" />
+          <ChevronLeft :size="24" />
         </button>
-        <button
-          v-if="hasNext"
-          type="button"
-          class="absolute right-2 z-10 inline-flex items-center justify-center h-11 w-11 rounded-full bg-black/40 text-white hover:bg-black/70 transition-colors"
-          :aria-label="$t('chat.mediaViewer.next')"
-          @click="next"
+
+        <!-- Stage: click empty space to close. Media renders only while open, so a
+             closed viewer neither keeps a video playing nor preloads items. -->
+        <div
+          class="flex-1 min-w-0 flex items-center justify-center overflow-hidden h-builder"
+          :aria-busy="currentKind === 'pdf' && pdfLoading ? 'true' : undefined"
+          data-spinner="large"
+          @click.self="closeOnBackdrop"
         >
-          <ChevronRight class="h-6 w-6" />
-        </button>
-
-        <!-- Image / sticker -->
-        <img
-          v-if="current && currentKind === 'image'"
-          :src="currentUrl"
-          :alt="filename || 'Image'"
-          class="max-w-full max-h-full object-contain"
-          :style="imageStyle"
-          draggable="false"
-          @wheel="onWheel"
-          @pointerdown="onPointerDown"
-          @pointermove="onPointerMove"
-          @pointerup="onPointerUp"
-          @pointercancel="onPointerUp"
-          @dblclick="toggleZoom"
-        />
-
-        <!-- Video -->
-        <video
-          v-else-if="current && currentKind === 'video'"
-          :src="currentUrl"
-          controls
-          class="max-w-full max-h-full"
-        />
-
-        <!-- PDF -->
-        <template v-else-if="current && currentKind === 'pdf'">
-          <div v-if="pdfLoading" class="flex flex-col items-center gap-2 text-white/80">
-            <Loader2 class="h-8 w-8 animate-spin" />
-          </div>
-          <iframe
-            v-else-if="pdfBlobUrl"
-            :src="pdfBlobUrl"
-            class="w-full h-full bg-white"
-            :title="filename || 'PDF'"
+          <!-- Image / sticker -->
+          <img
+            v-if="open && current && currentKind === 'image'"
+            :src="currentUrl"
+            :alt="filename || 'Image'"
+            class="media-fit"
+            :style="imageStyle"
+            draggable="false"
+            @wheel="onWheel"
+            @pointerdown="onPointerDown"
+            @pointermove="onPointerMove"
+            @pointerup="onPointerUp"
+            @pointercancel="onPointerUp"
+            @dblclick="toggleZoom"
           />
-          <div v-else class="flex flex-col items-center gap-3 text-white/80 px-6 text-center">
-            <FileText class="h-12 w-12" />
-            <p class="text-sm">{{ pdfError ? $t('chat.mediaViewer.pdfError') : filename }}</p>
-            <div class="flex gap-2">
-              <a :href="currentUrl" :download="filename || 'file'">
-                <Button variant="secondary"><Download class="mr-2 h-4 w-4" />{{ $t('chat.mediaViewer.download') }}</Button>
+
+          <!-- Video -->
+          <video
+            v-else-if="open && current && currentKind === 'video'"
+            :src="currentUrl"
+            controls
+            class="media-fit"
+          />
+
+          <!-- PDF -->
+          <template v-else-if="open && current && currentKind === 'pdf'">
+            <iframe
+              v-if="pdfBlobUrl"
+              :src="pdfBlobUrl"
+              class="w-100 h-full"
+              :title="filename || 'PDF'"
+            />
+            <div v-else-if="!pdfLoading" class="vstack items-center align-center">
+              <FileText :size="48" />
+              <p>{{ pdfError ? $t('chat.mediaViewer.pdfError') : filename }}</p>
+              <div class="hstack gap-2 justify-center">
+                <a :href="currentUrl" :download="filename || 'file'" class="button" data-variant="secondary">
+                  <Download />{{ $t('chat.mediaViewer.download') }}
+                </a>
+                <button type="button" class="outline" @click="openInTab">
+                  <ExternalLink />{{ $t('chat.mediaViewer.openInTab') }}
+                </button>
+              </div>
+            </div>
+          </template>
+
+          <!-- Other documents (docx, xlsx, …): no inline viewer -->
+          <div v-else-if="open && current" class="vstack items-center align-center min-w-0">
+            <FileText :size="48" />
+            <p class="truncate w-100">{{ filename }}</p>
+            <div class="hstack gap-2 justify-center">
+              <a :href="currentUrl" :download="filename || 'file'" class="button" data-variant="secondary">
+                <Download />{{ $t('chat.mediaViewer.download') }}
               </a>
-              <Button variant="outline" class="text-white border-white/30 hover:bg-white/10" @click="openInTab">
-                <ExternalLink class="mr-2 h-4 w-4" />{{ $t('chat.mediaViewer.openInTab') }}
-              </Button>
+              <button type="button" class="outline" @click="openInTab">
+                <ExternalLink />{{ $t('chat.mediaViewer.openInTab') }}
+              </button>
             </div>
           </div>
-        </template>
-
-        <!-- Other documents (docx, xlsx, …): no inline viewer -->
-        <div v-else-if="current" class="flex flex-col items-center gap-3 text-white/80 px-6 text-center">
-          <FileText class="h-12 w-12" />
-          <p class="text-sm truncate max-w-[60vw]">{{ filename }}</p>
-          <div class="flex gap-2">
-            <a :href="currentUrl" :download="filename || 'file'">
-              <Button variant="secondary"><Download class="mr-2 h-4 w-4" />{{ $t('chat.mediaViewer.download') }}</Button>
-            </a>
-            <Button variant="outline" class="text-white border-white/30 hover:bg-white/10" @click="openInTab">
-              <ExternalLink class="mr-2 h-4 w-4" />{{ $t('chat.mediaViewer.openInTab') }}
-            </Button>
-          </div>
         </div>
+
+        <!-- Next -->
+        <button
+          v-if="total > 1"
+          type="button"
+          class="outline icon shrink-0"
+          :disabled="!hasNext"
+          :aria-label="$t('chat.mediaViewer.next')"
+          :title="$t('chat.mediaViewer.next')"
+          @click="next"
+        >
+          <ChevronRight :size="24" />
+        </button>
       </div>
-    </DialogContent>
-  </Dialog>
+    </div>
+  </Modal>
 </template>

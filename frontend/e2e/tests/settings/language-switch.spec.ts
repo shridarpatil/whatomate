@@ -19,19 +19,17 @@ test.describe('Language Switching', () => {
     test('should display language selector on settings page', async ({ page }) => {
       await page.goto('/settings')
       await page.waitForLoadState('networkidle')
-      await expect(page.getByText('Language', { exact: true })).toBeVisible()
+      // Scope to main: the sidebar user menu also has a "Language" label.
+      await expect(page.locator('main').getByText('Language', { exact: true })).toBeVisible()
     })
 
     test('should show available languages in dropdown', async ({ page }) => {
       await page.goto('/settings')
       await page.waitForLoadState('networkidle')
 
-      // Find the language switcher select (the one with Globe icon nearby)
-      const languageSelect = page.locator('button[role="combobox"]').filter({ hasText: /English/ })
-      await languageSelect.click()
-
-      await expect(page.locator('[role="option"]').filter({ hasText: 'Español' })).toBeVisible()
-      await page.keyboard.press('Escape')
+      // Native language select: Spanish is among its options
+      const languageSelect = page.locator('main select:has(option[value="es"])')
+      await expect(languageSelect.locator('option', { hasText: 'Español' })).toHaveCount(1)
     })
 
     test('should switch to Spanish and update UI text', async ({ page }) => {
@@ -39,9 +37,8 @@ test.describe('Language Switching', () => {
       await page.waitForLoadState('networkidle')
 
       // Open language dropdown and select Spanish
-      const languageSelect = page.locator('button[role="combobox"]').filter({ hasText: /English/ })
-      await languageSelect.click()
-      await page.locator('[role="option"]').filter({ hasText: 'Español' }).click()
+      const languageSelect = page.locator('main select:has(option[value="es"])')
+      await languageSelect.selectOption('es')
 
       // Settings page headings should update to Spanish
       await expect(page.getByText('Configuración General')).toBeVisible()
@@ -52,15 +49,12 @@ test.describe('Language Switching', () => {
       await page.waitForLoadState('networkidle')
 
       // Switch to Spanish first
-      const languageSelect = page.locator('button[role="combobox"]').filter({ hasText: /English/ })
-      await languageSelect.click()
-      await page.locator('[role="option"]').filter({ hasText: 'Español' }).click()
+      const languageSelect = page.locator('main select:has(option[value="es"])')
+      await languageSelect.selectOption('es')
       await expect(page.getByText('Configuración General')).toBeVisible()
 
       // Switch back to English
-      const spanishSelect = page.locator('button[role="combobox"]').filter({ hasText: /Español/ })
-      await spanishSelect.click()
-      await page.locator('[role="option"]').filter({ hasText: 'English' }).click()
+      await page.locator('main select:has(option[value="es"])').selectOption('en')
       await expect(page.getByText('General Settings')).toBeVisible()
     })
   })
@@ -71,9 +65,8 @@ test.describe('Language Switching', () => {
       await page.waitForLoadState('networkidle')
 
       // Switch to Spanish
-      const languageSelect = page.locator('button[role="combobox"]').filter({ hasText: /English/ })
-      await languageSelect.click()
-      await page.locator('[role="option"]').filter({ hasText: 'Español' }).click()
+      const languageSelect = page.locator('main select:has(option[value="es"])')
+      await languageSelect.selectOption('es')
       await expect(page.getByText('Configuración General')).toBeVisible()
 
       // Verify localStorage was set
@@ -94,12 +87,11 @@ test.describe('Language Switching', () => {
       await page.goto('/settings')
       await page.waitForLoadState('networkidle')
 
-      // Open user menu popover (in sidebar)
+      // Open user menu (in sidebar)
       const userMenuButton = page.locator('aside').getByRole('button').filter({ hasText: /@/ }).first()
       await userMenuButton.click()
 
-      // The popover is portaled by Radix outside aside
-      const popoverContent = page.locator('[data-state="open"][data-side]')
+      const popoverContent = page.locator('aside [popover]:popover-open')
       await expect(popoverContent.getByText('Language', { exact: true })).toBeVisible()
     })
 
@@ -111,14 +103,9 @@ test.describe('Language Switching', () => {
       const userMenuButton = page.locator('aside').getByRole('button').filter({ hasText: /@/ }).first()
       await userMenuButton.click()
 
-      // The language switcher is in the popover that appears in the sidebar area
-      // Find the combobox within the popover content
-      const popoverContent = page.locator('[data-state="open"][data-side]')
-      const languageSelect = popoverContent.locator('button[role="combobox"]')
-      await languageSelect.click()
-
-      // Select Spanish
-      await page.locator('[role="option"]').filter({ hasText: 'Español' }).click()
+      // The language switcher is a native select inside the open user menu
+      const popoverContent = page.locator('aside [popover]:popover-open')
+      await popoverContent.locator('select').selectOption('es')
 
       // Close user menu by pressing Escape
       await page.keyboard.press('Escape')
@@ -136,9 +123,8 @@ test.describe('Language Switching', () => {
       await page.waitForLoadState('networkidle')
 
       // Switch to Spanish via settings page
-      const languageSelect = page.locator('button[role="combobox"]').filter({ hasText: /English/ })
-      await languageSelect.click()
-      await page.locator('[role="option"]').filter({ hasText: 'Español' }).click()
+      const languageSelect = page.locator('main select:has(option[value="es"])')
+      await languageSelect.selectOption('es')
 
       // Sidebar nav items should be in Spanish
       const sidebar = page.locator('aside')

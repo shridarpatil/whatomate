@@ -7,15 +7,10 @@ import FlowCanvas from '@/components/shared/FlowCanvas.vue'
 import { useCallingStore } from '@/stores/calling'
 import { useTeamsStore } from '@/stores/teams'
 import { ivrFlowsService, type IVRNode, type IVREdge, type IVRFlowData, type IVRNodeType } from '@/services/api'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Switch } from '@/components/ui/switch'
-import { Label } from '@/components/ui/label'
-import { ArrowLeft, Save, Volume2, Grid3X3, Hash, Globe, Users, ExternalLink, Clock, PhoneOff } from 'lucide-vue-next'
+import { ArrowLeft, Save, Volume2, Grid3X3, Hash, Globe, Users, ExternalLink, Clock, PhoneOff } from '@/lib/icons'
 import AuditLogPanel from '@/components/shared/AuditLogPanel.vue'
 import MetadataPanel from '@/components/shared/MetadataPanel.vue'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { toast } from 'vue-sonner'
+import { toast } from '@/lib/toast'
 import ConfirmDialog from '@/components/shared/ConfirmDialog.vue'
 import ErrorState from '@/components/shared/ErrorState.vue'
 import IVRNodeProperties from '@/components/calling/IVRNodeProperties.vue'
@@ -64,15 +59,15 @@ const nodeTypes: any = {
 }
 
 // Node palette
-const palette: { type: IVRNodeType; label: string; icon: any; color: string }[] = [
-  { type: 'greeting', label: 'Greeting', icon: Volume2, color: 'bg-green-600' },
-  { type: 'menu', label: 'Menu', icon: Grid3X3, color: 'bg-purple-600' },
-  { type: 'gather', label: 'Gather', icon: Hash, color: 'bg-blue-600' },
-  { type: 'http_callback', label: 'HTTP', icon: Globe, color: 'bg-orange-600' },
-  { type: 'transfer', label: 'Transfer', icon: Users, color: 'bg-amber-600' },
-  { type: 'goto_flow', label: 'Goto Flow', icon: ExternalLink, color: 'bg-teal-600' },
-  { type: 'timing', label: 'Timing', icon: Clock, color: 'bg-cyan-600' },
-  { type: 'hangup', label: 'Hangup', icon: PhoneOff, color: 'bg-red-600' },
+const palette: { type: IVRNodeType; label: string; icon: any }[] = [
+  { type: 'greeting', label: 'Greeting', icon: Volume2 },
+  { type: 'menu', label: 'Menu', icon: Grid3X3 },
+  { type: 'gather', label: 'Gather', icon: Hash },
+  { type: 'http_callback', label: 'HTTP', icon: Globe },
+  { type: 'transfer', label: 'Transfer', icon: Users },
+  { type: 'goto_flow', label: 'Goto Flow', icon: ExternalLink },
+  { type: 'timing', label: 'Timing', icon: Clock },
+  { type: 'hangup', label: 'Hangup', icon: PhoneOff },
 ]
 
 // Vue Flow instance
@@ -130,6 +125,7 @@ function addNodeFromPalette(type: IVRNodeType) {
     hangup: { audio_file: '' },
   }
 
+  nodes.value.forEach(n => (n.selected = false))
   addNodes([{
     id,
     type,
@@ -141,6 +137,9 @@ function addNodeFromPalette(type: IVRNodeType) {
     },
   }])
 
+  const created = nodes.value.find((n) => n.id === id)
+  if (created) created.selected = true
+  selectedNodeId.value = id
   if (isFirst) entryNodeId.value = id
 }
 
@@ -173,7 +172,7 @@ function spreadParallelLabels() {
   for (const group of groups.values()) {
     for (let i = 0; i < group.length; i++) {
       const yOffset = group.length > 1 ? (i - (group.length - 1) / 2) * 22 : 0
-      group[i].labelStyle = { transform: `translateY(${yOffset}px)` }
+      group[i].labelStyle = { transform: `translateY(${yOffset}px)`, fill: 'var(--foreground)' }
       group[i].labelBgStyle = { fill: 'none', fillOpacity: 0 }
       group[i].labelBgPadding = [0, 0] as [number, number]
     }
@@ -396,72 +395,57 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="h-screen flex flex-col">
-    <!-- Toolbar -->
-    <div class="flex items-center gap-3 px-4 py-2 border-b bg-background shrink-0">
-      <Button variant="ghost" size="icon" class="h-8 w-8" :aria-label="t('calling.backToFlows')" @click="router.push({ name: 'ivr-flows' })">
-        <ArrowLeft class="h-4 w-4" />
-      </Button>
-      <Input v-model="flowName" placeholder="Flow Name" class="h-8 text-sm max-w-[250px]" />
-      <div class="flex items-center gap-2 ml-4">
-        <Switch v-model:checked="isActive" />
-        <Label class="text-xs whitespace-nowrap">Active</Label>
+  <div class="flex flex-col h-full min-h-0">
+    <div class="vstack gap-4 p-4 shrink-0">
+      <!-- Toolbar -->
+      <div class="hstack gap-4 flex-wrap">
+        <button
+          type="button"
+          class="ghost icon"
+          :aria-label="t('calling.backToFlows')"
+          :title="t('calling.backToFlows')"
+          @click="router.push({ name: 'ivr-flows' })"
+        >
+          <ArrowLeft />
+        </button>
+        <input v-model="flowName" class="flex-1 min-w-0" placeholder="Flow Name" :aria-label="$t('calling.name')">
+        <label class="hstack gap-2">
+          <input v-model="isActive" type="checkbox" role="switch">
+          <small>Active</small>
+        </label>
+        <label class="hstack gap-2">
+          <input v-model="isCallStart" type="checkbox" role="switch" :disabled="!isActive">
+          <small>Incoming Call Start</small>
+        </label>
+        <label class="hstack gap-2">
+          <input v-model="isOutgoingEnd" type="checkbox" role="switch" :disabled="!isActive">
+          <small>Outgoing Post-Call</small>
+        </label>
+        <button type="button" class="small" :disabled="saving" :aria-busy="saving ? 'true' : undefined" data-spinner="small" @click="saveFlow">
+          <Save />
+          {{ saving ? t('calling.flowSaving') : t('calling.flowSave') }}
+        </button>
       </div>
-      <div class="flex items-center gap-2 ml-2">
-        <Switch v-model:checked="isCallStart" :disabled="!isActive" />
-        <Label class="text-xs whitespace-nowrap">Incoming Call Start</Label>
-      </div>
-      <div class="flex items-center gap-2 ml-2">
-        <Switch v-model:checked="isOutgoingEnd" :disabled="!isActive" />
-        <Label class="text-xs whitespace-nowrap">Outgoing Post-Call</Label>
-      </div>
-      <div class="flex-1" />
-      <Button :disabled="saving" size="sm" @click="saveFlow">
-        <Save class="h-4 w-4 mr-1" />
-        {{ saving ? t('calling.flowSaving') : t('calling.flowSave') }}
-      </Button>
-    </div>
 
-    <!-- Node Palette -->
-    <div class="flex items-center gap-2 px-4 py-2 border-b bg-muted/30 overflow-x-auto shrink-0">
-      <Button
-        v-for="p in palette"
-        :key="p.type"
-        variant="outline"
-        size="sm"
-        class="h-7 text-xs gap-1.5 shrink-0"
-        @click="addNodeFromPalette(p.type)"
-      >
-        <div :class="['w-2 h-2 rounded-full', p.color]" />
-        <component :is="p.icon" class="w-3 h-3" />
-        {{ p.label }}
-      </Button>
+      <!-- Node Palette -->
+      <div class="hstack gap-2 scroll-x" role="toolbar" :aria-label="t('flowBuilder.add')">
+        <button
+          v-for="p in palette"
+          :key="p.type"
+          type="button"
+          class="outline small shrink-0"
+          @click="addNodeFromPalette(p.type)"
+        >
+          <component :is="p.icon" />
+          {{ p.label }}
+        </button>
+      </div>
     </div>
 
     <!-- Main content -->
-    <div class="flex-1 flex overflow-hidden">
+    <div class="flex flex-1 min-h-0">
       <!-- Canvas -->
-      <div class="flex-1 relative">
-        <div v-if="loading" class="absolute inset-0 flex items-center justify-center bg-background/80 z-10">
-          <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-        </div>
-        <ErrorState
-          v-else-if="loadError"
-          :title="t('calling.flowLoadFailed')"
-          :description="t('calling.flowLoadFailedDesc')"
-          class="absolute inset-0 z-10 bg-background"
-        >
-          <template #action>
-            <div class="flex gap-2">
-              <Button variant="outline" size="sm" @click="router.push({ name: 'ivr-flows' })">
-                {{ t('calling.goBack') }}
-              </Button>
-              <Button size="sm" @click="loadFlow">
-                {{ t('common.retry') }}
-              </Button>
-            </div>
-          </template>
-        </ErrorState>
+      <div class="flex-1 relative min-w-0">
         <FlowCanvas
           :node-types="nodeTypes"
           edge-type="default"
@@ -470,33 +454,47 @@ onMounted(() => {
           @edge-update="onEdgeUpdate"
           @edge-click="onEdgeClick"
         />
+        <div v-if="loading" class="absolute-fill card flex items-center justify-center">
+          <div role="status" aria-busy="true" data-spinner="large" :aria-label="t('common.loading')" />
+        </div>
+        <div v-else-if="loadError" class="absolute-fill card flex items-center justify-center">
+          <ErrorState :title="t('calling.flowLoadFailed')" :description="t('calling.flowLoadFailedDesc')">
+            <template #action>
+              <div class="hstack gap-2 justify-center">
+                <button type="button" class="outline small" @click="router.push({ name: 'ivr-flows' })">
+                  {{ t('calling.goBack') }}
+                </button>
+                <button type="button" class="small" @click="loadFlow">
+                  {{ t('common.retry') }}
+                </button>
+              </div>
+            </template>
+          </ErrorState>
+        </div>
       </div>
 
       <!-- Right Panel -->
-      <div class="w-[420px] min-w-0 border-l bg-background shrink-0 flex flex-col overflow-hidden">
+      <aside class="side-panel shrink-0 scroll-y card p-4 min-w-0">
         <!-- Node Properties (when a node is selected) -->
-        <div v-if="selectedIVRNode" class="flex-1 overflow-y-auto">
-          <IVRNodeProperties
-            :node="selectedIVRNode"
-            :current-flow-id="flowId"
-            @update:node="onUpdateNode"
-            @delete="requestDeleteSelectedNode"
-          />
-        </div>
+        <IVRNodeProperties
+          v-if="selectedIVRNode"
+          :node="selectedIVRNode"
+          :current-flow-id="flowId"
+          @update:node="onUpdateNode"
+          @delete="requestDeleteSelectedNode"
+        />
 
         <!-- Metadata + Activity Log (when no node is selected) -->
-        <ScrollArea v-else class="flex-1 [&>div>div]:!overflow-x-hidden">
-          <div class="p-4 space-y-4 overflow-hidden">
-            <MetadataPanel
-              :created-at="flowCreatedAt"
-              :updated-at="flowUpdatedAt"
-              :created-by-name="flowCreatedByName"
-              :updated-by-name="flowUpdatedByName"
-            />
-            <AuditLogPanel :key="auditRefreshKey" resource-type="ivr_flow" :resource-id="flowId" />
-          </div>
-        </ScrollArea>
-      </div>
+        <div v-else class="vstack gap-4 min-w-0">
+          <MetadataPanel
+            :created-at="flowCreatedAt"
+            :updated-at="flowUpdatedAt"
+            :created-by-name="flowCreatedByName"
+            :updated-by-name="flowUpdatedByName"
+          />
+          <AuditLogPanel :key="auditRefreshKey" resource-type="ivr_flow" :resource-id="flowId" />
+        </div>
+      </aside>
     </div>
 
     <!-- Node Delete Confirmation -->
@@ -510,4 +508,3 @@ onMounted(() => {
     />
   </div>
 </template>
-

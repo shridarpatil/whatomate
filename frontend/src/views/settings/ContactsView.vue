@@ -1,15 +1,10 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { TagBadge } from '@/components/ui/tag-badge'
 import { PageHeader, SearchInput, DataTable, DeleteConfirmDialog, CreateContactDialog, ImportExportDialog, IconButton, ErrorState, type Column } from '@/components/shared'
 import { contactsService, accountsService, type ImportResult } from '@/services/api'
-import { toast } from 'vue-sonner'
-import { Plus, Users, Pencil, Trash2, MessageSquare, Download } from 'lucide-vue-next'
+import { toast } from '@/lib/toast'
+import { Plus, Users, Pencil, Trash2, MessageSquare, Download } from '@/lib/icons'
 import { getErrorMessage } from '@/lib/api-utils'
 import { formatDate } from '@/lib/utils'
 import { useSearchPagination } from '@/composables/useSearchPagination'
@@ -154,13 +149,13 @@ function getDisplayName(contact: Contact): string {
 </script>
 
 <template>
-  <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
-    <PageHeader :title="$t('contacts.title')" :subtitle="$t('contacts.subtitle')" :icon="Users" icon-gradient="bg-gradient-to-br from-blue-500 to-cyan-600 shadow-blue-500/20" back-link="/settings">
+  <div class="flex flex-col h-full">
+    <PageHeader :title="$t('contacts.title')" :description="$t('contacts.subtitle')" :icon="Users" back-link="/settings">
       <template v-if="canWriteContacts || canImportContacts || canExportContacts" #actions>
-        <Button v-if="canImportContacts || canExportContacts" variant="outline" size="sm" @click="isImportExportOpen = true">
-          <Download class="h-4 w-4 mr-2" />{{ $t('common.import') }}/{{ $t('common.export') }}
-        </Button>
-        <Button v-if="canWriteContacts" variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 mr-2" />{{ $t('contacts.addContact') }}</Button>
+        <button v-if="canImportContacts || canExportContacts" type="button" class="outline small" @click="isImportExportOpen = true">
+          <Download :size="16" />{{ $t('common.import') }}/{{ $t('common.export') }}
+        </button>
+        <button v-if="canWriteContacts" type="button" class="outline small" @click="openCreateDialog"><Plus :size="16" />{{ $t('contacts.addContact') }}</button>
       </template>
     </PageHeader>
 
@@ -174,80 +169,64 @@ function getDisplayName(contact: Contact): string {
       @retry="fetchContacts"
     />
 
-    <ScrollArea v-else class="flex-1">
-      <div class="p-6">
-        <div>
-          <Card>
-            <CardHeader>
-              <div class="flex items-center justify-between flex-wrap gap-4">
-                <div>
-                  <CardTitle>{{ $t('contacts.allContacts') }}</CardTitle>
-                  <CardDescription>{{ $t('contacts.allContactsDesc') }}</CardDescription>
-                </div>
-                <SearchInput v-model="searchQuery" :placeholder="$t('contacts.searchContacts') + '...'" class="w-64" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <DataTable
-                :items="contacts"
-                :columns="columns"
-                :is-loading="isLoading"
-                :empty-icon="Users"
-                :empty-title="searchQuery ? $t('contacts.noMatchingContacts') : $t('contacts.noContactsYet')"
-                :empty-description="searchQuery ? $t('contacts.noMatchingContactsDesc') : $t('contacts.noContactsYetDesc')"
-                v-model:sort-key="sortKey"
-                v-model:sort-direction="sortDirection"
-                server-pagination
-                :current-page="currentPage"
-                :total-items="totalItems"
-                :page-size="pageSize"
-                item-name="contacts"
-                @page-change="handlePageChange"
-              >
-                <template #cell-profile_name="{ item: contact }">
-                  <div class="flex flex-col">
-                    <RouterLink :to="`/settings/contacts/${contact.id}`" class="font-medium text-inherit no-underline hover:opacity-80">{{ getDisplayName(contact) }}</RouterLink>
-                    <span v-if="contact.last_message_preview" class="text-xs text-muted-foreground truncate max-w-[200px]">{{ contact.last_message_preview }}</span>
-                  </div>
-                </template>
-                <template #cell-phone_number="{ item: contact }">
-                  <code class="text-sm">{{ contact.phone_number }}</code>
-                </template>
-                <template #cell-tags="{ item: contact }">
-                  <div class="flex flex-wrap gap-1">
-                    <TagBadge v-for="tag in (contact.tags || []).slice(0, 3)" :key="tag" color="gray" class="text-xs">{{ tag }}</TagBadge>
-                    <Badge v-if="(contact.tags || []).length > 3" variant="outline" class="text-xs">+{{ contact.tags.length - 3 }}</Badge>
-                  </div>
-                </template>
-                <template #cell-last_message_at="{ item: contact }">
-                  <span class="text-muted-foreground">{{ contact.last_message_at ? formatDate(contact.last_message_at) : $t('contacts.never') }}</span>
-                </template>
-                <template #cell-created_at="{ item: contact }">
-                  <span class="text-muted-foreground">{{ formatDate(contact.created_at) }}</span>
-                </template>
-                <template #cell-actions="{ item: contact }">
-                  <div class="flex items-center justify-end gap-1">
-                    <IconButton :icon="MessageSquare" :label="$t('contacts.openChat')" class="h-8 w-8" @click="openChat(contact)" />
-                    <RouterLink :to="`/settings/contacts/${contact.id}`">
-                      <IconButton :icon="Pencil" :label="$t('common.edit')" class="h-8 w-8" />
-                    </RouterLink>
-                    <IconButton :label="$t('common.delete')" class="h-8 w-8" @click="openDeleteDialog(contact)">
-                      <Trash2 class="h-4 w-4 text-destructive" />
-                    </IconButton>
-                  </div>
-                </template>
-                <template v-if="canWriteContacts" #empty-action>
-                  <Button variant="outline" size="sm" @click="openCreateDialog">
-                    <Plus class="h-4 w-4 mr-2" />
-                    {{ $t('contacts.addContact') }}
-                  </Button>
-                </template>
-              </DataTable>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    </ScrollArea>
+    <div v-else class="flex-1 scroll-y p-4">
+      <article class="card">
+        <header class="hstack justify-between flex-wrap gap-4">
+          <h3>{{ $t('contacts.allContacts') }}</h3>
+          <SearchInput v-model="searchQuery" :placeholder="$t('contacts.searchContacts') + '...'" />
+        </header>
+        <DataTable
+          :items="contacts"
+          :columns="columns"
+          :is-loading="isLoading"
+          :empty-icon="Users"
+          :empty-title="searchQuery ? $t('contacts.noMatchingContacts') : $t('contacts.noContactsYet')"
+          :empty-description="searchQuery ? $t('contacts.noMatchingContactsDesc') : $t('contacts.noContactsYetDesc')"
+          v-model:sort-key="sortKey"
+          v-model:sort-direction="sortDirection"
+          server-pagination
+          :current-page="currentPage"
+          :total-items="totalItems"
+          :page-size="pageSize"
+          item-name="contacts"
+          @page-change="handlePageChange"
+        >
+          <template #cell-profile_name="{ item: contact }">
+            <div class="vstack">
+              <RouterLink :to="`/settings/contacts/${contact.id}`"><strong>{{ getDisplayName(contact) }}</strong></RouterLink>
+              <small v-if="contact.last_message_preview" class="text-light truncate">{{ contact.last_message_preview }}</small>
+            </div>
+          </template>
+          <template #cell-phone_number="{ item: contact }">
+            <code>{{ contact.phone_number }}</code>
+          </template>
+          <template #cell-tags="{ item: contact }">
+            <div class="hstack gap-1 flex-wrap">
+              <span v-for="tag in (contact.tags || []).slice(0, 3)" :key="tag" class="badge" data-variant="secondary">{{ tag }}</span>
+              <span v-if="(contact.tags || []).length > 3" class="badge outline">+{{ contact.tags.length - 3 }}</span>
+            </div>
+          </template>
+          <template #cell-last_message_at="{ item: contact }">
+            <span class="text-light">{{ contact.last_message_at ? formatDate(contact.last_message_at) : $t('contacts.never') }}</span>
+          </template>
+          <template #cell-created_at="{ item: contact }">
+            <span class="text-light">{{ formatDate(contact.created_at) }}</span>
+          </template>
+          <template #cell-actions="{ item: contact }">
+            <div class="hstack gap-1 justify-end">
+              <IconButton :icon="MessageSquare" :label="$t('contacts.openChat')" @click="openChat(contact)" />
+              <RouterLink :to="`/settings/contacts/${contact.id}`" class="button ghost icon" :title="$t('common.edit')" :aria-label="$t('common.edit')"><Pencil :size="16" /></RouterLink>
+              <IconButton :icon="Trash2" :label="$t('common.delete')" @click="openDeleteDialog(contact)" />
+            </div>
+          </template>
+          <template v-if="canWriteContacts" #empty-action>
+            <button type="button" class="outline small" @click="openCreateDialog">
+              <Plus :size="16" />{{ $t('contacts.addContact') }}
+            </button>
+          </template>
+        </DataTable>
+      </article>
+    </div>
 
     <!-- Create Contact Dialog (shared component) -->
     <CreateContactDialog v-model:open="isCreateDialogOpen" @created="onContactCreated" />

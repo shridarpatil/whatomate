@@ -1,5 +1,4 @@
 import { ref, onUnmounted, type Ref } from 'vue'
-import type { ScrollArea } from '@/components/ui/scroll-area'
 
 export interface InfiniteScrollOptions {
   /** Direction to trigger loading: 'top' for older items, 'bottom' for newer items */
@@ -17,9 +16,9 @@ export interface InfiniteScrollOptions {
 }
 
 export interface InfiniteScrollResult {
-  /** Ref to attach to ScrollArea component */
-  scrollAreaRef: Ref<InstanceType<typeof ScrollArea> | null>
-  /** Setup the scroll listener (call after component mounts and ScrollArea renders) */
+  /** Ref to attach to the scrolling element (e.g. a `.scroll-y` div) */
+  scrollAreaRef: Ref<HTMLElement | null>
+  /** Setup the scroll listener (call after the scrolling element renders) */
   setup: () => void
   /** Cleanup the scroll listener */
   cleanup: () => void
@@ -31,7 +30,7 @@ export interface InfiniteScrollResult {
 
 /**
  * Composable for infinite scroll functionality.
- * Works with Reka/Radix UI ScrollArea components.
+ * Attach `scrollAreaRef` to the element that scrolls.
  *
  * @example
  * ```ts
@@ -62,28 +61,8 @@ export function useInfiniteScroll(options: InfiniteScrollOptions): InfiniteScrol
     onScroll: onScrollCallback
   } = options
 
-  const scrollAreaRef = ref<InstanceType<typeof ScrollArea> | null>(null)
+  const scrollAreaRef = ref<HTMLElement | null>(null)
   let scrollViewport: HTMLElement | null = null
-
-  function findScrollViewport(scrollArea: HTMLElement): HTMLElement | null {
-    // Try data attributes first (Reka/Radix UI)
-    let viewport = scrollArea.querySelector('[data-reka-scroll-area-viewport]') ||
-                   scrollArea.querySelector('[data-radix-scroll-area-viewport]')
-
-    if (!viewport) {
-      // Fallback: find child element with overflow scroll/auto
-      const children = scrollArea.querySelectorAll('*')
-      for (const child of children) {
-        const style = window.getComputedStyle(child)
-        if (style.overflowY === 'scroll' || style.overflowY === 'auto') {
-          viewport = child as HTMLElement
-          break
-        }
-      }
-    }
-
-    return viewport as HTMLElement | null
-  }
 
   function handleScroll(event: Event) {
     const target = event.target as HTMLElement
@@ -108,13 +87,8 @@ export function useInfiniteScroll(options: InfiniteScrollOptions): InfiniteScrol
   }
 
   function setup() {
-    const scrollArea = scrollAreaRef.value?.$el
-    if (!scrollArea) return
-
-    scrollViewport = findScrollViewport(scrollArea)
-    if (scrollViewport) {
-      scrollViewport.addEventListener('scroll', handleScroll)
-    }
+    scrollViewport = scrollAreaRef.value
+    scrollViewport?.addEventListener('scroll', handleScroll)
   }
 
   function cleanup() {
