@@ -478,6 +478,108 @@ func TestRunChatGraph_Prompt_HappyPath(t *testing.T) {
 	assert.Equal(t, 0, session.StepRetries, "retries should reset on valid input")
 }
 
+// outgoingSessionMessages returns the outgoing message bodies logged on a session.
+func outgoingSessionMessages(t *testing.T, app *App, session *models.ChatbotSession) []string {
+	t.Helper()
+	var msgs []models.ChatbotSessionMessage
+	require.NoError(t, app.DB.Where("session_id = ? AND direction = ?", session.ID, models.DirectionOutgoing).
+		Order("created_at").Find(&msgs).Error)
+	out := make([]string, 0, len(msgs))
+	for _, m := range msgs {
+		out = append(out, m.Message)
+	}
+	return out
+}
+
+// TestRunChatGraph_Prompt_AfterButtonsSendsPrompt: a prompt reached right
+// after a button click must send its question in the same run, and the next
+// inbound must be stored as its answer (#541).
+func TestRunChatGraph_Prompt_AfterButtonsSendsPrompt(t *testing.T) {
+	app, org, account, contact, session := newGraphTestFixtures(t)
+	flow := &models.ChatbotFlow{
+		BaseModel:       models.BaseModel{ID: uuid.New()},
+		OrganizationID:  org.ID,
+		WhatsAppAccount: account.Name,
+		Name:            "buttons-then-prompt",
+		IsEnabled:       true,
+		Graph: models.JSONB{
+			"version":    2,
+			"entry_node": "b1",
+			"nodes": []any{
+				map[string]any{"id": "b1", "type": "buttons", "label": "choose", "config": map[string]any{
+					"body":    "Pick one",
+					"buttons": []any{map[string]any{"id": "opt_a", "title": "A"}},
+				}},
+				map[string]any{"id": "p1", "type": "prompt", "label": "ask", "config": map[string]any{
+					"body": "What's your name?", "store_as": "name",
+				}},
+				map[string]any{"id": "e1", "type": "end", "label": "done"},
+			},
+			"edges": []any{
+				map[string]any{"from": "b1", "to": "p1", "condition": "button:opt_a"},
+				map[string]any{"from": "p1", "to": "e1", "condition": "default"},
+			},
+		},
+	}
+	require.NoError(t, app.DB.Create(flow).Error)
+
+	require.NoError(t, app.runChatGraph(account, contact, session, flow, "start", "", nil))
+	require.NoError(t, app.runChatGraph(account, contact, session, flow, "A", "opt_a", nil))
+	require.NoError(t, app.DB.First(session, session.ID).Error)
+	assert.Equal(t, "p1", session.CurrentStep)
+	assert.Contains(t, outgoingSessionMessages(t, app, session), "What's your name?",
+		"prompt must be sent in the same run as the button click")
+
+	require.NoError(t, app.runChatGraph(account, contact, session, flow, "Customer A", "", nil))
+	require.NoError(t, app.DB.First(session, session.ID).Error)
+	assert.Equal(t, models.SessionStatusCompleted, session.Status)
+	assert.Equal(t, "Customer A", session.SessionData["name"])
+}
+
+// TestRunChatGraph_Prompt_ChainedPromptsEachSend: in a run of prompts, each
+// answer advances to the next prompt and sends its question (#472).
+func TestRunChatGraph_Prompt_ChainedPromptsEachSend(t *testing.T) {
+	app, org, account, contact, session := newGraphTestFixtures(t)
+	flow := &models.ChatbotFlow{
+		BaseModel:       models.BaseModel{ID: uuid.New()},
+		OrganizationID:  org.ID,
+		WhatsAppAccount: account.Name,
+		Name:            "chained-prompts",
+		IsEnabled:       true,
+		Graph: models.JSONB{
+			"version":    2,
+			"entry_node": "p1",
+			"nodes": []any{
+				map[string]any{"id": "p1", "type": "prompt", "label": "name", "config": map[string]any{
+					"body": "What's your name?", "store_as": "name",
+				}},
+				map[string]any{"id": "p2", "type": "prompt", "label": "email", "config": map[string]any{
+					"body": "What's your email?", "store_as": "email",
+				}},
+				map[string]any{"id": "e1", "type": "end", "label": "done"},
+			},
+			"edges": []any{
+				map[string]any{"from": "p1", "to": "p2", "condition": "default"},
+				map[string]any{"from": "p2", "to": "e1", "condition": "default"},
+			},
+		},
+	}
+	require.NoError(t, app.DB.Create(flow).Error)
+
+	require.NoError(t, app.runChatGraph(account, contact, session, flow, "start", "", nil))
+	require.NoError(t, app.runChatGraph(account, contact, session, flow, "Customer A", "", nil))
+	require.NoError(t, app.DB.First(session, session.ID).Error)
+	assert.Equal(t, "p2", session.CurrentStep)
+	assert.Equal(t, "Customer A", session.SessionData["name"])
+	assert.Contains(t, outgoingSessionMessages(t, app, session), "What's your email?",
+		"second prompt must be sent right after the first is answered")
+
+	require.NoError(t, app.runChatGraph(account, contact, session, flow, "user@example.com", "", nil))
+	require.NoError(t, app.DB.First(session, session.ID).Error)
+	assert.Equal(t, models.SessionStatusCompleted, session.Status)
+	assert.Equal(t, "user@example.com", session.SessionData["email"])
+}
+
 // TestRunChatGraph_Prompt_RetryOnInvalid: invalid input re-sends the error
 // and stays at the prompt node.
 func TestRunChatGraph_Prompt_RetryOnInvalid(t *testing.T) {

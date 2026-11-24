@@ -316,8 +316,10 @@ func (a *App) execChatButtons(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, er
 func (a *App) execChatPrompt(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, error) {
 	body := stringFromConfig(node.Config, "body", "message", "text")
 
-	// No input yet → send prompt and wait.
-	if !ctx.consumed && ctx.userInput == "" {
+	// No input for this node → send prompt and wait. Input already consumed
+	// by an earlier blocking node in this run (e.g. a button click or the
+	// previous prompt's answer) is not ours, so this is a fresh entry too.
+	if ctx.consumed || ctx.userInput == "" {
 		if body == "" {
 			return nodeOutcome{}, fmt.Errorf("prompt node %q has no body configured", node.ID)
 		}
@@ -326,12 +328,6 @@ func (a *App) execChatPrompt(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, err
 			return nodeOutcome{}, fmt.Errorf("send prompt: %w", err)
 		}
 		a.logSessionMessage(ctx.session.ID, models.DirectionOutgoing, rendered, node.ID)
-		return nodeOutcome{yield: true}, nil
-	}
-
-	if ctx.consumed {
-		// Input was already consumed by an earlier blocking node in this
-		// run — defensive guard. Treat as fresh entry.
 		return nodeOutcome{yield: true}, nil
 	}
 
