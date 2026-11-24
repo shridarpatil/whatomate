@@ -1,4 +1,15 @@
 {
+  "dateRange": {
+    "from": "From",
+    "to": "To",
+    "selectRange": "Date Range",
+    "today": "Today",
+    "last7Days": "Last 7 Days",
+    "last30Days": "Last 30 Days",
+    "thisMonth": "This Month",
+    "customRange": "Custom Range",
+    "apply": "Apply"
+  },
   "common": {
     "save": "சேமி",
     "cancel": "ரத்துசெய்",
@@ -35,6 +46,8 @@
     "deselectAll": "அனைத்தையும் தேர்வுநீக்கு",
     "noResults": "முடிவுகள் எதுவும் இல்லை",
     "noData": "தரவு எதுவும் இல்லை",
+    "showData": "Show data",
+    "value": "Value",
     "error": "பிழை",
     "success": "வெற்றி",
     "warning": "எச்சரிக்கை",
@@ -85,7 +98,12 @@
     "deleteConfirmMessage": "இந்த {resource} -ஐ நீக்க விரும்புகிறீர்களா? இதை மீட்க முடியாது.",
     "searchPlaceholder": "{resource} -ஐ தேடுக",
     "selectPlaceholder": "{resource} -ஐ தேர்வுசெய்க",
-    "copiedToClipboard": "கிளிப்போர்டுக்கு நகலெடுக்கப்பட்டது"
+    "copiedToClipboard": "கிளிப்போர்டுக்கு நகலெடுக்கப்பட்டது",
+    "firstPage": "First page",
+    "lastPage": "Last page",
+    "pagination": "Pagination",
+    "scrollToTop": "Scroll to top",
+    "clickToUpload": "Click to upload file"
   },
   "auth": {
     "login": "உள்நுழைய",
@@ -108,7 +126,7 @@
     "logoutSuccess": "வெற்றிகரமாக வெளியேறினீர்கள்",
     "invalidCredentials": "தவறான சான்றுகள்",
     "sessionExpired": "உங்கள் அமர்வு காலாவதியானது. மீண்டும் உள்நுழைக.",
-    "welcomeTitle": "வாட்ஸ்மேட்டுக்கு வரவேற்கிறோம்",
+    "welcomeTitle": "{name}-க்கு வரவேற்கிறோம்",
     "welcomeSubtitle": "உங்கள் கணக்கை அணுக உங்கள் சான்றுகளை உள்ளிடுக",
     "emailPlaceholder": "name{'@'}example.com",
     "enterEmailPassword": "மின்னஞ்சல் மற்றும் கடவுச்சொல்லை உள்ளிடுக",
@@ -207,6 +225,9 @@
     "Widget": "விட்ஜெட்"
   },
   "nav": {
+    "sidebar": "Sidebar",
+    "mainNavigation": "Main navigation",
+    "secondaryNavigation": "Secondary navigation",
     "dashboard": "டாஷ்போர்டு",
     "chat": "அரட்டை",
     "contacts": "தொடர்புகள்",
@@ -245,6 +266,10 @@
     "toggleMenu": "மெனுவை மாற்று"
   },
   "userMenu": {
+    "colorTheme": "Color theme",
+    "themeLight": "Light theme",
+    "themeDark": "Dark theme",
+    "themeSystem": "System theme",
     "myAccount": "எனது கணக்கு",
     "status": "நிலை",
     "available": "கிடைக்கும்",
@@ -259,9 +284,12 @@
     "failedUpdateAvailability": "கிடைக்கும் நிலையைப் புதுப்பிக்க முடியவில்லை",
     "awayWarningTitle": "செயலில் உள்ள மாற்றுகைகள் வரிசைக்குத் திருப்பியனுப்பப்படும்",
     "awayWarningDesc": "உங்களிடம் {count} செயலில் உள்ள மாற்றுகை(கள்) உள்ளன. உங்கள் நிலையை \"விலகி\" ஆக மாற்றினால், அவை மற்ற முகவர்களுக்காக வரிசைக்குத் திருப்பியனுப்பப்படும்.",
-    "goAway": "விலகிச் செல்"
+    "goAway": "விலகிச் செல்",
+    "userMenu": "பயனர் மெனு",
+    "toggleAvailability": "கிடைக்கும் நிலையை மாற்று"
   },
   "chat": {
+    "lastActive": "Last active {time}",
     "conversations": "உரையாடல்கள்",
     "messages": "செய்திகள்",
     "noContacts": "தொடர்புகள் எதுவும் இல்லை",
@@ -304,6 +332,7 @@
     "noTagsAvailable": "குறிச்சொற்கள் எதுவும் இல்லை",
     "paused": "இடைநிறுத்தப்பட்டது",
     "assignedTo": "இவருக்கு ஒதுக்கப்பட்டது",
+    "assigned": "Assigned",
     "unassigned": "ஒதுக்கப்படாதது",
     "assign": "ஒதுக்கு",
     "transfer": "மாற்று",
@@ -352,6 +381,7 @@
     "failedTapRetry": "தோல்வியடைந்தது - மீண்டும் முயல தட்டுக",
     "failedToSend": "அனுப்ப முடியவில்லை",
     "unsupportedMessage": "இந்த செய்தி வகை ஆதரிக்கப்படவில்லை",
+    "missedCall": "தவறிய அழைப்பு",
     "photo": "புகைப்படம்",
     "sticker": "ஸ்டிக்கர்",
     "message": "செய்தி",
@@ -385,7 +415,11 @@
     "urlButtonParamPlaceholder": "மாறும் URL மதிப்பை உள்ளிடவும்",
     "preview": "முன்னோட்டம்",
     "serviceWindowExpired": "24 மணிநேர செய்தியிடல் சாளரம் காலாவதியானது. வாடிக்கையாளர் பதிலளிக்கும் வரை வார்ப்புரு செய்திகளை மட்டுமே அனுப்ப முடியும்.",
-    "sendTemplateAction": "வார்ப்புருவை அனுப்பு"
+    "sendTemplateAction": "வார்ப்புருவை அனுப்பு",
+    "noTags": "No tags",
+    "general": "General",
+    "noPanelData": "No data configured",
+    "noPanelDataHint": "Configure panel display in the chatbot flow settings."
   },
   "contacts": {
     "title": "தொடர்புகள்",
@@ -516,6 +550,11 @@
     "newMessageAlertsDesc": "புதிய செய்திகள் வரும்போது அறிவிப்பைப் பெறுக",
     "campaignUpdates": "பிரச்சார புதுப்பிப்புகள்",
     "campaignUpdatesDesc": "பிரச்சார நிலை அறிவிப்புகளைப் பெறுக",
+    "callRingtone": "அழைப்பு ரிங்டோன்",
+    "callRingtoneDesc": "உள்வரும் அழைப்பு உங்களுக்காகக் காத்திருக்கும்போது ஒலிக்கும் ஒலி",
+    "ringtoneRing": "ரிங்",
+    "ringtoneBeep": "அறிவிப்பு பீப்",
+    "ringtoneNone": "அமைதி",
     "security": "பாதுகாப்பு",
     "businessProfile": "வணிக சுயவிவரம்",
     "save": "மாற்றங்களைச் சேமி",
@@ -540,7 +579,10 @@
     "currentFile": "தற்போதைய கோப்பு",
     "noFileUploaded": "இயல்புநிலை பயன்படுத்தப்படுகிறது",
     "audioUploaded": "ஆடியோ கோப்பு வெற்றிகரமாக பதிவேற்றப்பட்டது",
-    "audioUploadFailed": "ஆடியோ கோப்பை பதிவேற்ற முடியவில்லை"
+    "audioUploadFailed": "ஆடியோ கோப்பை பதிவேற்ற முடியவில்லை",
+    "previewRingtone": "Preview ringtone",
+    "playAudio": "Play",
+    "pauseAudio": "Pause"
   },
   "users": {
     "title": "பயனர் மேலாண்மை",
@@ -695,6 +737,10 @@
     "memberRemoved": "உறுப்பினர் குழுவிலிருந்து அகற்றப்பட்டார்"
   },
   "organizations": {
+    "label": "Organization",
+    "selectPlaceholder": "Select organization",
+    "loading": "Loading...",
+    "none": "No organizations found",
     "createNew": "நிறுவனத்தை உருவாக்கு",
     "createTitle": "நிறுவனத்தை உருவாக்கு",
     "createDesc": "தனி பணியிடத்தை நிர்வகிக்க புதிய நிறுவனத்தை உருவாக்கவும்.",
@@ -960,6 +1006,7 @@
     "nameRequired": "பெயர் கட்டாயமாகும்"
   },
   "webhooks": {
+    "removeHeader": "Remove header",
     "title": "வெப்ஹூக்குகள்",
     "subtitle": "வெளிப்புற அமைப்புகளுக்கு நிகழ்வுகளை அனுப்ப வெப்ஹூக்குகளை உள்ளமைக்கவும்",
     "addWebhook": "வெப்ஹூக்கைச் சேர்",
@@ -1098,6 +1145,7 @@
     "goHome": "முகப்புக்குச் செல்க"
   },
   "profile": {
+    "togglePasswordVisibility": "Toggle password visibility",
     "title": "சுயவிவரம்",
     "description": "உங்கள் கணக்கு அமைப்புகளை நிர்வகிக்கவும்",
     "accountInfo": "கணக்குத் தகவல்",
@@ -1588,7 +1636,9 @@
     "aiSettingsSaved": "AI அமைப்புகள் சேமிக்கப்பட்டன",
     "slaSettingsSaved": "SLA அமைப்புகள் சேமிக்கப்பட்டன",
     "aiSaveFailed": "AI அமைப்புகளைச் சேமிக்க முடியவில்லை",
-    "slaSaveFailed": "SLA அமைப்புகளைச் சேமிக்க முடியவில்லை"
+    "slaSaveFailed": "SLA அமைப்புகளைச் சேமிக்க முடியவில்லை",
+    "startTime": "{day} start time",
+    "endTime": "{day} end time"
   },
   "agentTransfers": {
     "title": "மாற்றுகைகள்",
@@ -2096,7 +2146,16 @@
     "sectionLabelPlaceholder": "பிரிவு லேபிள்",
     "addFieldPlaceholder": "+ சேர்",
     "exampleUrlPlaceholder": "https://example.com",
-    "dataPathPlaceholder": "data.path"
+    "dataPathPlaceholder": "data.path",
+    "previewTitle": "Flow preview",
+    "previewStart": "Start",
+    "previewPause": "Pause",
+    "previewRestart": "Restart",
+    "previewStepForward": "Step forward",
+    "previewStepBack": "Step back",
+    "dataPath": "தரவு பாதை",
+    "configureApiMock": "API மாக் அமைக்கவும்",
+    "selectOption": "ஒரு விருப்பத்தைத் தேர்ந்தெடுக்கவும்"
   },
   "calling": {
     "callLogs": "அழைப்புப் பதிவுகள்",
@@ -2198,7 +2257,8 @@
     "selectTargetFlow": "IVR பாய்வைத் தேர்வுசெய்க",
     "uploadAudioTab": "ஆடியோ பதிவேற்று",
     "textToSpeechTab": "உரையிலிருந்து பேச்சு",
-    "greetingTextPlaceholder": "உங்கள் IVR வரவேற்பு செய்தியைத் தட்டச்சுக..."
+    "greetingTextPlaceholder": "உங்கள் IVR வரவேற்பு செய்தியைத் தட்டச்சுக...",
+    "ttsText": "பேச வேண்டிய உரை"
   },
   "callTransfers": {
     "title": "அழைப்பு மாற்றுகைகள்",
@@ -2248,5 +2308,51 @@
     "callFailed": "அழைப்பைத் தொடங்க முடியவில்லை",
     "permissionSent": "அழைப்பு அனுமதி கோரிக்கை அனுப்பப்பட்டது",
     "permissionSentDesc": "நீங்கள் அழைக்கும் முன், தொடர்பு WhatsApp -இல் அழைப்பு அனுமதியை ஏற்க வேண்டும். அவர்கள் ஏற்ற பிறகு மீண்டும் முயல்க."
+  },
+  "waFlowBuilder": {
+    "screens": "Screens",
+    "addScreen": "Add Screen",
+    "removeScreen": "Remove screen",
+    "noScreens": "No screens yet",
+    "selectScreen": "Select a screen",
+    "screenTitle": "Screen Title",
+    "addComponents": "Add Components",
+    "addComponentsHint": "Add components from the palette",
+    "addScreenToStart": "Add a screen to get started",
+    "properties": "Properties",
+    "selectComponentHint": "Select a component to edit its properties",
+    "moveUp": "Move up",
+    "moveDown": "Move down",
+    "removeComponent": "Remove component",
+    "text": "Text",
+    "label": "Label",
+    "fieldName": "Field Name (Key)",
+    "fieldNamePlaceholder": "e.g. email, phone, message",
+    "fieldNameHint": "This key is used in the response data. Use lowercase with underscores (e.g. customer_name).",
+    "required": "Required",
+    "options": "Options",
+    "add": "Add",
+    "optionPlaceholder": "Option text",
+    "removeOption": "Remove option",
+    "buttonText": "Button Text",
+    "action": "Action",
+    "completeFlow": "Complete Flow",
+    "navigateToScreen": "Navigate to Screen",
+    "targetScreen": "Target Screen",
+    "selectTargetScreen": "Select screen",
+    "selectPlaceholder": "Select...",
+    "types": {
+      "heading": "Heading",
+      "subheading": "Subheading",
+      "text": "Text",
+      "textInput": "Text Input",
+      "textArea": "Text Area",
+      "dropdown": "Dropdown",
+      "radioButtons": "Radio Buttons",
+      "checkboxes": "Checkboxes",
+      "datePicker": "Date Picker",
+      "image": "Image",
+      "footerButton": "Footer Button"
+    }
   }
 }

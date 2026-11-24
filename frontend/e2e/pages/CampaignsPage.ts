@@ -12,11 +12,12 @@ export class CampaignsPage extends BasePage {
   constructor(page: Page) {
     super(page)
     this.heading = page.getByRole('heading', { name: /Campaigns/i }).first()
-    this.createButton = page.getByRole('button', { name: /Create Campaign/i }).first()
-    this.statusFilter = page.locator('button[role="combobox"]').first()
-    this.timeRangeFilter = page.locator('button[role="combobox"]').filter({ hasText: /This month|Today|days/i }).first()
-    this.createDialog = page.locator('[role="dialog"][data-state="open"]')
-    this.alertDialog = page.locator('[role="alertdialog"]')
+    this.createButton = page.getByRole('link', { name: /Create Campaign/i }).first()
+    // Native selects inside <main> (the app shell aside has its own selects)
+    this.statusFilter = page.locator('main select').first()
+    this.timeRangeFilter = page.locator('main').getByLabel(/Date Range/i).first()
+    this.createDialog = page.locator('dialog[open]')
+    this.alertDialog = page.getByRole('alertdialog')
   }
 
   async goto() {
@@ -31,27 +32,28 @@ export class CampaignsPage extends BasePage {
 
   // Campaign card actions
   getCampaignCard(index = 0): Locator {
-    return this.page.locator('.rounded-lg.border').nth(index)
+    return this.page.locator('main article.card').nth(index)
   }
 
   getEditButton(card?: Locator): Locator {
     const container = card || this.page
-    return container.locator('button').filter({ has: this.page.locator('.lucide-pencil') }).first()
+    // Edit is a router link (a.button) in the list, a button elsewhere
+    return container.locator('a, button').filter({ has: this.page.locator('[data-icon="pencil"]') }).first()
   }
 
   getDeleteButton(card?: Locator): Locator {
     const container = card || this.page
-    return container.locator('button').filter({ has: this.page.locator('.lucide-trash-2') }).first()
+    return container.locator('button').filter({ has: this.page.locator('[data-icon="trash-2"]') }).first()
   }
 
   getViewRecipientsButton(card?: Locator): Locator {
     const container = card || this.page
-    return container.locator('button').filter({ has: this.page.locator('.lucide-eye') }).first()
+    return container.locator('button').filter({ has: this.page.locator('[data-icon="eye"]') }).first()
   }
 
   getAddRecipientsButton(card?: Locator): Locator {
     const container = card || this.page
-    return container.locator('button').filter({ has: this.page.locator('.lucide-user-plus') }).first()
+    return container.locator('button').filter({ has: this.page.locator('[data-icon="user-plus"]') }).first()
   }
 
   getStartButton(card?: Locator): Locator {
@@ -80,12 +82,17 @@ export class CampaignsPage extends BasePage {
   }
 
   // Dialog interactions
+  /** Edit opens the campaign's detail page (a router link), not a dialog. */
   async clickEditButton() {
     const btn = this.getEditButton()
     if (await btn.isVisible()) {
       await btn.click()
-      await this.createDialog.waitFor({ state: 'visible' })
-      return true
+      await this.page.waitForURL(/\/campaigns\/[0-9a-f-]{36}$/)
+      // Another parallel test may delete the campaign between list render and click.
+      const notFound = this.page.locator('main').getByRole('heading', { name: /not found/i })
+      const form = this.page.locator('main input#name')
+      await expect(form.or(notFound)).toBeVisible()
+      return !(await notFound.isVisible())
     }
     return false
   }
@@ -146,26 +153,23 @@ export class CampaignsPage extends BasePage {
     await this.createDialog.locator('input#name').fill(name)
   }
 
+  // Account and template are native selects on the campaign detail page
   async selectAccount(accountName: string) {
-    const accountTrigger = this.createDialog.locator('button[role="combobox"]').first()
-    await accountTrigger.click()
-    await this.page.locator('[role="option"]').filter({ hasText: accountName }).click()
+    await this.page.locator('main select').first().selectOption({ label: accountName })
   }
 
   async selectTemplate(templateName: string) {
-    const templateTriggers = this.createDialog.locator('button[role="combobox"]')
-    // Template is typically the second combobox (after account)
-    await templateTriggers.nth(1).click()
-    await this.page.locator('[role="option"]').filter({ hasText: templateName }).click()
+    // Template is the second select (after account)
+    await this.getTemplateSelectTrigger().selectOption({ label: templateName })
   }
 
   // Template dropdown helpers
   getTemplateSelectTrigger(): Locator {
-    return this.createDialog.locator('button[role="combobox"]').nth(1)
+    return this.page.locator('main select').nth(1)
   }
 
   getTemplateOptions(): Locator {
-    return this.page.locator('[role="option"]')
+    return this.getTemplateSelectTrigger().locator('option:not([disabled])')
   }
 
   getNoTemplatesMessage(): Locator {
@@ -173,7 +177,7 @@ export class CampaignsPage extends BasePage {
   }
 
   async openTemplateDropdown() {
-    await this.getTemplateSelectTrigger().click()
+    await this.getTemplateSelectTrigger().focus()
   }
 
   // Recipients dialog helpers

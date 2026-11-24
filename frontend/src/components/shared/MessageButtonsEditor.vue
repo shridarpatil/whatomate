@@ -1,11 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
-import { Reply, ExternalLink, Phone, PhoneCall, Workflow, Trash2 } from 'lucide-vue-next'
+import { Reply, ExternalLink, Phone, PhoneCall, Workflow, Trash2 } from '@/lib/icons'
 import type { ButtonConfig } from '@/types/flow-preview'
 import { flowsService } from '@/services/api'
 import { MAX_BUTTON_TITLE_LENGTH, nextButtonId } from '@/lib/whatsappButtons'
@@ -135,161 +131,155 @@ function typeIcon(type?: string) {
 </script>
 
 <template>
-  <div class="space-y-3">
-    <div class="flex items-center justify-between flex-wrap gap-2">
-      <Label class="text-xs">
+  <div class="vstack gap-4">
+    <div class="hstack justify-between flex-wrap gap-2">
+      <strong>
         {{ $t('flowBuilder.buttonOptions', 'Buttons') }} ({{ buttons.length }}/{{ effectiveMax }})
-      </Label>
-      <div class="flex gap-1">
-        <Button
+      </strong>
+      <div class="hstack gap-1">
+        <button
           v-if="allowedTypes.includes('reply')"
-          variant="outline"
-          size="sm"
-          class="h-6 text-xs"
+          type="button"
+          class="outline small"
           :disabled="!canAdd('reply')"
           @click="addButton('reply')"
         >
-          <Reply class="h-3 w-3 mr-1" />
+          <Reply :size="12" />
           {{ $t('flowBuilder.replyButton', 'Reply') }}
-        </Button>
-        <Button
+        </button>
+        <button
           v-if="allowedTypes.includes('url')"
-          variant="outline"
-          size="sm"
-          class="h-6 text-xs"
+          type="button"
+          class="outline small"
           :disabled="!canAdd('url')"
           @click="addButton('url')"
         >
-          <ExternalLink class="h-3 w-3 mr-1" />
+          <ExternalLink :size="12" />
           {{ $t('flowBuilder.urlButton', 'URL') }}
-        </Button>
-        <Button
+        </button>
+        <button
           v-if="allowedTypes.includes('phone')"
-          variant="outline"
-          size="sm"
-          class="h-6 text-xs"
+          type="button"
+          class="outline small"
           :disabled="!canAdd('phone')"
           @click="addButton('phone')"
         >
-          <Phone class="h-3 w-3 mr-1" />
+          <Phone :size="12" />
           {{ $t('flowBuilder.phoneButton', 'Phone') }}
-        </Button>
-        <Button
+        </button>
+        <button
           v-if="allowedTypes.includes('voice_call')"
-          variant="outline"
-          size="sm"
-          class="h-6 text-xs"
+          type="button"
+          class="outline small"
           :disabled="!canAdd('voice_call')"
           @click="addButton('voice_call')"
         >
-          <PhoneCall class="h-3 w-3 mr-1" />
+          <PhoneCall :size="12" />
           {{ $t('flowBuilder.voiceCallButton', 'Call') }}
-        </Button>
-        <Button
+        </button>
+        <button
           v-if="allowedTypes.includes('flow')"
-          variant="outline"
-          size="sm"
-          class="h-6 text-xs"
+          type="button"
+          class="outline small"
           :disabled="!canAdd('flow')"
           @click="addButton('flow')"
         >
-          <Workflow class="h-3 w-3 mr-1" />
+          <Workflow :size="12" />
           {{ $t('flowBuilder.flowButton', 'Flow') }}
-        </Button>
+        </button>
       </div>
     </div>
 
-    <div class="space-y-2">
+    <div class="vstack gap-2">
       <div
         v-for="(btn, idx) in buttons"
         :key="idx"
-        class="p-2 border rounded-md bg-muted/30 space-y-2"
+        class="vstack gap-2"
       >
-        <div class="flex items-center gap-2">
-          <Badge variant="outline" class="text-[10px] px-1.5">
-            <component :is="typeIcon(btn.type)" class="h-2.5 w-2.5 mr-1" />
+        <div class="hstack gap-2">
+          <span class="badge" data-variant="secondary">
+            <component :is="typeIcon(btn.type)" :size="10" />
             {{ typeLabel(btn.type) }}
-          </Badge>
-          <Input
-            :model-value="btn.title"
+          </span>
+          <input
+            :value="btn.title"
             :placeholder="$t('flowBuilder.buttonTitle', 'Button title')"
+            :aria-label="$t('flowBuilder.buttonTitle', 'Button title')"
             :maxlength="MAX_BUTTON_TITLE_LENGTH"
-            class="h-7 flex-1 text-xs"
+            class="flex-1"
             :disabled="disabled"
-            @update:model-value="updateButton(idx, { title: String($event) })"
-          />
-          <Button
-            variant="ghost"
-            size="icon"
-            class="h-7 w-7"
+            @input="updateButton(idx, { title: ($event.target as HTMLInputElement).value })"
+          >
+          <button
+            type="button"
+            class="ghost small icon"
+            data-variant="danger"
+            :title="$t('common.delete')"
+            :aria-label="$t('common.delete')"
             :disabled="disabled"
             @click="removeButton(idx)"
           >
-            <Trash2 class="h-3 w-3 text-destructive" />
-          </Button>
+            <Trash2 :size="12" />
+          </button>
         </div>
 
-        <div v-if="btn.type === 'url'">
-          <Input
-            :model-value="btn.url"
-            :placeholder="$t('flowBuilder.exampleUrlPlaceholder', 'https://example.com')"
-            class="h-7 text-xs"
-            :disabled="disabled"
-            @update:model-value="updateButton(idx, { url: String($event) })"
-          />
-        </div>
-        <div v-else-if="btn.type === 'phone'">
-          <Input
-            :model-value="btn.phone_number"
-            :placeholder="$t('flowBuilder.phoneNumberPlaceholder', '+1234567890')"
-            class="h-7 text-xs"
-            :disabled="disabled"
-            @update:model-value="updateButton(idx, { phone_number: String($event) })"
-          />
-        </div>
-        <div v-else-if="btn.type === 'voice_call'" class="flex items-center gap-2">
-          <Label class="text-[10px] text-muted-foreground shrink-0">
-            {{ $t('flowBuilder.voiceCallTtl', 'Expires after') }}
-          </Label>
-          <Input
-            type="number"
-            min="1"
-            max="60"
-            :model-value="btn.ttl_minutes ?? 15"
-            class="h-7 w-16 text-xs"
-            :disabled="disabled"
-            @update:model-value="updateButton(idx, { ttl_minutes: Number($event) || 0 })"
-          />
-          <span class="text-[10px] text-muted-foreground">
+        <input
+          v-if="btn.type === 'url'"
+          :value="btn.url"
+          :placeholder="$t('flowBuilder.exampleUrlPlaceholder', 'https://example.com')"
+          :aria-label="$t('flowBuilder.urlButton', 'URL')"
+          :disabled="disabled"
+          @input="updateButton(idx, { url: ($event.target as HTMLInputElement).value })"
+        >
+        <input
+          v-else-if="btn.type === 'phone'"
+          :value="btn.phone_number"
+          :placeholder="$t('flowBuilder.phoneNumberPlaceholder', '+1234567890')"
+          :aria-label="$t('flowBuilder.phoneButton', 'Phone')"
+          :disabled="disabled"
+          @input="updateButton(idx, { phone_number: ($event.target as HTMLInputElement).value })"
+        >
+        <div v-else-if="btn.type === 'voice_call'" class="hstack gap-2">
+          <label class="hstack gap-2">
+            <small class="text-light">{{ $t('flowBuilder.voiceCallTtl', 'Expires after') }}</small>
+            <input
+              type="number"
+              min="1"
+              max="60"
+              :value="btn.ttl_minutes ?? 15"
+              :disabled="disabled"
+              @input="updateButton(idx, { ttl_minutes: Number(($event.target as HTMLInputElement).value) || 0 })"
+            >
+          </label>
+          <small class="text-light">
             {{ $t('flowBuilder.voiceCallTtlSuffix', 'minutes (1–60)') }}
-          </span>
+          </small>
         </div>
-        <div v-else-if="btn.type === 'flow'" class="space-y-1">
+        <div v-else-if="btn.type === 'flow'" class="vstack gap-1">
           <select
             :value="btn.flow_id || ''"
-            class="h-7 w-full rounded-md border bg-background px-2 text-xs"
+            :aria-label="$t('flowBuilder.selectFlow', 'Select a published flow…')"
             :disabled="disabled"
             @change="updateButton(idx, { flow_id: ($event.target as HTMLSelectElement).value })"
           >
             <option value="" disabled>{{ $t('flowBuilder.selectFlow', 'Select a published flow…') }}</option>
             <option v-for="f in publishedFlows" :key="f.meta_flow_id" :value="f.meta_flow_id">{{ f.name }}</option>
           </select>
-          <p v-if="publishedFlows.length === 0" class="text-[10px] text-muted-foreground">
+          <small v-if="publishedFlows.length === 0" class="text-light">
             {{ $t('flowBuilder.noPublishedFlows', 'No published flows available. Publish a flow first.') }}
-          </p>
-          <p v-else class="text-[10px] text-muted-foreground">
+          </small>
+          <small v-else class="text-light">
             {{ $t('flowBuilder.flowCtaHint', 'The title above is the button label shown to the customer.') }}
-          </p>
+          </small>
         </div>
-        <div v-else-if="showIdField">
-          <Input
-            :model-value="btn.id"
-            :placeholder="$t('flowBuilder.buttonIdPlaceholder', 'button-id')"
-            class="h-7 text-xs"
-            :disabled="disabled"
-            @update:model-value="updateButton(idx, { id: String($event) })"
-          />
-        </div>
+        <input
+          v-else-if="showIdField"
+          :value="btn.id"
+          :placeholder="$t('flowBuilder.buttonIdPlaceholder', 'button-id')"
+          :aria-label="$t('flowBuilder.buttonIdPlaceholder', 'button-id')"
+          :disabled="disabled"
+          @input="updateButton(idx, { id: ($event.target as HTMLInputElement).value })"
+        >
 
         <!-- Per-button extras (e.g. chatbot conditional-routing select) -->
         <slot name="button-extra" :button="btn" :index="idx" />

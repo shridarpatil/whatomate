@@ -1,19 +1,12 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import Modal from '@/components/oat/Modal.vue'
 import { PageHeader, DeleteConfirmDialog, ConfirmDialog, DataTable, SearchInput, IconButton, ErrorState, type Column } from '@/components/shared'
 import FlowBuilder from '@/components/flow-builder/FlowBuilder.vue'
 import { flowsService, accountsService } from '@/services/api'
-import { toast } from 'vue-sonner'
-import { Plus, Pencil, Trash2, Workflow, Play, ExternalLink, Loader2, Archive, RefreshCw, Upload, Copy } from 'lucide-vue-next'
+import { toast } from '@/lib/toast'
+import { Plus, Pencil, Trash2, Workflow, Play, ExternalLink, Archive, RefreshCw, Upload, Copy } from '@/lib/icons'
 import { getErrorMessage } from '@/lib/api-utils'
 import { formatDate } from '@/lib/utils'
 import { useSearchPagination } from '@/composables/useSearchPagination'
@@ -87,9 +80,8 @@ async function fetchAccounts() {
   } catch { /* ignore */ }
 }
 
-function onAccountChange(value: string | number | bigint | Record<string, any> | null) {
-  if (typeof value !== 'string') return
-  localStorage.setItem('flows_selected_account', value)
+function onAccountChange() {
+  localStorage.setItem('flows_selected_account', selectedAccount.value)
   currentPage.value = 1
   fetchFlows()
 }
@@ -200,7 +192,7 @@ async function syncFlows() {
 }
 
 function openPreviewUrl(url: string) { window.open(url, '_blank') }
-function getStatusClass(status: string): string { return { PUBLISHED: 'border-green-600 text-green-600', DEPRECATED: 'border-destructive text-destructive' }[status] || '' }
+function getStatusVariant(status: string): string | undefined { return ({ PUBLISHED: 'success', DEPRECATED: 'danger' } as Record<string, string>)[status] }
 function isFlowDraft(flow: WhatsAppFlow): boolean { return flow.status?.toUpperCase() === 'DRAFT' }
 
 const componentsWithoutId = ['TextHeading', 'TextSubheading', 'TextBody', 'TextInput', 'TextArea', 'Dropdown', 'RadioButtonsGroup', 'CheckboxGroup', 'DatePicker', 'Image', 'Footer']
@@ -213,11 +205,11 @@ function sanitizeScreensForMeta(screens: any[]): any[] {
 </script>
 
 <template>
-  <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
-    <PageHeader :title="$t('flows.title')" :subtitle="$t('flows.subtitle')" :icon="Workflow" icon-gradient="bg-gradient-to-br from-violet-500 to-purple-600 shadow-violet-500/20">
+  <div class="flex flex-col h-full">
+    <PageHeader :title="$t('flows.title')" :description="$t('flows.subtitle')" :icon="Workflow">
       <template #actions>
-        <Button variant="outline" size="sm" @click="syncFlows" :disabled="isSyncing || !selectedAccount || selectedAccount === 'all'"><RefreshCw :class="['h-4 w-4 mr-2', isSyncing && 'animate-spin']" />{{ $t('flows.syncFromMeta') }}</Button>
-        <Button variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 mr-2" />{{ $t('flows.createFlow') }}</Button>
+        <button type="button" class="outline small" :disabled="isSyncing || !selectedAccount || selectedAccount === 'all'" :aria-busy="isSyncing ? 'true' : undefined" @click="syncFlows"><RefreshCw v-if="!isSyncing" :size="16" />{{ $t('flows.syncFromMeta') }}</button>
+        <button type="button" class="outline small" @click="openCreateDialog"><Plus :size="16" />{{ $t('flows.createFlow') }}</button>
       </template>
     </PageHeader>
 
@@ -230,141 +222,154 @@ function sanitizeScreensForMeta(screens: any[]): any[] {
       @retry="fetchFlows"
     />
 
-    <ScrollArea v-else class="flex-1">
-      <div class="p-6">
-        <div class="max-w-6xl mx-auto">
-          <Card>
-            <CardHeader>
-              <div class="flex items-center justify-between flex-wrap gap-4">
-                <div>
-                  <CardTitle>{{ $t('flows.yourFlows') }}</CardTitle>
-                  <CardDescription>{{ $t('flows.yourFlowsDesc') }}</CardDescription>
-                </div>
-                <div class="flex items-center gap-2">
-                  <Label class="text-sm text-muted-foreground">{{ $t('flows.account') }}:</Label>
-                  <Select v-model="selectedAccount" @update:model-value="onAccountChange">
-                    <SelectTrigger class="w-[180px]"><SelectValue :placeholder="$t('flows.allAccounts')" /></SelectTrigger>
-                    <SelectContent><SelectItem value="all">{{ $t('flows.allAccounts') }}</SelectItem><SelectItem v-for="account in accounts" :key="account.id" :value="account.name">{{ account.name }}</SelectItem></SelectContent>
-                  </Select>
-                  <SearchInput v-model="searchQuery" :placeholder="$t('flows.searchFlows') + '...'" class="w-64" />
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <DataTable
-                :items="flows"
-                :columns="columns"
-                :is-loading="isLoading"
-                :empty-icon="Workflow"
-                :empty-title="searchQuery ? $t('flows.noMatchingFlows') : $t('flows.noFlowsYet')"
-                :empty-description="searchQuery ? $t('flows.noMatchingFlowsDesc') : $t('flows.noFlowsYetDesc')"
-                server-pagination
-                :current-page="currentPage"
-                :total-items="totalItems"
-                :page-size="pageSize"
-                item-name="flows"
-                @page-change="handlePageChange"
-                v-model:sort-key="sortKey"
-                v-model:sort-direction="sortDirection"
-              >
-                <template #cell-name="{ item: flow }">
-                  <div>
-                    <span class="font-medium">{{ flow.name }}</span>
-                    <p class="text-xs text-muted-foreground">{{ flow.whatsapp_account }}</p>
-                  </div>
-                </template>
-                <template #cell-status="{ item: flow }">
-                  <Badge v-if="flow.status?.toUpperCase() === 'DEPRECATED'" variant="destructive" class="text-xs">
-                    <Archive class="h-3 w-3 mr-1" />{{ $t('flows.deprecated') }}
-                  </Badge>
-                  <Badge v-else variant="outline" :class="[getStatusClass(flow.status), 'text-xs']">{{ flow.status }}</Badge>
-                </template>
-                <template #cell-category="{ item: flow }">
-                  <Badge v-if="flow.category" variant="outline" class="text-xs">{{ flow.category }}</Badge>
-                  <span v-else class="text-muted-foreground">—</span>
-                </template>
-                <template #cell-created_at="{ item: flow }">
-                  <span class="text-muted-foreground text-sm">{{ formatDate(flow.created_at) }}</span>
-                </template>
-                <template #cell-actions="{ item: flow }">
-                  <div class="flex items-center justify-end gap-1">
-                    <IconButton :icon="Pencil" :label="$t('flows.editTooltip')" class="h-8 w-8" @click="openEditDialog(flow)" />
-                    <IconButton :icon="duplicatingFlowId === flow.id ? Loader2 : Copy" :label="$t('flows.duplicateTooltip')" class="h-8 w-8" :disabled="duplicatingFlowId === flow.id" @click="duplicateFlow(flow)" />
-                    <IconButton v-if="flow.preview_url" :icon="ExternalLink" :label="$t('flows.previewTooltip')" class="h-8 w-8" @click="openPreviewUrl(flow.preview_url!)" />
-                    <IconButton
-                      v-if="flow.status?.toUpperCase() !== 'DEPRECATED' && (flow.has_local_changes || !flow.meta_flow_id)"
-                      :icon="savingToMetaFlowId === flow.id ? Loader2 : Upload"
-                      :label="flow.meta_flow_id ? $t('flows.updateOnMeta') : $t('flows.saveToMeta')"
-                      class="h-8 w-8"
-                      :disabled="savingToMetaFlowId === flow.id || publishingFlowId === flow.id"
-                      @click="openSaveToMetaDialog(flow)"
-                    />
-                    <IconButton
-                      v-if="isFlowDraft(flow) && flow.meta_flow_id"
-                      :icon="publishingFlowId === flow.id ? Loader2 : Play"
-                      :label="$t('flows.publishTooltip')"
-                      class="h-8 w-8 text-green-600"
-                      :disabled="savingToMetaFlowId === flow.id || publishingFlowId === flow.id"
-                      @click="openPublishDialog(flow)"
-                    />
-                    <IconButton
-                      :icon="Trash2"
-                      :label="$t('flows.deleteTooltip')"
-                      class="h-8 w-8 text-destructive"
-                      :disabled="flow.status?.toUpperCase() === 'PUBLISHED'"
-                      @click="flowToDelete = flow; deleteDialogOpen = true"
-                    />
-                  </div>
-                </template>
-                <template #empty-action>
-                  <Button v-if="!searchQuery" variant="outline" size="sm" @click="openCreateDialog">
-                    <Plus class="h-4 w-4 mr-2" />{{ $t('flows.createFlow') }}
-                  </Button>
-                </template>
-              </DataTable>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    </ScrollArea>
+    <div v-else class="flex-1 scroll-y p-4">
+      <article class="card">
+        <header class="hstack justify-between items-center flex-wrap gap-4">
+          <h3>{{ $t('flows.yourFlows') }}</h3>
+          <div class="hstack items-center gap-2">
+            <label class="hstack items-center gap-2">
+              <small class="text-light">{{ $t('flows.account') }}:</small>
+              <select class="w-auto" v-model="selectedAccount" @change="onAccountChange">
+                <option value="all">{{ $t('flows.allAccounts') }}</option>
+                <option v-for="account in accounts" :key="account.id" :value="account.name">{{ account.name }}</option>
+              </select>
+            </label>
+            <SearchInput v-model="searchQuery" :placeholder="$t('flows.searchFlows') + '...'" />
+          </div>
+        </header>
+        <DataTable
+          :items="flows"
+          :columns="columns"
+          :is-loading="isLoading"
+          :empty-icon="Workflow"
+          :empty-title="searchQuery ? $t('flows.noMatchingFlows') : $t('flows.noFlowsYet')"
+          :empty-description="searchQuery ? $t('flows.noMatchingFlowsDesc') : $t('flows.noFlowsYetDesc')"
+          server-pagination
+          :current-page="currentPage"
+          :total-items="totalItems"
+          :page-size="pageSize"
+          item-name="flows"
+          @page-change="handlePageChange"
+          v-model:sort-key="sortKey"
+          v-model:sort-direction="sortDirection"
+        >
+          <template #cell-name="{ item: flow }">
+            <div>
+              <strong>{{ flow.name }}</strong>
+              <br />
+              <small class="text-light">{{ flow.whatsapp_account }}</small>
+            </div>
+          </template>
+          <template #cell-status="{ item: flow }">
+            <span v-if="flow.status?.toUpperCase() === 'DEPRECATED'" class="badge" data-variant="danger">
+              <Archive :size="12" />{{ $t('flows.deprecated') }}
+            </span>
+            <span v-else class="badge" :data-variant="getStatusVariant(flow.status)">{{ flow.status }}</span>
+          </template>
+          <template #cell-category="{ item: flow }">
+            <span v-if="flow.category" class="badge outline">{{ flow.category }}</span>
+            <span v-else class="text-light">—</span>
+          </template>
+          <template #cell-created_at="{ item: flow }">
+            <span class="text-light">{{ formatDate(flow.created_at) }}</span>
+          </template>
+          <template #cell-actions="{ item: flow }">
+            <div class="hstack items-center justify-end gap-1">
+              <IconButton :icon="Pencil" :label="$t('flows.editTooltip')" @click="openEditDialog(flow)" />
+              <IconButton :icon="Copy" :label="$t('flows.duplicateTooltip')" :disabled="duplicatingFlowId === flow.id" :loading="duplicatingFlowId === flow.id" @click="duplicateFlow(flow)" />
+              <IconButton v-if="flow.preview_url" :icon="ExternalLink" :label="$t('flows.previewTooltip')" @click="openPreviewUrl(flow.preview_url!)" />
+              <IconButton
+                v-if="flow.status?.toUpperCase() !== 'DEPRECATED' && (flow.has_local_changes || !flow.meta_flow_id)"
+                :icon="Upload"
+                :label="flow.meta_flow_id ? $t('flows.updateOnMeta') : $t('flows.saveToMeta')"
+                :disabled="savingToMetaFlowId === flow.id || publishingFlowId === flow.id"
+                :loading="savingToMetaFlowId === flow.id"
+                @click="openSaveToMetaDialog(flow)"
+              />
+              <IconButton
+                v-if="isFlowDraft(flow) && flow.meta_flow_id"
+                :icon="Play"
+                :label="$t('flows.publishTooltip')"
+                :disabled="savingToMetaFlowId === flow.id || publishingFlowId === flow.id"
+                :loading="publishingFlowId === flow.id"
+                @click="openPublishDialog(flow)"
+              />
+              <IconButton
+                :icon="Trash2"
+                :label="$t('flows.deleteTooltip')"
+                :disabled="flow.status?.toUpperCase() === 'PUBLISHED'"
+                @click="flowToDelete = flow; deleteDialogOpen = true"
+              />
+            </div>
+          </template>
+          <template #empty-action>
+            <button v-if="!searchQuery" type="button" class="outline small" @click="openCreateDialog">
+              <Plus :size="16" />{{ $t('flows.createFlow') }}
+            </button>
+          </template>
+        </DataTable>
+      </article>
+    </div>
 
     <!-- Create Flow Dialog -->
-    <Dialog v-model:open="showCreateDialog">
-      <DialogContent class="max-w-6xl h-[85vh] flex flex-col">
-        <DialogHeader><DialogTitle>{{ $t('flows.createWhatsAppFlow') }}</DialogTitle><DialogDescription>{{ $t('flows.createFlowDesc') }}</DialogDescription></DialogHeader>
-        <div class="flex gap-4 py-2 border-b">
-          <div class="flex items-center gap-2">
-            <Label class="text-sm whitespace-nowrap">{{ $t('flows.account') }}:</Label>
-            <Select v-model="formData.whatsapp_account" :disabled="isCreating"><SelectTrigger class="w-[180px]"><SelectValue :placeholder="$t('flows.selectAccount')" /></SelectTrigger><SelectContent><SelectItem v-for="account in accounts" :key="account.id" :value="account.name">{{ account.name }}</SelectItem></SelectContent></Select>
-          </div>
-          <div class="flex items-center gap-2"><Label class="text-sm whitespace-nowrap">{{ $t('flows.name') }}:</Label><Input v-model="formData.name" :placeholder="$t('flows.flowName')" class="w-48" :disabled="isCreating" /></div>
-          <div class="flex items-center gap-2">
-            <Label class="text-sm whitespace-nowrap">{{ $t('flows.category') }}:</Label>
-            <Select v-model="formData.category" :disabled="isCreating"><SelectTrigger class="w-[180px]"><SelectValue :placeholder="$t('flows.selectCategory')" /></SelectTrigger><SelectContent><SelectItem v-for="cat in flowCategories" :key="cat.value" :value="cat.value">{{ cat.label }}</SelectItem></SelectContent></Select>
-          </div>
+    <Modal v-model:open="showCreateDialog" class="modal-wide" :title="$t('flows.createWhatsAppFlow')" :description="$t('flows.createFlowDesc')">
+      <div class="vstack gap-4">
+        <div class="hstack gap-4 items-center">
+          <label data-field>
+            {{ $t('flows.account') }}
+            <select v-model="formData.whatsapp_account" :disabled="isCreating">
+              <option value="" disabled>{{ $t('flows.selectAccount') }}</option>
+              <option v-for="account in accounts" :key="account.id" :value="account.name">{{ account.name }}</option>
+            </select>
+          </label>
+          <label data-field>
+            {{ $t('flows.name') }}
+            <input v-model="formData.name" :placeholder="$t('flows.flowName')" :disabled="isCreating" />
+          </label>
+          <label data-field>
+            {{ $t('flows.category') }}
+            <select v-model="formData.category" :disabled="isCreating">
+              <option value="" disabled>{{ $t('flows.selectCategory') }}</option>
+              <option v-for="cat in flowCategories" :key="cat.value" :value="cat.value">{{ cat.label }}</option>
+            </select>
+          </label>
         </div>
-        <div class="flex-1 overflow-hidden py-4"><FlowBuilder v-model="flowBuilderData" /></div>
-        <DialogFooter><Button variant="outline" size="sm" @click="showCreateDialog = false" :disabled="isCreating">{{ $t('common.cancel') }}</Button><Button size="sm" @click="createFlow" :disabled="isCreating"><Loader2 v-if="isCreating" class="h-4 w-4 mr-2 animate-spin" />{{ $t('flows.createFlow') }}</Button></DialogFooter>
-      </DialogContent>
-    </Dialog>
+        <div class="h-builder"><FlowBuilder v-model="flowBuilderData" /></div>
+      </div>
+      <template #footer>
+        <button type="button" class="outline" :disabled="isCreating" @click="showCreateDialog = false">{{ $t('common.cancel') }}</button>
+        <button type="button" :disabled="isCreating" :aria-busy="isCreating ? 'true' : undefined" @click="createFlow">{{ $t('flows.createFlow') }}</button>
+      </template>
+    </Modal>
 
     <!-- Edit Flow Dialog -->
-    <Dialog v-model:open="showEditDialog">
-      <DialogContent class="max-w-6xl h-[85vh] flex flex-col">
-        <DialogHeader><DialogTitle>{{ $t('flows.editWhatsAppFlow') }}</DialogTitle><DialogDescription>{{ $t('flows.editFlowDesc') }}</DialogDescription></DialogHeader>
-        <div class="flex gap-4 py-2 border-b">
-          <div class="flex items-center gap-2"><Label class="text-sm whitespace-nowrap">{{ $t('flows.account') }}:</Label><span class="text-sm text-muted-foreground">{{ flowToEdit?.whatsapp_account }}</span></div>
-          <div class="flex items-center gap-2"><Label class="text-sm whitespace-nowrap">{{ $t('flows.name') }}:</Label><Input v-model="editFormData.name" :placeholder="$t('flows.flowName')" class="w-48" :disabled="isUpdating" /></div>
-          <div class="flex items-center gap-2">
-            <Label class="text-sm whitespace-nowrap">{{ $t('flows.category') }}:</Label>
-            <Select v-model="editFormData.category" :disabled="isUpdating"><SelectTrigger class="w-[180px]"><SelectValue :placeholder="$t('flows.selectCategory')" /></SelectTrigger><SelectContent><SelectItem v-for="cat in flowCategories" :key="cat.value" :value="cat.value">{{ cat.label }}</SelectItem></SelectContent></Select>
+    <Modal v-model:open="showEditDialog" class="modal-wide" :title="$t('flows.editWhatsAppFlow')" :description="$t('flows.editFlowDesc')">
+      <div class="vstack gap-4">
+        <div class="hstack gap-4 items-center">
+          <div class="vstack gap-1">
+            <small class="text-light">{{ $t('flows.account') }}</small>
+            <span>{{ flowToEdit?.whatsapp_account }}</span>
           </div>
-          <div v-if="flowToEdit?.meta_flow_id" class="flex items-center gap-2 ml-auto"><Badge variant="outline">Meta ID: {{ flowToEdit.meta_flow_id }}</Badge></div>
+          <label data-field>
+            {{ $t('flows.name') }}
+            <input v-model="editFormData.name" :placeholder="$t('flows.flowName')" :disabled="isUpdating" />
+          </label>
+          <label data-field>
+            {{ $t('flows.category') }}
+            <select v-model="editFormData.category" :disabled="isUpdating">
+              <option value="" disabled>{{ $t('flows.selectCategory') }}</option>
+              <option v-for="cat in flowCategories" :key="cat.value" :value="cat.value">{{ cat.label }}</option>
+            </select>
+          </label>
+          <span v-if="flowToEdit?.meta_flow_id" class="badge outline">Meta ID: {{ flowToEdit.meta_flow_id }}</span>
         </div>
-        <div class="flex-1 overflow-hidden py-4"><FlowBuilder v-model="editFlowBuilderData" /></div>
-        <DialogFooter><Button variant="outline" size="sm" @click="showEditDialog = false" :disabled="isUpdating">{{ $t('common.cancel') }}</Button><Button size="sm" @click="updateFlow" :disabled="isUpdating"><Loader2 v-if="isUpdating" class="h-4 w-4 mr-2 animate-spin" />{{ $t('flows.saveChanges') }}</Button></DialogFooter>
-      </DialogContent>
-    </Dialog>
+        <div class="h-builder"><FlowBuilder v-model="editFlowBuilderData" /></div>
+      </div>
+      <template #footer>
+        <button type="button" class="outline" :disabled="isUpdating" @click="showEditDialog = false">{{ $t('common.cancel') }}</button>
+        <button type="button" :disabled="isUpdating" :aria-busy="isUpdating ? 'true' : undefined" @click="updateFlow">{{ $t('flows.saveChanges') }}</button>
+      </template>
+    </Modal>
 
     <DeleteConfirmDialog v-model:open="deleteDialogOpen" :title="$t('flows.deleteFlow')" :item-name="flowToDelete?.name" @confirm="confirmDeleteFlow" />
 

@@ -1,7 +1,10 @@
 package handlers
 
 import (
+	"encoding/base64"
 	"encoding/json"
+	"net/http"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -32,7 +35,51 @@ func generalSettingsSnapshot(name string, settings models.JSONB) map[string]any 
 		"meta_app_id":         settings["meta_app_id"],
 		"meta_config_id":      settings["meta_config_id"],
 		"has_meta_app_secret": hasSecret,
+		"has_logo":            orgLogo(settings) != "",
 	}
+}
+
+// maxOrgLogoBytes caps the decoded logo. The UI resizes logos to 128px
+// before upload, which is a few KB; this leaves room without bloating
+// every organization response.
+const maxOrgLogoBytes = 64 << 10
+
+// orgLogoMIME lists the accepted logo types. SVG is excluded because it can
+// carry scripts.
+var orgLogoMIME = map[string]bool{"image/png": true, "image/jpeg": true, "image/webp": true}
+
+// orgLogo returns the organization's logo data URL, or "" when none is set.
+func orgLogo(settings models.JSONB) string {
+	if settings == nil {
+		return ""
+	}
+	v, _ := settings["logo"].(string)
+	return v
+}
+
+// validateOrgLogo checks that logo is a base64 PNG, JPEG or WebP data URL
+// whose bytes match the declared type and fit maxOrgLogoBytes.
+func validateOrgLogo(logo string) bool {
+	meta, payload, ok := strings.Cut(logo, ",")
+	if !ok {
+		return false
+	}
+	mime, ok := strings.CutPrefix(meta, "data:")
+	if !ok {
+		return false
+	}
+	mime, ok = strings.CutSuffix(mime, ";base64")
+	if !ok || !orgLogoMIME[mime] {
+		return false
+	}
+	if base64.StdEncoding.DecodedLen(len(payload)) > maxOrgLogoBytes+3 {
+		return false
+	}
+	data, err := base64.StdEncoding.DecodeString(payload)
+	if err != nil || len(data) == 0 || len(data) > maxOrgLogoBytes {
+		return false
+	}
+	return http.DetectContentType(data) == mime
 }
 
 // callingSettingsSnapshot extracts the fields shown on the Calling tab into a
@@ -60,6 +107,7 @@ type OrganizationSettings struct {
 	MetaAppID           string `json:"meta_app_id"`
 	MetaConfigID        string `json:"meta_config_id"`
 	HasMetaAppSecret    bool   `json:"has_meta_app_secret"`
+	Logo                string `json:"logo"`
 }
 
 // GetOrganizationSettings returns the organization settings
@@ -120,6 +168,7 @@ func (a *App) GetOrganizationSettings(r *fastglue.Request) error {
 		if v, ok := org.Settings["meta_app_secret_encrypted"].(string); ok && v != "" {
 			settings.HasMetaAppSecret = true
 		}
+		settings.Logo = orgLogo(org.Settings)
 	}
 
 	return r.SendEnvelope(map[string]any{
@@ -148,6 +197,7 @@ func (a *App) UpdateOrganizationSettings(r *fastglue.Request) error {
 		MetaAppID           *string `json:"meta_app_id"`
 		MetaConfigID        *string `json:"meta_config_id"`
 		MetaAppSecret       *string `json:"meta_app_secret"`
+		Logo                *string `json:"logo"` // data URL; "" removes the logo
 	}
 
 	if err := json.Unmarshal(r.RequestCtx.PostBody(), &req); err != nil {
@@ -159,6 +209,18 @@ func (a *App) UpdateOrganizationSettings(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Organization not found", nil, "")
 	}
 
+	// Every settings field needs settings.general:write (the whole settings
+	// page, including the Calling tab, is gated on settings.general). Meta App
+	// credentials are gated separately on accounts:write below.
+	settingsTouched := req.MaskPhoneNumbers != nil || req.Timezone != nil || req.DateFormat != nil || req.Name != nil ||
+		req.CallingEnabled != nil || req.MaxCallDuration != nil || req.TransferTimeoutSecs != nil ||
+		req.HoldMusicFile != nil || req.RingbackFile != nil || req.Logo != nil
+	if settingsTouched {
+		if err := a.requirePermission(r, userID, models.ResourceSettingsGeneral, models.ActionWrite); err != nil {
+			return nil
+		}
+	}
+
 	// Gating Meta App credentials update on accounts:write permission
 	metaAppCredsTouched := req.MetaAppID != nil || req.MetaConfigID != nil || req.MetaAppSecret != nil
 	if metaAppCredsTouched {
@@ -167,12 +229,18 @@ func (a *App) UpdateOrganizationSettings(r *fastglue.Request) error {
 		}
 	}
 
+	if req.Logo != nil {
+		if *req.Logo != "" && !validateOrgLogo(*req.Logo) {
+			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Logo must be a PNG, JPEG or WebP image up to 64 KB", nil, "")
+		}
+	}
+
 	// Snapshot before mutation so we can compute per-tab diffs.
 	oldGeneral := generalSettingsSnapshot(org.Name, org.Settings)
 	oldCalling := callingSettingsSnapshot(org.Settings)
 
 	// Track which tabs received updates so we only audit the relevant ones.
-	generalTouched := req.MaskPhoneNumbers != nil || req.Timezone != nil || req.DateFormat != nil || (req.Name != nil && *req.Name != "") || metaAppCredsTouched
+	generalTouched := req.MaskPhoneNumbers != nil || req.Timezone != nil || req.DateFormat != nil || (req.Name != nil && *req.Name != "") || metaAppCredsTouched || req.Logo != nil
 	callingTouched := req.CallingEnabled != nil || req.MaxCallDuration != nil || req.TransferTimeoutSecs != nil || req.HoldMusicFile != nil || req.RingbackFile != nil
 
 	// Update settings
@@ -220,6 +288,13 @@ func (a *App) UpdateOrganizationSettings(r *fastglue.Request) error {
 	}
 	if req.Name != nil && *req.Name != "" {
 		org.Name = *req.Name
+	}
+	if req.Logo != nil {
+		if *req.Logo == "" {
+			delete(org.Settings, "logo")
+		} else {
+			org.Settings["logo"] = *req.Logo
+		}
 	}
 
 	if err := a.DB.Save(&org).Error; err != nil {
@@ -334,6 +409,7 @@ type OrganizationResponse struct {
 	Name      string    `json:"name"`
 	Slug      string    `json:"slug,omitempty"`
 	CreatedAt string    `json:"created_at"`
+	Logo      string    `json:"logo,omitempty"`
 }
 
 // ListOrganizations returns all organizations (super admin or users with organizations:read)
@@ -361,6 +437,7 @@ func (a *App) ListOrganizations(r *fastglue.Request) error {
 			Name:      org.Name,
 			Slug:      org.Slug,
 			CreatedAt: org.CreatedAt.Format("2006-01-02T15:04:05Z"),
+			Logo:      orgLogo(org.Settings),
 		}
 	}
 
@@ -386,6 +463,7 @@ func (a *App) GetCurrentOrganization(r *fastglue.Request) error {
 		Name:      org.Name,
 		Slug:      org.Slug,
 		CreatedAt: org.CreatedAt.Format("2006-01-02T15:04:05Z"),
+		Logo:      orgLogo(org.Settings),
 	})
 }
 
@@ -490,6 +568,7 @@ func (a *App) CreateOrganization(r *fastglue.Request) error {
 		Name:      org.Name,
 		Slug:      org.Slug,
 		CreatedAt: org.CreatedAt.Format("2006-01-02T15:04:05Z"),
+		Logo:      orgLogo(org.Settings),
 	})
 }
 

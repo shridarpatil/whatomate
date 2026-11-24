@@ -1,13 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { SimulationState, FlowStep } from '@/types/flow-preview'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Button } from '@/components/ui/button'
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible'
 import ExecutionTimeline from './ExecutionTimeline.vue'
 import {
   Play,
@@ -15,13 +9,12 @@ import {
   RotateCcw,
   SkipForward,
   Undo2,
-  ChevronDown,
-  ChevronRight,
   Braces,
   ListTree,
   CircleDot
-} from 'lucide-vue-next'
-import { ref } from 'vue'
+} from '@/lib/icons'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   state: SimulationState
@@ -38,10 +31,6 @@ const emit = defineEmits<{
   undo: []
   goToStep: [stepName: string]
 }>()
-
-const variablesExpanded = ref(true)
-const timelineExpanded = ref(true)
-const stepsExpanded = ref(false)
 
 const statusLabel = computed(() => {
   switch (props.state.status) {
@@ -62,23 +51,28 @@ const statusLabel = computed(() => {
   }
 })
 
-const statusColor = computed(() => {
+// Oat badge variant for the status pill (undefined = primary).
+const statusVariant = computed(() => {
   switch (props.state.status) {
-    case 'idle':
-      return 'bg-gray-500'
     case 'running':
-      return 'bg-green-500'
-    case 'paused':
-      return 'bg-yellow-500'
-    case 'waiting_input':
-      return 'bg-blue-500'
     case 'completed':
-      return 'bg-green-600'
+      return 'success'
+    case 'paused':
+      return 'warning'
+    case 'waiting_input':
+      return undefined
     case 'error':
-      return 'bg-red-500'
+      return 'danger'
     default:
-      return 'bg-gray-500'
+      return 'secondary'
   }
+})
+
+const isRunning = computed(() => props.state.status === 'running' || props.state.status === 'waiting_input')
+
+const playPauseLabel = computed(() => {
+  if (props.state.status === 'completed') return t('flowBuilder.previewRestart')
+  return isRunning.value ? t('flowBuilder.previewPause') : t('flowBuilder.previewStart')
 })
 
 const variableEntries = computed(() => {
@@ -98,158 +92,120 @@ function handlePlayPause() {
 </script>
 
 <template>
-  <div class="h-full flex flex-col bg-gray-50 dark:bg-[#111b21] border-l border-gray-200 dark:border-gray-700">
+  <article class="card p-4 flex flex-col gap-4 min-h-0">
     <!-- Header -->
-    <div class="px-3 py-2 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-[#202c33]">
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-2">
-          <div
-            class="w-2 h-2 rounded-full animate-pulse"
-            :class="statusColor"
-          />
-          <span class="text-xs font-medium text-gray-600 dark:text-gray-300">
-            {{ statusLabel }}
-          </span>
-        </div>
+    <header class="vstack gap-2 shrink-0">
+      <div class="hstack justify-between gap-2">
+        <span class="badge" :data-variant="statusVariant" role="status">{{ statusLabel }}</span>
 
         <!-- Control Buttons -->
-        <div class="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            class="h-7 w-7"
+        <div class="hstack gap-1">
+          <button
+            type="button"
+            class="ghost small icon"
             :disabled="state.status === 'error'"
-            :title="state.status === 'completed' ? 'Restart' : (state.status === 'running' || state.status === 'waiting_input' ? 'Pause' : 'Start')"
+            :title="playPauseLabel"
+            :aria-label="playPauseLabel"
             @click="handlePlayPause"
           >
-            <Pause v-if="state.status === 'running' || state.status === 'waiting_input'" class="h-4 w-4" />
-            <Play v-else class="h-4 w-4" />
-          </Button>
+            <Pause v-if="isRunning" />
+            <Play v-else />
+          </button>
 
-          <Button
-            variant="ghost"
-            size="icon"
-            class="h-7 w-7"
+          <button
+            type="button"
+            class="ghost small icon"
             :disabled="state.status === 'idle' || state.status === 'completed' || state.status === 'error' || state.status === 'waiting_input'"
+            :title="$t('flowBuilder.previewStepForward')"
+            :aria-label="$t('flowBuilder.previewStepForward')"
             @click="emit('stepForward')"
           >
-            <SkipForward class="h-4 w-4" />
-          </Button>
+            <SkipForward />
+          </button>
 
-          <Button
-            variant="ghost"
-            size="icon"
-            class="h-7 w-7"
-            title="Step back"
+          <button
+            type="button"
+            class="ghost small icon"
             :disabled="!canUndo"
+            :title="$t('flowBuilder.previewStepBack')"
+            :aria-label="$t('flowBuilder.previewStepBack')"
             @click="emit('undo')"
           >
-            <Undo2 class="h-4 w-4" />
-          </Button>
+            <Undo2 />
+          </button>
 
-          <Button
-            variant="ghost"
-            size="icon"
-            class="h-7 w-7"
-            title="Restart"
+          <button
+            type="button"
+            class="ghost small icon"
+            :title="$t('flowBuilder.previewRestart')"
+            :aria-label="$t('flowBuilder.previewRestart')"
             @click="emit('reset')"
           >
-            <RotateCcw class="h-4 w-4" />
-          </Button>
+            <RotateCcw />
+          </button>
         </div>
       </div>
 
       <!-- Current Step -->
-      <div v-if="state.currentStepName" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-        Step {{ (state.currentStepIndex ?? 0) + 1 }}: <span class="font-mono">{{ state.currentStepName }}</span>
-      </div>
+      <small v-if="state.currentStepName" class="text-light">
+        Step {{ (state.currentStepIndex ?? 0) + 1 }}: <code>{{ state.currentStepName }}</code>
+      </small>
+    </header>
+
+    <div class="flex-1 scroll-y">
+      <!-- Variables Section -->
+      <details open>
+        <summary>
+          <span class="hstack gap-2"><Braces /> Variables</span>
+          <span class="badge" data-variant="secondary">{{ variableEntries.length }}</span>
+        </summary>
+        <div class="vstack gap-1">
+          <small v-if="variableEntries.length === 0" class="text-light align-center">No variables set</small>
+          <p v-for="[key, value] in variableEntries" :key="key" class="hstack gap-2 min-w-0">
+            <code class="shrink-0">{{ key }}:</code>
+            <small class="min-w-0">{{ typeof value === 'object' ? JSON.stringify(value) : value }}</small>
+          </p>
+        </div>
+      </details>
+
+      <!-- Steps Section -->
+      <details>
+        <summary>
+          <span class="hstack gap-2"><ListTree /> Steps</span>
+          <span class="badge" data-variant="secondary">{{ steps.length }}</span>
+        </summary>
+        <ul class="unstyled vstack gap-1">
+          <li v-for="(step, idx) in steps" :key="step.step_name">
+            <button
+              type="button"
+              class="small w-100 justify-between"
+              :class="state.currentStepName === step.step_name ? 'outline' : 'ghost'"
+              :aria-current="state.currentStepName === step.step_name ? 'step' : undefined"
+              @click="emit('goToStep', step.step_name)"
+            >
+              <span class="hstack gap-2 min-w-0">
+                <CircleDot :size="12" />
+                <span>{{ idx + 1 }}.</span>
+                <code class="truncate">{{ step.step_name }}</code>
+              </span>
+            </button>
+          </li>
+        </ul>
+      </details>
+
+      <!-- Timeline Section -->
+      <details open>
+        <summary>
+          Timeline
+          <span class="badge" data-variant="secondary">{{ state.executionLog.length }}</span>
+        </summary>
+        <div>
+          <ExecutionTimeline
+            :entries="state.executionLog"
+            :current-step-name="state.currentStepName"
+          />
+        </div>
+      </details>
     </div>
-
-    <ScrollArea class="flex-1">
-      <div class="p-2 space-y-2">
-        <!-- Variables Section -->
-        <Collapsible v-model:open="variablesExpanded">
-          <CollapsibleTrigger class="flex items-center gap-2 w-full px-2 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded text-sm font-medium text-gray-700 dark:text-gray-300">
-            <ChevronDown v-if="variablesExpanded" class="h-4 w-4" />
-            <ChevronRight v-else class="h-4 w-4" />
-            <Braces class="h-4 w-4" />
-            Variables
-            <span class="ml-auto text-xs text-gray-400">{{ variableEntries.length }}</span>
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <div class="mt-1 px-2 py-1 bg-white dark:bg-[#202c33] rounded border border-gray-200 dark:border-gray-700">
-              <div v-if="variableEntries.length === 0" class="text-xs text-gray-400 py-2 text-center">
-                No variables set
-              </div>
-              <div v-else class="space-y-1">
-                <div
-                  v-for="[key, value] in variableEntries"
-                  :key="key"
-                  class="flex items-start gap-2 text-xs py-1"
-                >
-                  <span class="font-mono text-purple-600 dark:text-purple-400 flex-shrink-0">{{ key }}:</span>
-                  <span class="text-gray-700 dark:text-gray-300 break-all">
-                    {{ typeof value === 'object' ? JSON.stringify(value) : value }}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </CollapsibleContent>
-        </Collapsible>
-
-        <!-- Steps Section -->
-        <Collapsible v-model:open="stepsExpanded">
-          <CollapsibleTrigger class="flex items-center gap-2 w-full px-2 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded text-sm font-medium text-gray-700 dark:text-gray-300">
-            <ChevronDown v-if="stepsExpanded" class="h-4 w-4" />
-            <ChevronRight v-else class="h-4 w-4" />
-            <ListTree class="h-4 w-4" />
-            Steps
-            <span class="ml-auto text-xs text-gray-400">{{ steps.length }}</span>
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <div class="mt-1 px-2 py-1 bg-white dark:bg-[#202c33] rounded border border-gray-200 dark:border-gray-700 max-h-40 overflow-y-auto">
-              <div
-                v-for="(step, idx) in steps"
-                :key="step.step_name"
-                class="flex items-center gap-2 text-xs py-1.5 px-1 rounded cursor-pointer transition-colors"
-                :class="{
-                  'bg-blue-50 dark:bg-blue-900/30': state.currentStepName === step.step_name,
-                  'hover:bg-gray-50 dark:hover:bg-gray-800': state.currentStepName !== step.step_name
-                }"
-                @click="emit('goToStep', step.step_name)"
-              >
-                <CircleDot
-                  class="h-3 w-3"
-                  :class="{
-                    'text-green-500': state.currentStepName === step.step_name,
-                    'text-gray-300 dark:text-gray-600': state.currentStepName !== step.step_name
-                  }"
-                />
-                <span class="text-gray-500">{{ idx + 1 }}.</span>
-                <span class="font-mono text-gray-700 dark:text-gray-300">{{ step.step_name }}</span>
-              </div>
-            </div>
-          </CollapsibleContent>
-        </Collapsible>
-
-        <!-- Timeline Section -->
-        <Collapsible v-model:open="timelineExpanded">
-          <CollapsibleTrigger class="flex items-center gap-2 w-full px-2 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded text-sm font-medium text-gray-700 dark:text-gray-300">
-            <ChevronDown v-if="timelineExpanded" class="h-4 w-4" />
-            <ChevronRight v-else class="h-4 w-4" />
-            Timeline
-            <span class="ml-auto text-xs text-gray-400">{{ state.executionLog.length }}</span>
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <div class="mt-1 bg-white dark:bg-[#202c33] rounded border border-gray-200 dark:border-gray-700 max-h-60 overflow-y-auto">
-              <ExecutionTimeline
-                :entries="state.executionLog"
-                :current-step-name="state.currentStepName"
-              />
-            </div>
-          </CollapsibleContent>
-        </Collapsible>
-      </div>
-    </ScrollArea>
-  </div>
+  </article>
 </template>

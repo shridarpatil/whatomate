@@ -56,7 +56,7 @@ test.describe('Register', () => {
     await page.goto(`/register?org=${orgId}`)
     await page.locator('button[type="submit"]').click()
 
-    const toast = page.locator('[data-sonner-toast]')
+    const toast = page.locator('.toast-container output')
     await expect(toast).toBeVisible({ timeout: 5000 })
     await expect(toast).toContainText('fill in all fields')
   })
@@ -73,7 +73,7 @@ test.describe('Register', () => {
     await page.locator('input#confirmPassword').fill('different123')
     await page.locator('button[type="submit"]').click()
 
-    const toast = page.locator('[data-sonner-toast]')
+    const toast = page.locator('.toast-container output')
     await expect(toast).toBeVisible({ timeout: 5000 })
     await expect(toast).toContainText('do not match')
   })
@@ -90,7 +90,7 @@ test.describe('Register', () => {
     await page.locator('input#confirmPassword').fill('short')
     await page.locator('button[type="submit"]').click()
 
-    const toast = page.locator('[data-sonner-toast]')
+    const toast = page.locator('.toast-container output')
     await expect(toast).toBeVisible({ timeout: 5000 })
     await expect(toast).toContainText('at least 8 characters')
   })

@@ -452,9 +452,15 @@ export function useFlowGraphSimulation(
       }
       // Treat free-text into a buttons node as no-op (re-yield).
       state.status = 'waiting_input'
-    } else {
+      } else {
       const btn = input
       addMessage('user', btn.title)
+
+      const storeAs = stringField(node, 'store_as')
+      if (storeAs) {
+        setVariable(storeAs, btn.title || btn.id)
+      }
+
       log('branch', node.id, { buttonId: btn.id })
       await advance(node, `button:${btn.id}`)
     }

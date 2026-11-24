@@ -58,7 +58,7 @@ test.describe('24-Hour Service Window', () => {
     await expect(banner).toBeVisible({ timeout: 5000 })
 
     // The "Send Template" button should be in the banner
-    const sendTemplateBtn = page.getByRole('button', { name: /Send Template/i })
+    const sendTemplateBtn = page.getByRole('alert').filter({ hasText: '24-hour messaging window has expired' }).getByRole('button', { name: /Send Template/i })
     await expect(sendTemplateBtn).toBeVisible()
   })
 
@@ -100,7 +100,7 @@ test.describe('24-Hour Service Window', () => {
     await chatPage.goto(contactId)
 
     // Click the "Send Template" button in the banner
-    const sendTemplateBtn = page.getByRole('button', { name: /Send Template/i })
+    const sendTemplateBtn = page.getByRole('alert').filter({ hasText: '24-hour messaging window has expired' }).getByRole('button', { name: /Send Template/i })
     await expect(sendTemplateBtn).toBeVisible({ timeout: 5000 })
     await sendTemplateBtn.click()
 

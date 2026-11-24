@@ -1,6 +1,6 @@
 import { test, expect, request as playwrightRequest } from '@playwright/test'
 import { Client } from 'pg'
-import { ApiHelper } from '../../helpers'
+import { ApiHelper, selectOptionMatching } from '../../helpers'
 import {
   createTestScope,
   createUserWithPermissions,
@@ -196,7 +196,7 @@ test.describe('Pick from queue — agent flow', () => {
     // Success toast confirms the pick. Use a partial match because the toast
     // body includes the contact name interpolated via i18n.
     await expect(
-      page.locator('[data-sonner-toast]').filter({ hasText: /Transfer picked/i }),
+      page.locator('.toast-container output').filter({ hasText: /Transfer picked/i }),
     ).toBeVisible({ timeout: 10_000 })
 
     // After picking the page navigates to the contact's chat.
@@ -330,17 +330,16 @@ test.describe('Pick from queue — admin assign flow', () => {
     // The dialog has two comboboxes (Team Queue then Assign to Agent).
     // We want the second.
     const agentSelect = dialog.getByRole('combobox').nth(1)
-    await agentSelect.click()
 
     // The agent option is rendered with full_name = scope.name('tx-assignee'),
     // so the option text contains 'tx-assignee'.
-    await page.getByRole('option').filter({ hasText: /tx-assignee/i }).first().click()
+    await selectOptionMatching(agentSelect, /tx-assignee/i)
 
     await dialog.getByRole('button', { name: /^Save$/i }).click()
 
     // Toast on success.
     await expect(
-      page.locator('[data-sonner-toast]').filter({ hasText: /updated|assigned/i }),
+      page.locator('.toast-container output').filter({ hasText: /updated|assigned/i }),
     ).toBeVisible({ timeout: 10_000 })
 
     // Transfer now has the agent assigned in the DB.
@@ -419,13 +418,13 @@ test.describe('Queue pickup gated by allow_agent_queue_pickup', () => {
     await expect(pickBtn).toBeVisible({ timeout: 10_000 })
     await expect(pickBtn).toBeDisabled()
 
-    // Tooltip explains why it's disabled. We hover the wrapping span (the
-    // tooltip trigger) — disabled buttons don't receive pointer events, and
-    // the trigger wraps the button precisely for this reason.
-    await pickBtn.locator('xpath=ancestor::span[1]').hover()
-    await expect(
-      page.getByText(/Queue pickup is disabled by your administrator/i),
-    ).toBeVisible({ timeout: 5_000 })
+    // Tooltip explains why it's disabled. It is a native `title` on the span
+    // wrapping the button (disabled buttons don't receive pointer events), so
+    // assert the attribute rather than a rendered tooltip popup.
+    await expect(pickBtn.locator('xpath=ancestor::span[1]')).toHaveAttribute(
+      'title',
+      /Queue pickup is disabled by your administrator/i,
+    )
   })
 
   test('Pick Next is enabled again when the toggle is flipped back on', async ({ page }) => {
@@ -555,18 +554,15 @@ test.describe('Pickup respects assign_to_same_agent', () => {
     await expect(page.getByText('Paused').first()).toBeVisible({ timeout: 10_000 })
 
     // Click the standalone Resume button in the chat header. The button is
-    // icon-only (Play icon, no aria-label). Lucide-vue-next renders icons
-    // with a class attribute like "lucide lucide-play" on the SVG, but
-    // Playwright's :has(svg.X) selector struggles with SVG namespacing —
-    // use attribute matching instead.
+    // icon-only (Play icon, no aria-label); match it via its data-icon attribute.
     const resumeBtn = page.locator('main button').filter({
-      has: page.locator('[class*="lucide-play"]'),
+      has: page.locator('[data-icon="play"]'),
     }).first()
     await expect(resumeBtn).toBeVisible({ timeout: 10_000 })
     await resumeBtn.click()
 
     await expect(
-      page.locator('[data-sonner-toast]').filter({ hasText: /resumed/i }),
+      page.locator('.toast-container output').filter({ hasText: /resumed/i }),
     ).toBeVisible({ timeout: 10_000 })
 
     // Re-read: assigned_user_id remains nil, transfer is resumed.
@@ -686,12 +682,11 @@ test.describe('Admin reassign and unassign flows', () => {
     await expect(dialog).toBeVisible({ timeout: 5_000 })
 
     // Second combobox is the agent select. Pick agent B by slug.
-    await dialog.getByRole('combobox').nth(1).click()
-    await page.getByRole('option').filter({ hasText: /reassign-pickup-b/i }).first().click()
+    await selectOptionMatching(dialog.getByRole('combobox').nth(1), /reassign-pickup-b/i)
     await dialog.getByRole('button', { name: /^Save$/i }).click()
 
     await expect(
-      page.locator('[data-sonner-toast]').filter({ hasText: /updated|assigned/i }),
+      page.locator('.toast-container output').filter({ hasText: /updated|assigned/i }),
     ).toBeVisible({ timeout: 10_000 })
 
     const rows = await execSQL(
@@ -713,13 +708,12 @@ test.describe('Admin reassign and unassign flows', () => {
 
     const dialog = page.getByRole('dialog')
     await expect(dialog).toBeVisible({ timeout: 5_000 })
-    await dialog.getByRole('combobox').nth(1).click()
     // The "Unassigned (in queue)" option returns the transfer to the queue.
-    await page.getByRole('option').filter({ hasText: /Unassigned/i }).first().click()
+    await selectOptionMatching(dialog.getByRole('combobox').nth(1), /Unassigned/i)
     await dialog.getByRole('button', { name: /^Save$/i }).click()
 
     await expect(
-      page.locator('[data-sonner-toast]').filter({ hasText: /updated|assigned/i }),
+      page.locator('.toast-container output').filter({ hasText: /updated|assigned/i }),
     ).toBeVisible({ timeout: 10_000 })
 
     const rows = await execSQL(
@@ -819,8 +813,7 @@ test.describe('Queue tab team filter', () => {
 
     // Apply alpha team filter — the team-filter combobox is the
     // "Filter by team" select on the Queue tab header.
-    await page.getByRole('combobox').filter({ hasText: /All Queues|Filter by team/i }).first().click()
-    await page.getByRole('option').filter({ hasText: scope.name('team-alpha') }).first().click()
+    await selectOptionMatching(page.getByRole('combobox', { name: /Filter by team/i }), new RegExp(scope.name('team-alpha')))
 
     await expect(queueTable.getByText(alphaContactName)).toBeVisible({ timeout: 5_000 })
     await expect(queueTable.getByText(betaContactName)).toHaveCount(0)

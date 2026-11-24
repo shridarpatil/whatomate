@@ -41,7 +41,7 @@ test.describe('Organization Switching (Super Admin)', () => {
     const orgSwitcher = page.locator('[data-testid="org-switcher"]').or(
       page.locator('aside').locator('button').filter({ hasText: /organization|org/i })
     ).or(
-      page.locator('aside select')
+      page.locator('aside [data-testid="org-switcher"] button[popovertarget]')
     )
 
     // Super admin should see org switcher if they have multiple orgs
@@ -83,7 +83,7 @@ test.describe('Organization Switching (Super Admin)', () => {
     expect(page.url()).toContain('/settings/users')
   })
 
-  test('regular user cannot see organization switcher', async ({ page }) => {
+  test('regular user sees their organization but cannot create one', async ({ page }) => {
     // Login as regular agent
     await page.goto('/login')
     await page.locator('input[type="email"]').fill('agent@test.com')
@@ -91,10 +91,14 @@ test.describe('Organization Switching (Super Admin)', () => {
     await page.locator('button[type="submit"]').click()
     await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 10000 })
 
-    // Regular user should NOT see organization switcher
-    await page.waitForTimeout(1000)
-    const orgSwitcher = page.locator('[data-testid="org-switcher"]')
-    await expect(orgSwitcher).not.toBeVisible()
+    // Everyone sees the current organization (logo + name) in the sidebar...
+    const trigger = page.locator('aside [data-testid="org-switcher"] button[popovertarget]')
+    await expect(trigger).toBeVisible({ timeout: 10000 })
+    await expect(trigger.locator('[data-org-logo]')).toBeVisible()
+
+    // ...but only users with organizations:write get the create item.
+    await trigger.click()
+    await expect(page.getByRole('menuitem', { name: /Create Organization/i })).toHaveCount(0)
   })
 
 })
@@ -126,16 +130,15 @@ test.describe('Create Organization via Sidebar', () => {
     }
   }
 
-  // Helper to find the plus button in the org switcher
+  // Open the org switcher menu and return its "create organization" item.
   async function getOrgPlusButton(page: any) {
-    const sidebar = page.locator('aside')
-    // Use exact match for the "Organization" label to avoid matching "No organizations found"
-    const orgLabel = sidebar.getByText('Organization', { exact: true })
-    await expect(orgLabel).toBeVisible({ timeout: 10000 })
-    return orgLabel.locator('..').locator('button').filter({ has: page.locator('.lucide-plus-icon') })
+    const trigger = page.locator('aside [data-testid="org-switcher"] button[popovertarget]')
+    await expect(trigger).toBeVisible({ timeout: 10000 })
+    await trigger.click()
+    return page.getByRole('menuitem', { name: /Create Organization/i })
   }
 
-  test('should show plus button in org switcher for super admin', async ({ page }) => {
+  test('should show create item in org switcher menu for super admin', async ({ page }) => {
     const loggedIn = await loginAsSuperAdmin(page)
     if (!loggedIn) { test.skip(true, 'No admin credentials available'); return }
 
@@ -143,7 +146,7 @@ test.describe('Create Organization via Sidebar', () => {
     await expect(plusButton).toBeVisible()
   })
 
-  test('should open create organization dialog on plus click', async ({ page }) => {
+  test('should open create organization dialog on menu item click', async ({ page }) => {
     const loggedIn = await loginAsSuperAdmin(page)
     if (!loggedIn) { test.skip(true, 'No admin credentials available'); return }
 
@@ -160,7 +163,7 @@ test.describe('Create Organization via Sidebar', () => {
     await expect(dialog).not.toBeVisible()
   })
 
-  test('should create a new organization via plus button', async ({ page }) => {
+  test('should create a new organization via switcher menu', async ({ page }) => {
     const loggedIn = await loginAsSuperAdmin(page)
     if (!loggedIn) { test.skip(true, 'No admin credentials available'); return }
 
@@ -178,12 +181,11 @@ test.describe('Create Organization via Sidebar', () => {
     // Dialog should close after successful creation
     await expect(dialog).not.toBeVisible({ timeout: 10000 })
 
-    // The org switcher is a closed Select; opening it reveals the org list
-    // (rendered into a portal, not inside aside, so don't scope to aside).
-    await page.locator('aside').getByRole('combobox').first().click()
+    // The new org must appear among the switcher menu items.
+    await page.locator('aside [data-testid="org-switcher"] button[popovertarget]').click()
     await expect(
-      page.getByRole('option').filter({ hasText: orgName }),
-    ).toBeVisible({ timeout: 10000 })
+      page.getByRole('menuitem', { name: orgName }),
+    ).toHaveCount(1, { timeout: 10000 })
   })
 
   test('should not submit with empty org name', async ({ page }) => {

@@ -1,0 +1,50 @@
+@layer base {
+  /* Container to get horizontal scroll on small screens. */
+  .table {
+    min-width: 320px;
+    width: 100%;
+    overflow-x: auto;
+  }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: var(--text-7);
+  }
+
+  thead {
+    border-bottom: 1px solid var(--border);
+  }
+
+  tfoot {
+    border-top: 1px solid var(--border);
+  }
+
+  th, td {
+    overflow-wrap: break-word;
+  }
+
+  th {
+    padding: var(--space-3) var(--space-2);
+    text-align: start;
+    font-weight: var(--font-medium);
+    color: var(--muted-foreground);
+  }
+
+  td {
+    padding: var(--space-3) var(--space-2);
+  }
+
+  tbody tr {
+    border-bottom: 1px solid var(--border);
+    transition: background-color var(--transition-fast);
+
+    &:last-child {
+      border-bottom: none;
+    }
+
+    &:hover {
+      background-color: rgb(from var(--muted) r g b / 0.5);
+    }
+  }
+}

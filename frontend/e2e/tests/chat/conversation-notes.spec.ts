@@ -144,7 +144,7 @@ test.describe('Conversation Notes - UI', () => {
     await chatPage.noteInput.fill('   ')
     await chatPage.noteInput.press('Enter')
 
-    const toast = chatPage.page.locator('[data-sonner-toast]').filter({ hasText: 'Note added' })
+    const toast = chatPage.page.locator('.toast-container output').filter({ hasText: 'Note added' })
     await expect(toast).not.toBeVisible()
   })
 

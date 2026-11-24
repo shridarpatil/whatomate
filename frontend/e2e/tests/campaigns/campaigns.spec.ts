@@ -16,10 +16,9 @@ test.describe('Campaigns Management', () => {
     await expect(campaignsPage.createButton).toBeVisible()
   })
 
-  test('should display status filter', async ({ page }) => {
+  test('should display status filter', async () => {
     await expect(campaignsPage.statusFilter).toBeVisible()
-    await campaignsPage.statusFilter.click()
-    await expect(page.locator('[role="option"]').first()).toBeVisible()
+    await expect(campaignsPage.statusFilter.locator('option').first()).toBeAttached()
   })
 
   test('should display time range filter', async () => {
@@ -30,15 +29,15 @@ test.describe('Campaigns Management', () => {
     await page.goto('/campaigns/new')
     await page.waitForLoadState('networkidle')
     expect(page.url()).toContain('/campaigns/new')
-    await expect(page.locator('input').first()).toBeVisible()
+    await expect(page.locator('main').locator('input').first()).toBeVisible()
   })
 
   test('should show required fields on create page', async ({ page }) => {
     await page.goto('/campaigns/new')
     await page.waitForLoadState('networkidle')
-    await expect(page.locator('input').first()).toBeVisible()
+    await expect(page.locator('main').locator('input').first()).toBeVisible()
     // Account and Template selects
-    const selects = page.locator('button[role="combobox"]')
+    const selects = page.locator('main select')
     expect(await selects.count()).toBeGreaterThanOrEqual(1)
   })
 
@@ -55,12 +54,8 @@ test.describe('Campaigns Management', () => {
   })
 
   test('should filter campaigns by status', async ({ page }) => {
-    await campaignsPage.statusFilter.click()
-    const completedOption = page.locator('[role="option"]').filter({ hasText: /Completed/i })
-    if (await completedOption.isVisible()) {
-      await completedOption.click()
-      await page.waitForLoadState('networkidle')
-    }
+    await campaignsPage.statusFilter.selectOption('completed')
+    await page.waitForLoadState('networkidle')
   })
 })
 
@@ -73,25 +68,28 @@ test.describe('Campaign Edit Dialog', () => {
     await campaignsPage.goto()
   })
 
-  test('should open edit dialog when clicking edit button on draft campaign', async () => {
+  test('should open the campaign detail page when clicking edit', async ({ page }) => {
     if (await campaignsPage.clickEditButton()) {
-      await campaignsPage.expectDialogVisible()
-      await campaignsPage.expectDialogTitle(/Edit Campaign/i)
+      await expect(page.locator('main input#name')).toBeVisible()
     }
   })
 
-  test('should pre-fill form fields when editing campaign', async () => {
+  test('should pre-fill form fields when editing campaign', async ({ page }) => {
     if (await campaignsPage.clickEditButton()) {
-      const nameInput = campaignsPage.createDialog.locator('input#name')
+      const nameInput = page.locator('main input#name')
       await expect(nameInput).toBeVisible()
-      const nameValue = await nameInput.inputValue()
-      expect(nameValue.length).toBeGreaterThan(0)
+      expect((await nameInput.inputValue()).length).toBeGreaterThan(0)
     }
   })
 
-  test('should have Save Changes button in edit mode', async () => {
+  test('should show a Save button after editing a draft campaign', async ({ page }) => {
     if (await campaignsPage.clickEditButton()) {
-      await expect(campaignsPage.createDialog.getByRole('button', { name: /Save Changes/i })).toBeVisible()
+      const nameInput = page.locator('main input#name')
+      // Only draft campaigns are editable; Save appears once something changed.
+      if (await nameInput.isEnabled()) {
+        await nameInput.fill(`${await nameInput.inputValue()} edited`)
+        await expect(page.locator('main').getByRole('button', { name: /^(Save|Saving)/ })).toBeVisible()
+      }
     }
   })
 })
@@ -160,9 +158,9 @@ test.describe('Campaign Detail Page CRUD', () => {
     await page.waitForLoadState('networkidle')
 
     // Name input
-    await expect(page.locator('input').first()).toBeVisible()
+    await expect(page.locator('main').locator('input').first()).toBeVisible()
     // Account and Template selects
-    const selects = page.locator('button[role="combobox"]')
+    const selects = page.locator('main select')
     expect(await selects.count()).toBeGreaterThanOrEqual(1)
   })
 
@@ -256,7 +254,7 @@ test.describe('Campaign Detail Page CRUD', () => {
     await page.goto(href)
     await page.waitForLoadState('networkidle')
 
-    const nameInput = page.locator('input').first()
+    const nameInput = page.locator('main').locator('input').first()
     if (await nameInput.isDisabled()) return
 
     const original = await nameInput.inputValue()
@@ -292,14 +290,14 @@ test.describe('Campaign Detail Page CRUD', () => {
 
     // Dismiss any toast
     await page.evaluate(() => {
-      document.querySelectorAll('[data-sonner-toast]').forEach(el => el.remove())
+      document.querySelectorAll('.toast-container output').forEach(el => el.remove())
     })
     await page.waitForTimeout(300)
 
     const deleteBtn = page.getByRole('button', { name: /Delete/i }).first()
     if (await deleteBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
       await deleteBtn.click()
-      const dialog = page.locator('[role="alertdialog"]')
+      const dialog = page.getByRole('alertdialog')
       await expect(dialog).toBeVisible({ timeout: 5000 })
       // Cancel — don't actually delete
       await dialog.getByRole('button', { name: /Cancel/i }).click()
@@ -323,11 +321,11 @@ test.describe('Campaign Detail Page CRUD', () => {
     const addBtn = page.getByRole('button', { name: /Add/i }).first()
     if (await addBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
       await addBtn.click()
-      const dialog = page.locator('[role="dialog"]')
+      const dialog = page.locator('dialog[open], [role="dialog"]')
       await expect(dialog).toBeVisible({ timeout: 5000 })
       // Should have Manual Entry and CSV tabs
-      await expect(dialog.getByText('Manual Entry')).toBeVisible()
-      await expect(dialog.getByText('CSV')).toBeVisible()
+      await expect(dialog.getByRole('tab', { name: /Manual Entry/i })).toBeVisible()
+      await expect(dialog.getByRole('tab', { name: /CSV/i })).toBeVisible()
       // Close
       await page.keyboard.press('Escape')
     }

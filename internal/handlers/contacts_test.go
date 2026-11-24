@@ -1,8 +1,11 @@
 package handlers_test
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -14,6 +17,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 // --- ListContacts Tests ---
@@ -197,6 +202,114 @@ func TestApp_ListContacts(t *testing.T) {
 		// Default pagination: page=1, limit=50
 		assert.Equal(t, 1, resp.Data.Page)
 		assert.Equal(t, 50, resp.Data.Limit)
+	})
+}
+
+// messageQueryCounter is a GORM logger that counts SQL statements hitting the messages table.
+type messageQueryCounter struct {
+	logger.Interface
+	n atomic.Int64
+}
+
+func (c *messageQueryCounter) Trace(_ context.Context, _ time.Time, fc func() (string, int64), _ error) {
+	if sql, _ := fc(); strings.Contains(sql, `FROM "messages"`) {
+		c.n.Add(1)
+	}
+}
+
+func TestApp_ListContacts_UnreadCounts(t *testing.T) {
+	t.Parallel()
+
+	listContacts := func(t *testing.T, app *handlers.App, orgID, userID uuid.UUID) map[uuid.UUID]int {
+		t.Helper()
+		req := testutil.NewGETRequest(t)
+		testutil.SetAuthContext(req, orgID, userID)
+		testutil.SetQueryParam(req, "limit", 50)
+		require.NoError(t, app.ListContacts(req))
+		require.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+		var resp struct {
+			Data struct {
+				Contacts []handlers.ContactResponse `json:"contacts"`
+			} `json:"data"`
+		}
+		require.NoError(t, json.Unmarshal(testutil.GetResponseBody(req), &resp))
+		out := make(map[uuid.UUID]int, len(resp.Data.Contacts))
+		for _, c := range resp.Data.Contacts {
+			out[c.ID] = c.UnreadCount
+		}
+		return out
+	}
+
+	t.Run("counts only unread incoming messages per contact", func(t *testing.T) {
+		app := newTestApp(t)
+		org := testutil.CreateTestOrganization(t, app.DB)
+		adminRole := testutil.CreateAdminRole(t, app.DB, org.ID)
+		user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&adminRole.ID))
+		account := testutil.CreateTestWhatsAppAccount(t, app.DB, org.ID)
+
+		mixed := testutil.CreateTestContact(t, app.DB, org.ID)
+		allRead := testutil.CreateTestContact(t, app.DB, org.ID)
+		noMessages := testutil.CreateTestContact(t, app.DB, org.ID)
+		withDeleted := testutil.CreateTestContact(t, app.DB, org.ID)
+
+		addMsg := func(contactID uuid.UUID, dir models.Direction, status models.MessageStatus) *models.Message {
+			msg := &models.Message{
+				BaseModel:       models.BaseModel{ID: uuid.New()},
+				OrganizationID:  org.ID,
+				WhatsAppAccount: account.Name,
+				ContactID:       contactID,
+				Direction:       dir,
+				MessageType:     models.MessageTypeText,
+				Content:         "hi",
+				Status:          status,
+			}
+			require.NoError(t, app.DB.Create(msg).Error)
+			return msg
+		}
+
+		addMsg(mixed.ID, models.DirectionIncoming, models.MessageStatusDelivered)
+		addMsg(mixed.ID, models.DirectionIncoming, models.MessageStatusReceived)
+		addMsg(mixed.ID, models.DirectionIncoming, models.MessageStatusRead)
+		addMsg(mixed.ID, models.DirectionOutgoing, models.MessageStatusSent)
+		addMsg(allRead.ID, models.DirectionIncoming, models.MessageStatusRead)
+		addMsg(allRead.ID, models.DirectionOutgoing, models.MessageStatusDelivered)
+		addMsg(withDeleted.ID, models.DirectionIncoming, models.MessageStatusDelivered)
+		deleted := addMsg(withDeleted.ID, models.DirectionIncoming, models.MessageStatusDelivered)
+		require.NoError(t, app.DB.Delete(deleted).Error)
+
+		got := listContacts(t, app, org.ID, user.ID)
+		assert.Equal(t, map[uuid.UUID]int{
+			mixed.ID:       2,
+			allRead.ID:     0,
+			noMessages.ID:  0,
+			withDeleted.ID: 1,
+		}, got)
+	})
+
+	t.Run("unread lookup is one query regardless of page size", func(t *testing.T) {
+		app := newTestApp(t)
+		org := testutil.CreateTestOrganization(t, app.DB)
+		adminRole := testutil.CreateAdminRole(t, app.DB, org.ID)
+		user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&adminRole.ID))
+
+		counter := &messageQueryCounter{Interface: logger.Discard}
+		base := app.DB
+		app.DB = base.Session(&gorm.Session{Logger: counter})
+
+		_ = listContacts(t, app, org.ID, user.ID)
+		assert.Equal(t, int64(0), counter.n.Load(), "empty page should not query messages")
+
+		created := 0
+		for _, size := range []int{3, 25} {
+			for ; created < size; created++ {
+				testutil.CreateTestContact(t, base, org.ID)
+			}
+			counter.n.Store(0)
+			got := listContacts(t, app, org.ID, user.ID)
+			require.Len(t, got, size)
+			assert.Equal(t, int64(1), counter.n.Load(), "page of %d contacts", size)
+		}
 	})
 }
 

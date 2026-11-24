@@ -147,15 +147,11 @@ func (a *App) ListContacts(r *fastglue.Request) error {
 	// Check if phone masking is enabled
 	shouldMask := a.ShouldMaskPhoneNumbers(orgID)
 
+	unreadCounts := a.unreadCountsByContact(contacts)
+
 	// Convert to response format
 	response := make([]ContactResponse, len(contacts))
 	for i, c := range contacts {
-		// Count unread messages
-		var unreadCount int64
-		a.DB.Model(&models.Message{}).
-			Where("contact_id = ? AND direction = ? AND status != ?", c.ID, models.DirectionIncoming, models.MessageStatusRead).
-			Count(&unreadCount)
-
 		tags := []string{}
 		if c.Tags != nil {
 			for _, t := range c.Tags {
@@ -184,7 +180,7 @@ func (a *App) ListContacts(r *fastglue.Request) error {
 			Metadata:           c.Metadata,
 			LastMessageAt:      c.LastMessageAt,
 			LastMessagePreview: c.LastMessagePreview,
-			UnreadCount:        int(unreadCount),
+			UnreadCount:        int(unreadCounts[c.ID]),
 			AssignedUserID:     c.AssignedUserID,
 			WhatsAppAccount:    c.WhatsAppAccount,
 			LastInboundAt:      c.LastInboundAt,
@@ -196,6 +192,38 @@ func (a *App) ListContacts(r *fastglue.Request) error {
 	}
 
 	return r.SendEnvelope(listEnvelope("contacts", response, total, pg))
+}
+
+// unreadCountsByContact returns unread incoming message counts for a page of
+// contacts in one grouped query. Contacts with no unread messages are absent (0).
+func (a *App) unreadCountsByContact(contacts []models.Contact) map[uuid.UUID]int64 {
+	counts := make(map[uuid.UUID]int64, len(contacts))
+	if len(contacts) == 0 {
+		return counts
+	}
+	ids := make([]uuid.UUID, len(contacts))
+	for i := range contacts {
+		ids[i] = contacts[i].ID
+	}
+
+	var rows []struct {
+		ContactID uuid.UUID
+		Count     int64
+	}
+	if err := a.DB.Model(&models.Message{}).
+		Select("contact_id, COUNT(*) AS count").
+		Where("contact_id IN ?", ids).
+		// Literals, not bind params, so cached generic plans still match idx_messages_contact_unread.
+		Where("direction = 'incoming' AND status <> 'read'").
+		Group("contact_id").
+		Scan(&rows).Error; err != nil {
+		a.Log.Error("Failed to count unread messages", "error", err)
+		return counts
+	}
+	for _, row := range rows {
+		counts[row.ContactID] = row.Count
+	}
+	return counts
 }
 
 // scopeAssignedContact narrows a contact query for users who lack the

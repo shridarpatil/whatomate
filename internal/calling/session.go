@@ -172,6 +172,10 @@ func NewManager(cfg *config.CallingConfig, s3Client *storage.S3Client, db *gorm.
 		cfg.PerAgentTimeoutSecs = 15
 	}
 
+	if cfg.StickyRingSecs <= 0 {
+		cfg.StickyRingSecs = 30
+	}
+
 	return &Manager{
 		sessions: make(map[string]*CallSession),
 		log:      log,
@@ -227,6 +231,13 @@ func (m *Manager) HandleIncomingCall(account *models.WhatsAppAccount, contact *m
 
 	// Start WebRTC negotiation using the consumer's SDP offer
 	go m.negotiateWebRTC(session, account, sdpOffer)
+}
+
+// RejectIncomingCall declines a ringing call without answering it. Used for a
+// click-to-call call whose originating agent can't take it: the call is never
+// offered to anyone else, so there is no reason to pre-accept it for WebRTC.
+func (m *Manager) RejectIncomingCall(ctx context.Context, account *models.WhatsAppAccount, callID string) {
+	m.rejectCall(ctx, account.ToWAAccount(), callID)
 }
 
 // HandleCallEvent processes a call lifecycle event (in_call, ended, etc.)

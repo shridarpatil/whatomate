@@ -88,6 +88,7 @@ type CallingConfig struct {
 	HoldMusicFile       string            `koanf:"hold_music_file"`
 	TransferTimeoutSecs int               `koanf:"transfer_timeout_secs"`
 	PerAgentTimeoutSecs int               `koanf:"per_agent_timeout_secs"`
+	StickyRingSecs      int               `koanf:"sticky_ring_secs"`
 	RingbackFile        string            `koanf:"ringback_file"`
 	UDPPortMin          uint16            `koanf:"udp_port_min"` // WebRTC UDP port range start (default: 10000)
 	UDPPortMax          uint16            `koanf:"udp_port_max"` // WebRTC UDP port range end (default: 10100)
@@ -98,7 +99,8 @@ type CallingConfig struct {
 }
 
 type AppConfig struct {
-	Name          string `koanf:"name"`
+	Name          string `koanf:"name"`     // Shown on the login page ("Welcome to <name>")
+	LogoURL       string `koanf:"logo_url"` // Login page logo; empty uses the default icon
 	Environment   string `koanf:"environment"` // development, staging, production
 	Debug         bool   `koanf:"debug"`
 	EncryptionKey string `koanf:"encryption_key"` // AES-256 key for encrypting secrets at rest

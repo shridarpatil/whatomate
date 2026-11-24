@@ -11,7 +11,7 @@ import {
 // Helper to read the visible sidebar menu items as plain text.
 async function getSidebarMenuItems(page: Page): Promise<string[]> {
   const items: string[] = []
-  const navLinks = page.locator('aside a[role="menuitem"], aside nav a, aside nav button[class*="justify-start"]')
+  const navLinks = page.locator('aside nav a')
   const count = await navLinks.count()
   for (let i = 0; i < count; i++) {
     const text = await navLinks.nth(i).textContent()

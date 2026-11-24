@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { GitBranch } from 'lucide-vue-next'
+import { GitBranch } from '@/lib/icons'
 import BaseNode from '@/components/calling/nodes/BaseNode.vue'
 
 defineOptions({ inheritAttrs: false })
@@ -23,11 +23,10 @@ const outputHandles = [
 <template>
   <BaseNode
     :label="data?.label || 'Condition'"
-    header-class="bg-indigo-600"
     :output-handles="outputHandles"
     :has-input="!data?.isEntryNode"
   >
-    <template #icon><GitBranch class="w-4 h-4" /></template>
-    <p class="truncate" :title="summary">{{ summary }}</p>
+    <template #icon><GitBranch /></template>
+    <small class="truncate" :title="summary">{{ summary }}</small>
   </BaseNode>
 </template>

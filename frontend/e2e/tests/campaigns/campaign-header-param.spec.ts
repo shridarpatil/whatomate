@@ -104,7 +104,7 @@ test.describe('Campaign recipients — TEXT header parameter', () => {
     await page.waitForLoadState('networkidle')
 
     await page.getByRole('button', { name: /Add Recipients/i }).first().click()
-    const dialog = page.locator('[role="dialog"]')
+    const dialog = page.locator('dialog[open], [role="dialog"]')
     await expect(dialog).toBeVisible()
 
     // Format hint shows the header column explicitly so users don't conflate
@@ -112,8 +112,7 @@ test.describe('Campaign recipients — TEXT header parameter', () => {
     await expect(dialog.locator('code')).toContainText('header')
 
     // Manual entry: phone, name, header, body_1, body_2 — header is the
-    // third column. The Textarea component doesn't forward an id; the
-    // dialog only has one textarea when the Manual tab is active.
+    // third column. The dialog only renders one textarea (the active tab panel).
     const textarea = dialog.locator('textarea')
     await textarea.fill('+15551230001, Alice, HEADER-VAL, BODY-1, BODY-2')
 
@@ -165,7 +164,7 @@ test.describe('Campaign recipients — TEXT header parameter', () => {
     await page.waitForLoadState('networkidle')
 
     await page.getByRole('button', { name: /Add Recipients/i }).first().click()
-    const dialog = page.locator('[role="dialog"]')
+    const dialog = page.locator('dialog[open], [role="dialog"]')
     await expect(dialog).toBeVisible()
 
     // Missing the header column — only phone, name, and two body values.
@@ -200,7 +199,7 @@ test.describe('Campaign recipients — TEXT header parameter', () => {
     await page.waitForLoadState('networkidle')
 
     await page.getByRole('button', { name: /Add Recipients/i }).first().click()
-    const dialog = page.locator('[role="dialog"]')
+    const dialog = page.locator('dialog[open], [role="dialog"]')
     await expect(dialog).toBeVisible()
 
     await dialog.getByRole('tab', { name: /CSV/i }).click()

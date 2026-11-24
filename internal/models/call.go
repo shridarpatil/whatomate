@@ -52,6 +52,7 @@ type CallLog struct {
 	IVRFlowID         *uuid.UUID     `gorm:"type:uuid" json:"ivr_flow_id,omitempty"`
 	IVRPath           JSONB          `gorm:"type:jsonb" json:"ivr_path,omitempty"`
 	AgentID           *uuid.UUID     `gorm:"type:uuid" json:"agent_id,omitempty"`
+	StickyAgentID     *uuid.UUID     `gorm:"type:uuid" json:"sticky_agent_id,omitempty"`
 	StartedAt         *time.Time     `json:"started_at,omitempty"`
 	AnsweredAt        *time.Time     `json:"answered_at,omitempty"`
 	EndedAt           *time.Time     `json:"ended_at,omitempty"`
