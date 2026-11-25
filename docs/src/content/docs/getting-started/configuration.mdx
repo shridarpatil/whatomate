@@ -57,6 +57,8 @@ s3_bucket = ""
 s3_region = ""
 s3_key = ""
 s3_secret = ""
+# s3_endpoint = ""
+# s3_use_path_style = false
 
 [whatsapp]
 webhook_verify_token = "random-string-change-this"
@@ -184,6 +186,10 @@ Controls media storage (template samples, uploaded files, call recordings).
 <Aside type="caution">
   Call recording is **S3-only**. If `calling.recording_enabled = true` but no S3 client is configured, recording is silently skipped — recordings are never written to `local_path`.
 </Aside>
+
+For recordings on an S3-compatible provider, set `s3_endpoint` to the provider's S3 API URL. Enable `s3_use_path_style` if the provider requires the bucket name in the URL path. Both settings are optional for Amazon S3.
+
+For Cloudflare R2, use `s3_endpoint = "https://<account-id>.r2.cloudflarestorage.com"`, `s3_region = "auto"`, and the R2 bucket name in `s3_bucket`. Supply the R2 S3 API credentials in `s3_key` and `s3_secret` or through the AWS SDK credential chain. The endpoint must also be reachable by clients playing recordings because their signed download URLs use it. [Cloudflare R2 Go SDK example](https://developers.cloudflare.com/r2/examples/aws/aws-sdk-go/)
 
 ### `[whatsapp]`
 
