@@ -780,6 +780,33 @@ func TestApp_SSOSettings_RequirePermissions(t *testing.T) {
 	assert.Equal(t, int64(1), count, "forbidden calls must not change SSO providers")
 }
 
+func TestApp_UpdateSSOProvider_SavesDisplayName(t *testing.T) {
+	app := newSSOApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	admin := createAdminUser(t, app, org.ID)
+
+	put := func(name string) *fastglue.Request {
+		req := testutil.NewJSONRequest(t, map[string]any{
+			"client_id": "id", "client_secret": "secret", "is_enabled": true,
+			"auth_url": "https://idp.example.com/auth", "token_url": "https://idp.example.com/token",
+			"user_info_url": "https://idp.example.com/userinfo", "display_name": name,
+		})
+		testutil.SetAuthContext(req, org.ID, admin.ID)
+		testutil.SetPathParam(req, "provider", "custom")
+		require.NoError(t, app.UpdateSSOProvider(req))
+		return req
+	}
+
+	req := put("  Acme Okta  ")
+	require.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+	var saved models.SSOProvider
+	require.NoError(t, app.DB.Where("organization_id = ? AND provider = ?", org.ID, "custom").First(&saved).Error)
+	assert.Equal(t, "Acme Okta", saved.DisplayName)
+
+	req = put(strings.Repeat("x", 101))
+	testutil.AssertErrorResponse(t, req, fasthttp.StatusBadRequest, "display_name")
+}
+
 // initSSORedirectURI runs InitSSO with the given Host header and returns the
 // redirect_uri the IdP is told to send the browser back to.
 func initSSORedirectURI(t *testing.T, app *handlers.App, host string) string {

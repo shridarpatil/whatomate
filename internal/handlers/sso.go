@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	appcrypto "github.com/shridarpatil/whatomate/internal/crypto"
@@ -74,6 +75,7 @@ type SSOProviderRequest struct {
 	AllowAutoCreate bool   `json:"allow_auto_create"`
 	DefaultRole     string `json:"default_role"`
 	AllowedDomains  string `json:"allowed_domains"`
+	DisplayName     string `json:"display_name"`
 	// Custom provider fields
 	AuthURL     string `json:"auth_url"`
 	TokenURL    string `json:"token_url"`
@@ -89,6 +91,7 @@ type SSOProviderResponse struct {
 	AllowAutoCreate bool   `json:"allow_auto_create"`
 	DefaultRole     string `json:"default_role"`
 	AllowedDomains  string `json:"allowed_domains"`
+	DisplayName     string `json:"display_name,omitempty"`
 	AuthURL         string `json:"auth_url,omitempty"`
 	TokenURL        string `json:"token_url,omitempty"`
 	UserInfoURL     string `json:"user_info_url,omitempty"`
@@ -120,17 +123,25 @@ func (a *App) GetPublicSSOProviders(r *fastglue.Request) error {
 			continue
 		}
 		seen[p.Provider] = true
-		name := providerDisplayNames[p.Provider]
-		if name == "" {
-			name = p.Provider
-		}
 		result = append(result, SSOProviderPublic{
 			Provider: p.Provider,
-			Name:     name,
+			Name:     ssoButtonName(&p),
 		})
 	}
 
 	return r.SendEnvelope(result)
+}
+
+// ssoButtonName is the provider's name on the login page: the admin's label,
+// else the built-in name, else the provider key.
+func ssoButtonName(p *models.SSOProvider) string {
+	if p.DisplayName != "" {
+		return p.DisplayName
+	}
+	if name := providerDisplayNames[p.Provider]; name != "" {
+		return name
+	}
+	return p.Provider
 }
 
 // InitSSO initiates OAuth flow for a provider
@@ -410,6 +421,7 @@ func (a *App) GetSSOSettings(r *fastglue.Request) error {
 			AllowAutoCreate: p.AllowAutoCreate,
 			DefaultRole:     p.DefaultRoleName,
 			AllowedDomains:  p.AllowedDomains,
+			DisplayName:     p.DisplayName,
 			AuthURL:         p.AuthURL,
 			TokenURL:        p.TokenURL,
 			UserInfoURL:     p.UserInfoURL,
@@ -444,6 +456,11 @@ func (a *App) UpdateSSOProvider(r *fastglue.Request) error {
 	var req SSOProviderRequest
 	if err := a.decodeRequest(r, &req); err != nil {
 		return nil
+	}
+
+	req.DisplayName = strings.TrimSpace(req.DisplayName)
+	if utf8.RuneCountInString(req.DisplayName) > 100 {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "display_name must be at most 100 characters", nil, "")
 	}
 
 	// Validate custom provider fields
@@ -482,6 +499,7 @@ func (a *App) UpdateSSOProvider(r *fastglue.Request) error {
 		ssoConfig.DefaultRoleName = "agent"
 	}
 	ssoConfig.AllowedDomains = req.AllowedDomains
+	ssoConfig.DisplayName = req.DisplayName
 	ssoConfig.AuthURL = req.AuthURL
 	ssoConfig.TokenURL = req.TokenURL
 	ssoConfig.UserInfoURL = req.UserInfoURL
@@ -499,6 +517,7 @@ func (a *App) UpdateSSOProvider(r *fastglue.Request) error {
 		AllowAutoCreate: ssoConfig.AllowAutoCreate,
 		DefaultRole:     ssoConfig.DefaultRoleName,
 		AllowedDomains:  ssoConfig.AllowedDomains,
+		DisplayName:     ssoConfig.DisplayName,
 		AuthURL:         ssoConfig.AuthURL,
 		TokenURL:        ssoConfig.TokenURL,
 		UserInfoURL:     ssoConfig.UserInfoURL,
