@@ -279,7 +279,7 @@ func (a *App) CallbackSSO(r *fastglue.Request) error {
 		}
 	}
 
-	// Find user by email (across all orgs, like regular login)
+	// Find user by email (emails are unique across orgs); ownership is checked below
 	var user models.User
 	if err := a.DB.Where("email = ?", userInfo.Email).First(&user).Error; err != nil {
 		// User doesn't exist - check if auto-create is enabled
@@ -333,6 +333,19 @@ func (a *App) CallbackSSO(r *fastglue.Request) error {
 
 		a.Log.Info("Created SSO user", "user_id", user.ID, "email", user.Email, "provider", provider)
 	} else {
+		// An org's provider only vouches for that org's own accounts. Without
+		// this, an org admin's provider (a custom one can return any email)
+		// could sign in users of other orgs. Super admins reach every org, so
+		// no single org's provider may sign them in. Being a member of this
+		// org isn't enough either: the account belongs to its home org.
+		if user.OrganizationID != orgID || user.IsSuperAdmin {
+			a.Log.Warn("SSO login refused: user not owned by provider's organization",
+				"provider", provider, "provider_org_id", orgID, "user_id", user.ID,
+				"user_org_id", user.OrganizationID, "is_super_admin", user.IsSuperAdmin)
+			a.redirectWithError(r, "User not found. Contact your administrator.")
+			return nil
+		}
+
 		// User exists - update SSO info if not set
 		if user.SSOProvider == "" {
 			user.SSOProvider = provider
