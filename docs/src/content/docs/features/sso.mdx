@@ -77,6 +77,17 @@ https://<your-host>/api/auth/sso/{provider}/callback
 
 Replace `{provider}` with `google`, `microsoft`, `github`, `facebook`, or `custom`. If you serve Whatomate at a sub-path (`server.base_path = "/whatomate"`), include it: `https://example.com/whatomate/api/auth/sso/google/callback`.
 
+The SSO settings page shows the exact URL the server sends to the provider; copy it from there.
+
+If Whatomate runs behind a reverse proxy, set `server.public_url` (or `WHATOMATE_SERVER__PUBLIC_URL`) to the address users reach it at:
+
+```toml
+[server]
+public_url = "https://chat.example.com"
+```
+
+Without it, the host comes from the request's `Host` header, which is the internal address when the proxy doesn't pass the original host through. Put only the scheme and host in `public_url`; a sub-path goes in `server.base_path`.
+
 <Aside type="caution">
   The provider must use HTTPS for redirect URIs in production. HTTP is only allowed when `app.environment = "development"`.
 </Aside>

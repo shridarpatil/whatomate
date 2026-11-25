@@ -199,3 +199,42 @@ func TestLoad_EnvMapsMultiWordKeys(t *testing.T) {
 	assert.Equal(t, "admin@example.com", cfg.DefaultAdmin.Email)
 	assert.Equal(t, "db.internal", cfg.Database.Host)
 }
+
+func TestLoad_PublicURLTrimsTrailingSlash(t *testing.T) {
+	cfg, err := config.Load(writeConfig(t, `
+[server]
+public_url = "https://chat.example.com/"
+`))
+	require.NoError(t, err)
+	assert.Equal(t, "https://chat.example.com", cfg.Server.PublicURL)
+}
+
+func TestLoad_PublicURLFromEnv(t *testing.T) {
+	t.Setenv("WHATOMATE_SERVER__PUBLIC_URL", "https://chat.example.com:8443")
+	cfg, err := config.Load("")
+	require.NoError(t, err)
+	assert.Equal(t, "https://chat.example.com:8443", cfg.Server.PublicURL)
+}
+
+func TestLoad_PublicURLEmptyByDefault(t *testing.T) {
+	cfg, err := config.Load("")
+	require.NoError(t, err)
+	assert.Empty(t, cfg.Server.PublicURL)
+}
+
+func TestLoad_PublicURLRejectsInvalid(t *testing.T) {
+	for _, v := range []string{
+		"chat.example.com",                   // no scheme
+		"ftp://chat.example.com",             // not http(s)
+		"https://",                           // no host
+		"https://chat.example.com/app",       // path belongs in base_path
+		"https://chat.example.com/?a=1",      // query
+		"https://chat.example.com/#frag",     // fragment
+		"https://user:pass@chat.example.com", // credentials
+	} {
+		t.Run(v, func(t *testing.T) {
+			_, err := config.Load(writeConfig(t, "[server]\npublic_url = \""+v+"\"\n"))
+			assert.Error(t, err)
+		})
+	}
+}
