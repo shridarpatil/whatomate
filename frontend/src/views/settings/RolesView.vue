@@ -2,7 +2,7 @@
 import { ref, onMounted, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { PageHeader, SearchInput, DataTable, DeleteConfirmDialog, RowMenu, ErrorState, type Column } from '@/components/shared'
-import { humanize } from '@/lib/status'
+import { roleLabel } from '@/lib/status'
 import { useRolesStore } from '@/stores/roles'
 import { useOrganizationsStore } from '@/stores/organizations'
 import { useAuthStore } from '@/stores/auth'
@@ -125,7 +125,7 @@ function deleteBlockedReason(role: Role): string | undefined {
         <DataTable :items="roles" :columns="columns" :is-loading="isLoading" :empty-icon="Shield" :empty-title="searchQuery ? $t('roles.noMatchingRoles') : $t('roles.noRolesYet')" :empty-description="searchQuery ? $t('roles.noMatchingRolesDesc') : $t('roles.noRolesYetDesc')" v-model:sort-key="sortKey" v-model:sort-direction="sortDirection" server-pagination :current-page="currentPage" :total-items="totalItems" :page-size="pageSize" item-name="roles" @page-change="handlePageChange">
           <template #cell-role="{ item: role }">
             <div class="hstack gap-2">
-              <RouterLink :to="`/settings/roles/${role.id}`"><strong>{{ humanize(role.name) }}</strong></RouterLink>
+              <RouterLink :to="`/settings/roles/${role.id}`"><strong>{{ roleLabel(role.name) }}</strong></RouterLink>
               <span v-if="role.is_system" class="badge" data-label>{{ $t('roles.system') }}</span>
               <span v-if="role.is_default" class="badge" data-label>{{ $t('roles.default') }}</span>
             </div>

@@ -29,7 +29,7 @@ test.describe('Agent Analytics', () => {
 
   test('should display agent performance metrics', async ({ page }) => {
     // Wait for the stat tiles to finish loading (skeletons disappear)
-    await page.locator('[data-testid="agent-stats"] h3').first().waitFor({ timeout: 15000 })
+    await page.locator('[data-testid="agent-stats"] [data-widget-value]').first().waitFor({ timeout: 15000 })
 
     // Stat card labels (exact match to avoid matching chart descriptions)
     await expect(page.getByText('Transfers handled', { exact: true }).first()).toBeVisible()

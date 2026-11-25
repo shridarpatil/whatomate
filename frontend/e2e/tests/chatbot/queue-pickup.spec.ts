@@ -676,7 +676,9 @@ test.describe('Admin reassign and unassign flows', () => {
     await page.getByRole('tab', { name: /All Active/i }).click()
     const row = page.locator('tbody tr').filter({ hasText: seeded.phone })
     await expect(row).toBeVisible({ timeout: 10_000 })
-    await row.getByRole('button', { name: /^Assign$/i }).click()
+    // On All Active, Assign lives in the row's "More actions" menu.
+    await row.getByRole('button', { name: /more actions/i }).click()
+    await row.getByRole('menuitem', { name: /^Assign$/i }).click()
 
     const dialog = page.getByRole('dialog')
     await expect(dialog).toBeVisible({ timeout: 5_000 })
@@ -704,7 +706,9 @@ test.describe('Admin reassign and unassign flows', () => {
     await page.getByRole('tab', { name: /All Active/i }).click()
     const row = page.locator('tbody tr').filter({ hasText: seeded.phone })
     await expect(row).toBeVisible({ timeout: 10_000 })
-    await row.getByRole('button', { name: /^Assign$/i }).click()
+    // On All Active, Assign lives in the row's "More actions" menu.
+    await row.getByRole('button', { name: /more actions/i }).click()
+    await row.getByRole('menuitem', { name: /^Assign$/i }).click()
 
     const dialog = page.getByRole('dialog')
     await expect(dialog).toBeVisible({ timeout: 5_000 })
@@ -804,7 +808,7 @@ test.describe('Queue tab team filter', () => {
     // The Queue tab's accessible name includes the badge count, e.g. "Queue 2".
     await page.getByRole('tab', { name: /^Queue\b/i }).click()
 
-    const queueTable = page.locator('[role="tabpanel"]').filter({ hasText: /Transfer Queue/i }).locator('table')
+    const queueTable = page.locator('#transfers-tabpanel table')
     await expect(queueTable).toBeVisible({ timeout: 10_000 })
 
     // Without filter both contacts should be visible.

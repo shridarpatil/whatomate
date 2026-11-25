@@ -67,7 +67,7 @@ export class AccountsPage extends BasePage {
   }
 
   async testConnection() {
-    await this.page.getByRole('button', { name: /Test/i }).click()
+    await this.page.getByRole('button', { name: /^Test$/i }).click()
   }
 
   async subscribeApp() {

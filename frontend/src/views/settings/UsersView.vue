@@ -2,7 +2,7 @@
 import { ref, onMounted, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { PageHeader, SearchInput, DataTable, CrudFormDialog, DeleteConfirmDialog, RowMenu, ErrorState, type Column } from '@/components/shared'
-import { humanize } from '@/lib/status'
+import { roleLabel } from '@/lib/status'
 import Modal from '@/components/oat/Modal.vue'
 import { useUsersStore, type User } from '@/stores/users'
 import { useAuthStore } from '@/stores/auth'
@@ -137,7 +137,7 @@ async function confirmDelete() {
   }
 }
 
-function getRoleName(user: User) { return user.role?.name ? humanize(user.role.name) : t('users.noRole') }
+function getRoleName(user: User) { return user.role?.name ? roleLabel(user.role.name) : t('users.noRole') }
 const initials = (name: string) => name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
 
 // Add existing user dialog
@@ -216,7 +216,7 @@ async function copyInviteLink() {
           <div>
             <select class="w-auto" v-model="roleFilter" :aria-label="$t('users.allRoles', 'All roles')">
               <option value="">{{ $t('users.allRoles', 'All roles') }}</option>
-              <option v-for="role in rolesStore.roles" :key="role.id" :value="role.id">{{ humanize(role.name) }}</option>
+              <option v-for="role in rolesStore.roles" :key="role.id" :value="role.id">{{ roleLabel(role.name) }}</option>
             </select>
             <label class="hstack gap-2">
               <input v-model="onlineOnly" type="checkbox" role="switch" />

@@ -38,7 +38,7 @@ export class CampaignsPage extends BasePage {
   getEditButton(card?: Locator): Locator {
     const container = card || this.page
     // In the list each row's main action is a link ("Edit" or "View report") to the detail page.
-    return container.locator('tbody tr td:last-child a.button').first()
+    return container.locator('tbody tr td:last-child a.button:not([href$="/new"])').first()
   }
 
   /** Delete lives in each row's "More actions" menu (disabled while a campaign is sending). */

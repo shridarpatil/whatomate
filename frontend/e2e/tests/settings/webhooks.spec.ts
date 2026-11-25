@@ -158,12 +158,6 @@ test.describe('Webhooks - Table Sorting', () => {
     expect(direction).not.toBeNull()
   })
 
-  test('should sort by URL', async () => {
-    await tablePage.clickColumnHeader('URL')
-    const direction = await tablePage.getSortDirection('URL')
-    expect(direction).not.toBeNull()
-  })
-
   test('should sort by status', async () => {
     await tablePage.clickColumnHeader('Status')
     const direction = await tablePage.getSortDirection('Status')

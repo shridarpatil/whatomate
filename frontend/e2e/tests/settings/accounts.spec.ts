@@ -101,7 +101,7 @@ test.describe('WhatsApp Accounts - Detail Page CRUD', () => {
     await page.waitForLoadState('networkidle')
 
     if (await navigateToFirstItem(page)) {
-      await expect(page.getByRole('button', { name: /Test/i })).toBeVisible()
+      await expect(page.getByRole('button', { name: /^Test$/i })).toBeVisible()
     }
   })
 
@@ -218,7 +218,7 @@ test.describe('WhatsApp Accounts - Detail Page CRUD', () => {
     await page.waitForLoadState('networkidle')
 
     // Click the Test button
-    await page.getByRole('button', { name: /Test/i }).click()
+    await page.getByRole('button', { name: /^Test$/i }).click()
 
     // Assert details card is shown and fields are correct
     await expect(page.getByText('Details', { exact: true })).toBeVisible()
@@ -264,7 +264,7 @@ test.describe('WhatsApp Accounts - Detail Page CRUD', () => {
     await page.waitForLoadState('networkidle')
 
     // Click the Test button
-    await page.getByRole('button', { name: /Test/i }).click()
+    await page.getByRole('button', { name: /^Test$/i }).click()
 
     // Assert details card is shown and UNKNOWN is translated to Unknown
     await expect(page.getByText('Details', { exact: true })).toBeVisible()

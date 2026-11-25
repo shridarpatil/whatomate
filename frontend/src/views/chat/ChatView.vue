@@ -49,7 +49,7 @@ import {
   ArrowLeft,
   Info
 } from '@/lib/icons'
-import { humanize } from '@/lib/status'
+import { roleLabel } from '@/lib/status'
 import { getInitials } from '@/lib/utils'
 import { useInfiniteScroll } from '@/composables/useInfiniteScroll'
 import CannedResponsePicker from '@/components/chat/CannedResponsePicker.vue'
@@ -2619,7 +2619,7 @@ async function sendMediaMessage() {
                 </figure>
                 <span class="flex flex-col flex-1 min-w-0 align-left">
                   <strong class="truncate">{{ user.full_name }}</strong>
-                  <small class="text-light truncate">{{ user.email }}<template v-if="user.role?.name"> · {{ humanize(user.role.name) }}</template></small>
+                  <small class="text-light truncate">{{ user.email }}<template v-if="user.role?.name"> · {{ roleLabel(user.role.name) }}</template></small>
                 </span>
                 <span v-if="contactsStore.currentContact?.assigned_user_id === user.id" class="badge" data-status="success">{{ $t('chat.assigned') }}</span>
               </button>

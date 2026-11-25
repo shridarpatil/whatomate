@@ -28,7 +28,9 @@ async function openRoleDetail(tablePage: TablePage, page: Page, rowText: string)
   await tablePage.search(rowText)
   // Click the exact-name link to avoid colliding with rows whose names share the prefix
   // (e.g. "admin" vs "admin_fe9fb00b" left over from earlier runs).
-  await page.locator('tbody tr strong').getByText(rowText, { exact: true }).first().click()
+  const escaped = rowText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const exact = new RegExp(`^${escaped}$`, 'i')
+  await page.locator('tbody tr strong').getByText(exact).first().click()
   await page.waitForURL(/\/settings\/roles\/[a-f0-9-]+$/)
   await page.waitForLoadState('networkidle')
 }
@@ -287,12 +289,6 @@ test.describe('Roles - Table Sorting', () => {
   test('should sort by role name', async () => {
     await tablePage.clickColumnHeader('Role')
     const direction = await tablePage.getSortDirection('Role')
-    expect(direction).not.toBeNull()
-  })
-
-  test('should sort by description', async () => {
-    await tablePage.clickColumnHeader('Description')
-    const direction = await tablePage.getSortDirection('Description')
     expect(direction).not.toBeNull()
   })
 

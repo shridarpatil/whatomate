@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { campaignTone, templateTone, humanize } from './status'
+import { campaignTone, templateTone, humanize, roleLabel } from './status'
 
 describe('campaignTone', () => {
   it('maps campaign states to tones', () => {
@@ -30,5 +30,14 @@ describe('humanize', () => {
     expect(humanize('in_review')).toBe('In review')
     expect(humanize('agent')).toBe('Agent')
     expect(humanize(null)).toBe('')
+  })
+})
+
+describe('roleLabel', () => {
+  it('capitalises built-in roles and keeps custom names as typed', () => {
+    expect(roleLabel('admin')).toBe('Admin')
+    expect(roleLabel('E2E-roles-test')).toBe('E2E-roles-test')
+    expect(roleLabel('support_lead')).toBe('support_lead')
+    expect(roleLabel(undefined)).toBe('')
   })
 })
