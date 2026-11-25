@@ -806,3 +806,87 @@ func TestApp_UpdateSSOProvider_SavesDisplayName(t *testing.T) {
 	req = put(strings.Repeat("x", 101))
 	testutil.AssertErrorResponse(t, req, fasthttp.StatusBadRequest, "display_name")
 }
+
+// initSSORedirectURI runs InitSSO with the given Host header and returns the
+// redirect_uri the IdP is told to send the browser back to.
+func initSSORedirectURI(t *testing.T, app *handlers.App, host string) string {
+	t.Helper()
+	req := testutil.NewGETRequest(t)
+	req.RequestCtx.Request.SetRequestURI("http://" + host + "/api/auth/sso/custom/init")
+	req.RequestCtx.Request.SetHost(host)
+	testutil.SetPathParam(req, "provider", "custom")
+
+	require.NoError(t, app.InitSSO(req))
+	require.Equal(t, fasthttp.StatusTemporaryRedirect, testutil.GetResponseStatusCode(req))
+	parsed, err := url.Parse(string(req.RequestCtx.Response.Header.Peek("Location")))
+	require.NoError(t, err)
+	return parsed.Query().Get("redirect_uri")
+}
+
+func TestApp_InitSSO_RedirectURIUsesPublicURL(t *testing.T) {
+	app := newSSOApp(t)
+	app.Config.Server.PublicURL = "https://chat.example.com"
+	app.Config.Server.BasePath = "/wa"
+	fake := newFakeOAuth(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	createCustomSSOProvider(t, app, org.ID, fake)
+
+	// The proxy forwards an internal Host; the public URL must win.
+	got := initSSORedirectURI(t, app, "whatomate:8080")
+	assert.Equal(t, "https://chat.example.com/wa/api/auth/sso/custom/callback", got)
+}
+
+func TestApp_InitSSO_RedirectURIFallsBackToHost(t *testing.T) {
+	app := newSSOApp(t)
+	fake := newFakeOAuth(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	createCustomSSOProvider(t, app, org.ID, fake)
+
+	// development + non-TLS request -> http, host from the request.
+	got := initSSORedirectURI(t, app, "example.test")
+	assert.Equal(t, "http://example.test/api/auth/sso/custom/callback", got)
+}
+
+func TestApp_GetSSOCallbackURL(t *testing.T) {
+	app := newSSOApp(t)
+	app.Config.Server.PublicURL = "https://chat.example.com"
+	org := testutil.CreateTestOrganization(t, app.DB)
+
+	agentRole := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "agent", []string{"chat:read"})
+	agent := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&agentRole.ID))
+	readerRole := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "sso-reader", []string{"settings.sso:read"})
+	reader := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&readerRole.ID))
+
+	t.Run("returns the URL the server sends to the provider", func(t *testing.T) {
+		req := testutil.NewGETRequest(t)
+		req.RequestCtx.Request.SetHost("whatomate:8080")
+		testutil.SetAuthContext(req, org.ID, reader.ID)
+		testutil.SetPathParam(req, "provider", "google")
+		require.NoError(t, app.GetSSOCallbackURL(req))
+		require.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+		var resp struct {
+			Data struct {
+				CallbackURL string `json:"callback_url"`
+			} `json:"data"`
+		}
+		require.NoError(t, json.Unmarshal(testutil.GetResponseBody(req), &resp))
+		assert.Equal(t, "https://chat.example.com/api/auth/sso/google/callback", resp.Data.CallbackURL)
+	})
+
+	t.Run("unknown provider rejected", func(t *testing.T) {
+		req := testutil.NewGETRequest(t)
+		testutil.SetAuthContext(req, org.ID, reader.ID)
+		testutil.SetPathParam(req, "provider", "nope")
+		require.NoError(t, app.GetSSOCallbackURL(req))
+		assert.Equal(t, fasthttp.StatusBadRequest, testutil.GetResponseStatusCode(req))
+	})
+
+	t.Run("forbidden without settings.sso:read", func(t *testing.T) {
+		req := testutil.NewGETRequest(t)
+		testutil.SetAuthContext(req, org.ID, agent.ID)
+		testutil.SetPathParam(req, "provider", "google")
+		require.NoError(t, app.GetSSOCallbackURL(req))
+		assert.Equal(t, fasthttp.StatusForbidden, testutil.GetResponseStatusCode(req))
+	})
+}
