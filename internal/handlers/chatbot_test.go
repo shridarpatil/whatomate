@@ -2995,6 +2995,25 @@ func TestApp_ChatbotSettings_RequirePermissions(t *testing.T) {
 	assert.Equal(t, "Secret greeting", settings.DefaultResponse)
 }
 
+func TestApp_GetChatbotSettings_PickupDefaultsToAllowed(t *testing.T) {
+	t.Parallel()
+
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB) // no chatbot settings saved
+	agent := chatbotTestUserWithPerms(t, app, org.ID, "chat:read", "transfers:read", "transfers:pickup")
+
+	req := testutil.NewGETRequest(t)
+	testutil.SetAuthContext(req, org.ID, agent.ID)
+	require.NoError(t, app.GetChatbotSettings(req))
+	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	var resp struct {
+		Data map[string]map[string]any `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(testutil.GetResponseBody(req), &resp))
+	assert.Equal(t, true, resp.Data["settings"]["allow_agent_queue_pickup"])
+}
+
 func TestApp_KeywordRules_RequirePermissions(t *testing.T) {
 	t.Parallel()
 

@@ -125,6 +125,12 @@ func (a *App) GetChatbotSettings(r *fastglue.Request) error {
 			DefaultResponse:    "Hello! How can I help you today?",
 			SessionTimeoutMins: 30,
 			AI:                 models.AIConfig{Enabled: false},
+			// Match the column defaults so an org that never saved settings
+			// reports the same behaviour the pick-up endpoint enforces.
+			AgentAssignment: models.AgentAssignmentConfig{
+				AllowQueuePickup:  true,
+				AssignToSameAgent: true,
+			},
 		}
 	}
 
