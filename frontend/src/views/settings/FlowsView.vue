@@ -2,11 +2,12 @@
 import { ref, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Modal from '@/components/oat/Modal.vue'
-import { PageHeader, DeleteConfirmDialog, ConfirmDialog, DataTable, SearchInput, IconButton, ErrorState, type Column } from '@/components/shared'
+import { PageHeader, DeleteConfirmDialog, ConfirmDialog, DataTable, SearchInput, RowMenu, ErrorState, type Column } from '@/components/shared'
+import { humanize, type StatusTone } from '@/lib/status'
 import FlowBuilder from '@/components/flow-builder/FlowBuilder.vue'
 import { flowsService, accountsService } from '@/services/api'
 import { toast } from '@/lib/toast'
-import { Plus, Pencil, Trash2, Workflow, Play, ExternalLink, Archive, RefreshCw, Upload, Copy } from '@/lib/icons'
+import { Plus, Trash2, Workflow, Play, ExternalLink, RefreshCw, Upload, Copy } from '@/lib/icons'
 import { getErrorMessage } from '@/lib/api-utils'
 import { formatDate } from '@/lib/utils'
 import { useSearchPagination } from '@/composables/useSearchPagination'
@@ -192,7 +193,14 @@ async function syncFlows() {
 }
 
 function openPreviewUrl(url: string) { window.open(url, '_blank') }
-function getStatusVariant(status: string): string | undefined { return ({ PUBLISHED: 'success', DEPRECATED: 'danger' } as Record<string, string>)[status] }
+const STATUS_TONE: Record<string, StatusTone> = { DRAFT: 'neutral', PUBLISHED: 'success', DEPRECATED: 'danger' }
+const statusTone = (status: string): StatusTone => STATUS_TONE[status?.toUpperCase()] ?? 'neutral'
+const statusLabel = (status: string) => (status?.toUpperCase() === 'DEPRECATED' ? t('flows.deprecated') : humanize(status))
+const categoryLabel = (value: string) => flowCategories.find(c => c.value === value)?.label ?? humanize(value)
+const isPublished = (flow: WhatsAppFlow) => flow.status?.toUpperCase() === 'PUBLISHED'
+const canSaveToMeta = (flow: WhatsAppFlow) => flow.status?.toUpperCase() !== 'DEPRECATED' && (flow.has_local_changes || !flow.meta_flow_id)
+const syncDisabledReason = computed(() =>
+  !selectedAccount.value || selectedAccount.value === 'all' ? t('flows.selectAccountToSync') : undefined)
 function isFlowDraft(flow: WhatsAppFlow): boolean { return flow.status?.toUpperCase() === 'DRAFT' }
 
 const componentsWithoutId = ['TextHeading', 'TextSubheading', 'TextBody', 'TextInput', 'TextArea', 'Dropdown', 'RadioButtonsGroup', 'CheckboxGroup', 'DatePicker', 'Image', 'Footer']
@@ -208,8 +216,8 @@ function sanitizeScreensForMeta(screens: any[]): any[] {
   <div class="flex flex-col h-full">
     <PageHeader :title="$t('flows.title')" :description="$t('flows.subtitle')" :icon="Workflow">
       <template #actions>
-        <button type="button" class="outline small" :disabled="isSyncing || !selectedAccount || selectedAccount === 'all'" :aria-busy="isSyncing ? 'true' : undefined" @click="syncFlows"><RefreshCw v-if="!isSyncing" :size="16" />{{ $t('flows.syncFromMeta') }}</button>
-        <button type="button" class="outline small" @click="openCreateDialog"><Plus :size="16" />{{ $t('flows.createFlow') }}</button>
+        <button type="button" class="outline small" :disabled="isSyncing || !!syncDisabledReason" :title="syncDisabledReason" :aria-busy="isSyncing ? 'true' : undefined" @click="syncFlows"><RefreshCw v-if="!isSyncing" :size="16" />{{ $t('flows.syncFromMeta') }}</button>
+        <button type="button" class="small" @click="openCreateDialog"><Plus :size="16" />{{ $t('flows.createFlow') }}</button>
       </template>
     </PageHeader>
 
@@ -223,20 +231,16 @@ function sanitizeScreensForMeta(screens: any[]): any[] {
     />
 
     <div v-else class="flex-1 scroll-y p-4">
-      <article class="card">
-        <header class="hstack justify-between items-center flex-wrap gap-4">
-          <h3>{{ $t('flows.yourFlows') }}</h3>
-          <div class="hstack items-center gap-2">
-            <label class="hstack items-center gap-2">
-              <small class="text-light">{{ $t('flows.account') }}:</small>
-              <select class="w-auto" v-model="selectedAccount" @change="onAccountChange">
-                <option value="all">{{ $t('flows.allAccounts') }}</option>
-                <option v-for="account in accounts" :key="account.id" :value="account.name">{{ account.name }}</option>
-              </select>
-            </label>
-            <SearchInput v-model="searchQuery" :placeholder="$t('flows.searchFlows') + '...'" />
+      <article class="card vstack gap-4">
+        <div data-toolbar>
+          <div>
+            <select class="w-auto" v-model="selectedAccount" :aria-label="$t('flows.account')" @change="onAccountChange">
+              <option value="all">{{ $t('flows.allAccounts') }}</option>
+              <option v-for="account in accounts" :key="account.id" :value="account.name">{{ account.name }}</option>
+            </select>
           </div>
-        </header>
+          <SearchInput v-model="searchQuery" :placeholder="$t('flows.searchFlows')" />
+        </div>
         <DataTable
           :items="flows"
           :columns="columns"
@@ -254,52 +258,67 @@ function sanitizeScreensForMeta(screens: any[]): any[] {
           v-model:sort-direction="sortDirection"
         >
           <template #cell-name="{ item: flow }">
-            <div>
-              <strong>{{ flow.name }}</strong>
-              <br />
-              <small class="text-light">{{ flow.whatsapp_account }}</small>
-            </div>
+            <strong>{{ flow.name }}</strong>
+            <small class="text-light block">{{ flow.whatsapp_account }}</small>
           </template>
           <template #cell-status="{ item: flow }">
-            <span v-if="flow.status?.toUpperCase() === 'DEPRECATED'" class="badge" data-variant="danger">
-              <Archive :size="12" />{{ $t('flows.deprecated') }}
-            </span>
-            <span v-else class="badge" :data-variant="getStatusVariant(flow.status)">{{ flow.status }}</span>
+            <span class="badge" :data-status="statusTone(flow.status)">{{ statusLabel(flow.status) }}</span>
+            <small v-if="flow.has_local_changes && flow.meta_flow_id" class="text-light block">{{ $t('flows.localChangesHint') }}</small>
           </template>
           <template #cell-category="{ item: flow }">
-            <span v-if="flow.category" class="badge outline">{{ flow.category }}</span>
+            <span v-if="flow.category" class="badge" data-label>{{ categoryLabel(flow.category) }}</span>
             <span v-else class="text-light">—</span>
           </template>
           <template #cell-created_at="{ item: flow }">
             <span class="text-light">{{ formatDate(flow.created_at) }}</span>
           </template>
           <template #cell-actions="{ item: flow }">
-            <div class="hstack items-center justify-end gap-1">
-              <IconButton :icon="Pencil" :label="$t('flows.editTooltip')" @click="openEditDialog(flow)" />
-              <IconButton :icon="Copy" :label="$t('flows.duplicateTooltip')" :disabled="duplicatingFlowId === flow.id" :loading="duplicatingFlowId === flow.id" @click="duplicateFlow(flow)" />
-              <IconButton v-if="flow.preview_url" :icon="ExternalLink" :label="$t('flows.previewTooltip')" @click="openPreviewUrl(flow.preview_url!)" />
-              <IconButton
-                v-if="flow.status?.toUpperCase() !== 'DEPRECATED' && (flow.has_local_changes || !flow.meta_flow_id)"
-                :icon="Upload"
-                :label="flow.meta_flow_id ? $t('flows.updateOnMeta') : $t('flows.saveToMeta')"
-                :disabled="savingToMetaFlowId === flow.id || publishingFlowId === flow.id"
-                :loading="savingToMetaFlowId === flow.id"
-                @click="openSaveToMetaDialog(flow)"
-              />
-              <IconButton
-                v-if="isFlowDraft(flow) && flow.meta_flow_id"
-                :icon="Play"
-                :label="$t('flows.publishTooltip')"
-                :disabled="savingToMetaFlowId === flow.id || publishingFlowId === flow.id"
-                :loading="publishingFlowId === flow.id"
-                @click="openPublishDialog(flow)"
-              />
-              <IconButton
-                :icon="Trash2"
-                :label="$t('flows.deleteTooltip')"
-                :disabled="flow.status?.toUpperCase() === 'PUBLISHED'"
-                @click="flowToDelete = flow; deleteDialogOpen = true"
-              />
+            <div class="hstack items-center justify-end gap-1 flex-nowrap">
+              <button type="button" class="outline small" @click="openEditDialog(flow)">{{ $t('common.edit') }}</button>
+              <RowMenu>
+                <button
+                  v-if="canSaveToMeta(flow)"
+                  type="button"
+                  role="menuitem"
+                  class="ghost"
+                  :disabled="savingToMetaFlowId === flow.id || publishingFlowId === flow.id"
+                  @click="openSaveToMetaDialog(flow)"
+                >
+                  <Upload :size="14" />
+                  {{ flow.meta_flow_id ? $t('flows.updateOnMeta') : $t('flows.saveToMeta') }}
+                </button>
+                <button
+                  v-if="isFlowDraft(flow) && flow.meta_flow_id"
+                  type="button"
+                  role="menuitem"
+                  class="ghost"
+                  :disabled="savingToMetaFlowId === flow.id || publishingFlowId === flow.id"
+                  @click="openPublishDialog(flow)"
+                >
+                  <Play :size="14" />
+                  {{ $t('flows.publishTooltip') }}
+                </button>
+                <button v-if="flow.preview_url" type="button" role="menuitem" class="ghost" @click="openPreviewUrl(flow.preview_url!)">
+                  <ExternalLink :size="14" />
+                  {{ $t('flows.previewTooltip') }}
+                </button>
+                <button type="button" role="menuitem" class="ghost" :disabled="duplicatingFlowId === flow.id" @click="duplicateFlow(flow)">
+                  <Copy :size="14" />
+                  {{ $t('flows.duplicate') }}
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  class="ghost"
+                  data-variant="danger"
+                  :disabled="isPublished(flow)"
+                  :title="isPublished(flow) ? $t('flows.deletePublishedHint') : undefined"
+                  @click="flowToDelete = flow; deleteDialogOpen = true"
+                >
+                  <Trash2 :size="14" />
+                  {{ $t('common.delete') }}
+                </button>
+              </RowMenu>
             </div>
           </template>
           <template #empty-action>

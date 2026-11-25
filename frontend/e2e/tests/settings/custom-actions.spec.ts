@@ -22,7 +22,7 @@ test.describe('Custom Actions Management', () => {
   test('should open create custom action dialog', async () => {
     await customActionsPage.openCreateDialog()
     await customActionsPage.expectDialogVisible()
-    await expect(customActionsPage.dialog).toContainText('Custom Action')
+    await expect(customActionsPage.dialog).toContainText(/custom action/i)
   })
 
   test('should show validation error for empty name', async () => {

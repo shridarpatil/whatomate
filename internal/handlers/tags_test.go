@@ -822,3 +822,43 @@ func TestApp_CreateTag_AllValidColors(t *testing.T) {
 		})
 	}
 }
+
+// --- Permission Tests ---
+
+func TestApp_Tags_Permissions(t *testing.T) {
+	t.Parallel()
+
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+
+	userWith := func(perms ...string) *models.User {
+		role := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "tag-perms", perms)
+		return testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
+	}
+	list := func(user *models.User) int {
+		req := testutil.NewGETRequest(t)
+		testutil.SetAuthContext(req, org.ID, user.ID)
+		require.NoError(t, app.ListTags(req))
+		return testutil.GetResponseStatusCode(req)
+	}
+	create := func(user *models.User) int {
+		req := testutil.NewJSONRequest(t, map[string]any{"name": "Nope", "color": "blue"})
+		testutil.SetAuthContext(req, org.ID, user.ID)
+		require.NoError(t, app.CreateTag(req))
+		return testutil.GetResponseStatusCode(req)
+	}
+
+	t.Run("user without relevant permissions is forbidden", func(t *testing.T) {
+		user := userWith("analytics:read")
+		assert.Equal(t, fasthttp.StatusForbidden, list(user))
+		assert.Equal(t, fasthttp.StatusForbidden, create(user))
+	})
+
+	t.Run("chat:read and contacts:read can list but not create", func(t *testing.T) {
+		for _, perm := range []string{"chat:read", "contacts:read"} {
+			user := userWith(perm)
+			assert.Equal(t, fasthttp.StatusOK, list(user), perm)
+			assert.Equal(t, fasthttp.StatusForbidden, create(user), perm)
+		}
+	})
+}

@@ -4,20 +4,10 @@ import { useI18n } from 'vue-i18n'
 import { campaignsService } from '@/services/api'
 import { wsService } from '@/services/websocket'
 import { toast } from '@/lib/toast'
-import { PageHeader, DataTable, DeleteConfirmDialog, SearchInput, IconButton, ErrorState, DateRangePicker, type Column } from '@/components/shared'
+import { PageHeader, DataTable, DeleteConfirmDialog, SearchInput, RowMenu, ErrorState, DateRangePicker, type Column } from '@/components/shared'
+import { campaignTone } from '@/lib/status'
 import { getErrorMessage } from '@/lib/api-utils'
-import {
-  Plus,
-  Pencil,
-  Trash2,
-  Megaphone,
-  Play,
-  Pause,
-  Users,
-  CheckCircle,
-  Clock,
-  AlertCircle,
-} from '@/lib/icons'
+import { Plus, Trash2, Megaphone } from '@/lib/icons'
 import { formatDate } from '@/lib/utils'
 import { useSearchPagination } from '@/composables/useSearchPagination'
 import { useDateRange } from '@/composables/useDateRange'
@@ -50,9 +40,8 @@ const isLoading = ref(true)
 
 const columns = computed<Column<Campaign>[]>(() => [
   { key: 'name', label: t('campaigns.campaign'), sortable: true },
-  { key: 'template', label: t('campaigns.template', 'Template') },
   { key: 'status', label: t('campaigns.status'), sortable: true },
-  { key: 'stats', label: t('campaigns.progress') },
+  { key: 'stats', label: t('campaigns.delivery') },
   { key: 'created_at', label: t('campaigns.created'), sortable: true },
   { key: 'actions', label: t('common.actions'), align: 'right' },
 ])
@@ -186,41 +175,30 @@ async function confirmDeleteCampaign() {
   }
 }
 
-function getStatusIcon(status: string) {
-  switch (status) {
-    case 'completed':
-      return CheckCircle
-    case 'running':
-    case 'processing':
-    case 'queued':
-      return Play
-    case 'paused':
-      return Pause
-    case 'scheduled':
-      return Clock
-    case 'failed':
-    case 'cancelled':
-      return AlertCircle
-    default:
-      return Megaphone
-  }
+const isSending = (c: Campaign) => ['running', 'processing', 'queued'].includes(c.status)
+const isEditable = (c: Campaign) => ['draft', 'scheduled'].includes(c.status)
+
+function statusLabel(c: Campaign): string {
+  if (isSending(c)) return t('campaigns.sendingPercent', { percent: getProgressPercentage(c) })
+  if (c.status === 'completed' && c.failed_count > 0) return t('campaigns.completedWithErrors')
+  return t(`campaigns.${c.status}`, c.status)
 }
 
-function getStatusVariant(status: string): string | undefined {
-  switch (status) {
-    case 'completed':
-      return 'success'
-    case 'running':
-    case 'processing':
-    case 'queued':
-      return 'secondary'
-    case 'failed':
-    case 'cancelled':
-      return 'danger'
-    default:
-      return undefined
-  }
+/** Widths (%) of the read / delivered / sent / failed segments, each counted once. */
+function deliverySegments(c: Campaign) {
+  const total = Math.max(c.total_recipients, 1)
+  const read = c.read_count
+  const delivered = Math.max(c.delivered_count - c.read_count, 0)
+  const sent = Math.max(c.sent_count - c.delivered_count, 0)
+  return [
+    { k: 'read', pct: (read / total) * 100 },
+    { k: 'delivered', pct: (delivered / total) * 100 },
+    { k: 'sent', pct: (sent / total) * 100 },
+    { k: 'failed', pct: (c.failed_count / total) * 100 },
+  ].filter(s => s.pct > 0)
 }
+
+const hasStarted = (c: Campaign) => c.sent_count > 0 || c.failed_count > 0
 
 function getProgressPercentage(campaign: Campaign): number {
   if (campaign.total_recipients === 0) return 0
@@ -237,7 +215,7 @@ function getProgressPercentage(campaign: Campaign): number {
       :icon="Megaphone"
     >
       <template #actions>
-        <RouterLink to="/campaigns/new" class="button outline small">
+        <RouterLink to="/campaigns/new" class="button small">
           <Plus :size="16" />
           {{ $t('campaigns.createCampaign') }}
         </RouterLink>
@@ -246,10 +224,10 @@ function getProgressPercentage(campaign: Campaign): number {
 
     <!-- Campaigns List -->
     <div class="flex-1 scroll-y p-4">
-      <article class="card">
-        <header class="hstack justify-between items-center flex-wrap gap-4">
-          <h3>{{ $t('campaigns.yourCampaigns') }}</h3>
-          <div class="hstack items-center gap-2 flex-wrap">
+      <article class="card vstack gap-4">
+        <!-- Filters on the left, search on the right. -->
+        <div data-toolbar>
+          <div>
             <select class="w-auto" v-model="filterStatus" :aria-label="$t('campaigns.status')">
               <option v-for="opt in statusOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
             </select>
@@ -260,9 +238,9 @@ function getProgressPercentage(campaign: Campaign): number {
               :format-date-range-display="formatDateRangeDisplay"
               @apply-custom="applyCustomRange"
             />
-            <SearchInput v-model="searchQuery" :placeholder="$t('campaigns.searchCampaigns') + '...'" />
           </div>
-        </header>
+          <SearchInput v-model="searchQuery" :placeholder="$t('campaigns.searchCampaigns')" />
+        </div>
         <ErrorState
           v-if="error && !isLoading"
           :title="$t('campaigns.fetchFailedTitle')"
@@ -289,27 +267,31 @@ function getProgressPercentage(campaign: Campaign): number {
         >
           <template #cell-name="{ item: campaign }">
             <RouterLink :to="`/campaigns/${campaign.id}`"><strong>{{ campaign.name }}</strong></RouterLink>
-          </template>
-          <template #cell-template="{ item: campaign }">
-            <span class="text-light">{{ campaign.template_name || '—' }}</span>
+            <small class="text-light block">
+              {{ campaign.template_name || '—' }} · {{ $t('campaigns.recipientsCount', { count: campaign.total_recipients.toLocaleString() }) }}
+            </small>
           </template>
           <template #cell-status="{ item: campaign }">
-            <span class="badge" :data-variant="getStatusVariant(campaign.status)">
-              <component :is="getStatusIcon(campaign.status)" :size="12" />
-              {{ campaign.status }}
-            </span>
+            <span class="badge" :data-status="campaignTone(campaign.status, campaign.failed_count)">{{ statusLabel(campaign) }}</span>
+            <small v-if="campaign.status === 'scheduled' && campaign.scheduled_at" class="text-light block">
+              {{ $t('campaigns.startsAt', { date: formatDate(campaign.scheduled_at) }) }}
+            </small>
           </template>
           <template #cell-stats="{ item: campaign }">
-            <div class="vstack gap-1">
-              <div v-if="campaign.status === 'running' || campaign.status === 'processing'" class="vstack">
-                <progress :value="getProgressPercentage(campaign)" max="100" :aria-label="$t('campaigns.progress')"></progress>
-                <small class="text-light">{{ getProgressPercentage(campaign) }}%</small>
+            <small v-if="!hasStarted(campaign)" class="text-light">{{ $t('campaigns.notStarted') }}</small>
+            <div v-else>
+              <div
+                data-delivery
+                role="img"
+                :aria-label="$t('campaigns.deliverySummary', { read: campaign.read_count, delivered: campaign.delivered_count, sent: campaign.sent_count, failed: campaign.failed_count, total: campaign.total_recipients })"
+              >
+                <i v-for="seg in deliverySegments(campaign)" :key="seg.k" :data-k="seg.k" :style="{ width: `${seg.pct}%` }"></i>
               </div>
-              <div class="hstack items-center gap-2">
-                <small :title="$t('campaigns.recipients')"><Users :size="12" /> {{ campaign.total_recipients }}</small>
-                <small :title="$t('campaigns.delivered')">{{ campaign.delivered_count }}</small>
-                <small :title="$t('campaigns.read')">{{ campaign.read_count }}</small>
-                <small v-if="campaign.failed_count > 0" :title="$t('campaigns.failed')">{{ campaign.failed_count }}</small>
+              <div data-delivery-legend aria-hidden="true">
+                <span><i data-key="read"></i>{{ $t('campaigns.read') }} {{ campaign.read_count.toLocaleString() }}</span>
+                <span><i data-key="delivered"></i>{{ $t('campaigns.delivered') }} {{ campaign.delivered_count.toLocaleString() }}</span>
+                <span><i data-key="sent"></i>{{ $t('campaigns.sent') }} {{ campaign.sent_count.toLocaleString() }}</span>
+                <span v-if="campaign.failed_count > 0"><i data-key="failed"></i>{{ $t('campaigns.failed') }} {{ campaign.failed_count.toLocaleString() }}</span>
               </div>
             </div>
           </template>
@@ -317,14 +299,24 @@ function getProgressPercentage(campaign: Campaign): number {
             <span class="text-light">{{ formatDate(campaign.created_at) }}</span>
           </template>
           <template #cell-actions="{ item: campaign }">
-            <div class="hstack items-center justify-end gap-1">
-              <RouterLink :to="`/campaigns/${campaign.id}`" class="button ghost icon" :title="$t('campaigns.editCampaign')" :aria-label="$t('campaigns.editCampaign')"><Pencil :size="16" /></RouterLink>
-              <IconButton
-                :icon="Trash2"
-                :label="$t('campaigns.deleteCampaign')"
-                :disabled="campaign.status === 'running' || campaign.status === 'processing'"
-                @click="openDeleteDialog(campaign)"
-              />
+            <div class="hstack items-center justify-end gap-1 flex-nowrap">
+              <RouterLink :to="`/campaigns/${campaign.id}`" class="button outline small">
+                {{ isEditable(campaign) ? $t('common.edit') : $t('campaigns.viewReport') }}
+              </RouterLink>
+              <RowMenu>
+                <button
+                  type="button"
+                  role="menuitem"
+                  class="ghost"
+                  data-variant="danger"
+                  :disabled="isSending(campaign)"
+                  :title="isSending(campaign) ? $t('campaigns.deleteWhileSending') : undefined"
+                  @click="openDeleteDialog(campaign)"
+                >
+                  <Trash2 :size="14" />
+                  {{ isSending(campaign) ? $t('campaigns.deletePauseFirst') : $t('common.delete') }}
+                </button>
+              </RowMenu>
             </div>
           </template>
           <template #empty-action>

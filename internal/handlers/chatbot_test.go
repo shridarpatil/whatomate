@@ -94,7 +94,7 @@ func TestApp_GetChatbotSettings(t *testing.T) {
 	t.Run("success returns default settings when none exist", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 
 		req := testutil.NewGETRequest(t)
 		testutil.SetAuthContext(req, org.ID, user.ID)
@@ -134,7 +134,7 @@ func TestApp_UpdateChatbotSettings(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 
 		enabled := true
 		greeting := "Welcome to our shop!"
@@ -207,7 +207,7 @@ func TestApp_ListKeywordRules(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 
 		createTestKeywordRule(t, app, org.ID, "Greeting Rule", []string{"hello", "hi"})
 		createTestKeywordRule(t, app, org.ID, "Help Rule", []string{"help", "support"})
@@ -232,7 +232,7 @@ func TestApp_ListKeywordRules(t *testing.T) {
 	t.Run("empty list", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 
 		req := testutil.NewGETRequest(t)
 		testutil.SetAuthContext(req, org.ID, user.ID)
@@ -262,7 +262,7 @@ func TestApp_CreateKeywordRule(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 
 		req := testutil.NewJSONRequest(t, map[string]any{
 			"name":          "Greeting Rule",
@@ -307,7 +307,7 @@ func TestApp_CreateKeywordRule(t *testing.T) {
 	t.Run("validation error missing keywords", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 
 		req := testutil.NewJSONRequest(t, map[string]any{
 			"name":          "Bad Rule",
@@ -327,7 +327,7 @@ func TestApp_CreateKeywordRule(t *testing.T) {
 	t.Run("defaults name to first keyword when name empty", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 
 		req := testutil.NewJSONRequest(t, map[string]any{
 			"keywords":      []string{"pricing"},
@@ -370,7 +370,7 @@ func TestApp_GetKeywordRule(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 		rule := createTestKeywordRule(t, app, org.ID, "Greeting", []string{"hello"})
 
 		req := testutil.NewGETRequest(t)
@@ -396,7 +396,7 @@ func TestApp_GetKeywordRule(t *testing.T) {
 	t.Run("not found", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 
 		req := testutil.NewGETRequest(t)
 		testutil.SetAuthContext(req, org.ID, user.ID)
@@ -418,7 +418,7 @@ func TestApp_UpdateKeywordRule(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 		rule := createTestKeywordRule(t, app, org.ID, "Original", []string{"hello"})
 
 		updatedName := "Updated Greeting"
@@ -467,7 +467,7 @@ func TestApp_DeleteKeywordRule(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 		rule := createTestKeywordRule(t, app, org.ID, "To Delete", []string{"delete"})
 
 		req := testutil.NewGETRequest(t)
@@ -496,7 +496,7 @@ func TestApp_DeleteKeywordRule(t *testing.T) {
 	t.Run("not found", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 
 		req := testutil.NewGETRequest(t)
 		testutil.SetAuthContext(req, org.ID, user.ID)
@@ -824,7 +824,7 @@ func TestApp_ListAIContexts(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 
 		createTestAIContext(t, app, org.ID, "FAQ Context")
 		createTestAIContext(t, app, org.ID, "Product Context")
@@ -849,7 +849,7 @@ func TestApp_ListAIContexts(t *testing.T) {
 	t.Run("empty list", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 
 		req := testutil.NewGETRequest(t)
 		testutil.SetAuthContext(req, org.ID, user.ID)
@@ -879,7 +879,7 @@ func TestApp_CreateAIContext(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 
 		req := testutil.NewJSONRequest(t, map[string]any{
 			"name":             "Product FAQ",
@@ -929,7 +929,7 @@ func TestApp_GetAIContext(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 		ctx := createTestAIContext(t, app, org.ID, "FAQ Context")
 
 		req := testutil.NewGETRequest(t)
@@ -953,7 +953,7 @@ func TestApp_GetAIContext(t *testing.T) {
 	t.Run("not found", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 
 		req := testutil.NewGETRequest(t)
 		testutil.SetAuthContext(req, org.ID, user.ID)
@@ -975,7 +975,7 @@ func TestApp_DeleteAIContext(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 		ctx := createTestAIContext(t, app, org.ID, "To Delete Context")
 
 		req := testutil.NewGETRequest(t)
@@ -1004,7 +1004,7 @@ func TestApp_DeleteAIContext(t *testing.T) {
 	t.Run("not found", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 
 		req := testutil.NewGETRequest(t)
 		testutil.SetAuthContext(req, org.ID, user.ID)
@@ -1026,7 +1026,7 @@ func TestApp_GetChatbotSettings_ExistingSettings(t *testing.T) {
 	t.Run("returns persisted settings when they exist", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 
 		// Create settings directly in the DB
 		settings := &models.ChatbotSettings{
@@ -1071,7 +1071,7 @@ func TestApp_GetChatbotSettings_ExistingSettings(t *testing.T) {
 	t.Run("stats reflect actual data counts", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 
 		// Create some keyword rules and flows so stats are non-zero
 		createTestKeywordRule(t, app, org.ID, "Rule A", []string{"hi"})
@@ -1108,7 +1108,7 @@ func TestApp_UpdateChatbotSettings_PartialUpdate(t *testing.T) {
 	t.Run("partial update only changes provided fields", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 
 		// First, create full settings
 		setupReq := testutil.NewJSONRequest(t, map[string]any{
@@ -1153,7 +1153,7 @@ func TestApp_UpdateChatbotSettings_PartialUpdate(t *testing.T) {
 	t.Run("update business hours settings", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 
 		req := testutil.NewJSONRequest(t, map[string]any{
 			"business_hours_enabled":        true,
@@ -1188,7 +1188,7 @@ func TestApp_UpdateChatbotSettings_PartialUpdate(t *testing.T) {
 	t.Run("update agent assignment settings", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 
 		req := testutil.NewJSONRequest(t, map[string]any{
 			"allow_agent_queue_pickup":        false,
@@ -1222,7 +1222,7 @@ func TestApp_UpdateChatbotSettings_PartialUpdate(t *testing.T) {
 	t.Run("update client inactivity settings", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 
 		req := testutil.NewJSONRequest(t, map[string]any{
 			"client_reminder_enabled":   true,
@@ -1260,7 +1260,7 @@ func TestApp_UpdateChatbotSettings_PartialUpdate(t *testing.T) {
 	t.Run("update SLA settings", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 
 		req := testutil.NewJSONRequest(t, map[string]any{
 			"sla_enabled":            true,
@@ -1302,7 +1302,7 @@ func TestApp_UpdateChatbotSettings_PartialUpdate(t *testing.T) {
 	t.Run("invalid JSON body returns 400", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 
 		ctx := &fasthttp.RequestCtx{}
 		ctx.Request.Header.SetContentType("application/json")
@@ -1327,7 +1327,7 @@ func TestApp_CreateKeywordRule_MatchTypes(t *testing.T) {
 	t.Run("exact match type", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 
 		req := testutil.NewJSONRequest(t, map[string]any{
 			"name":          "Exact Match Rule",
@@ -1366,7 +1366,7 @@ func TestApp_CreateKeywordRule_MatchTypes(t *testing.T) {
 	t.Run("starts_with match type", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 
 		req := testutil.NewJSONRequest(t, map[string]any{
 			"name":          "Prefix Rule",
@@ -1403,7 +1403,7 @@ func TestApp_CreateKeywordRule_MatchTypes(t *testing.T) {
 	t.Run("regex match type", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 
 		req := testutil.NewJSONRequest(t, map[string]any{
 			"name":          "Regex Rule",
@@ -1440,7 +1440,7 @@ func TestApp_CreateKeywordRule_MatchTypes(t *testing.T) {
 	t.Run("transfer response type", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 
 		req := testutil.NewJSONRequest(t, map[string]any{
 			"name":          "Transfer Rule",
@@ -1479,7 +1479,7 @@ func TestApp_CreateKeywordRule_MatchTypes(t *testing.T) {
 	t.Run("defaults match_type and response_type when omitted", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 
 		req := testutil.NewJSONRequest(t, map[string]any{
 			"name":     "Default Types Rule",
@@ -1523,7 +1523,7 @@ func TestApp_UpdateKeywordRule_Additional(t *testing.T) {
 	t.Run("not found", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 
 		req := testutil.NewJSONRequest(t, map[string]any{
 			"name": "Ghost",
@@ -1539,7 +1539,7 @@ func TestApp_UpdateKeywordRule_Additional(t *testing.T) {
 	t.Run("update match_type and response_content", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 		rule := createTestKeywordRule(t, app, org.ID, "MatchUpdate", []string{"hello"})
 
 		newMatchType := models.MatchTypeExact
@@ -1565,7 +1565,7 @@ func TestApp_UpdateKeywordRule_Additional(t *testing.T) {
 	t.Run("update response_type to transfer", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 		rule := createTestKeywordRule(t, app, org.ID, "TypeSwitch", []string{"agent"})
 
 		newRespType := models.ResponseTypeTransfer
@@ -1596,12 +1596,13 @@ func TestApp_ListKeywordRules_OrgIsolation(t *testing.T) {
 		app := newTestApp(t)
 
 		org1 := testutil.CreateTestOrganization(t, app.DB)
-		user1 := testutil.CreateTestUser(t, app.DB, org1.ID)
+		user1 := createAdminUser(t, app, org1.ID)
 		createTestKeywordRule(t, app, org1.ID, "Org1 Rule", []string{"org1"})
 
 		org2 := testutil.CreateTestOrganization(t, app.DB)
 		user2 := testutil.CreateTestUser(t, app.DB, org2.ID,
 			testutil.WithEmail(testutil.UniqueEmail("org2-kw")),
+			testutil.WithRoleID(&testutil.CreateAdminRole(t, app.DB, org2.ID).ID),
 		)
 		createTestKeywordRule(t, app, org2.ID, "Org2 Rule", []string{"org2"})
 
@@ -1961,7 +1962,7 @@ func TestApp_CreateAIContext_Additional(t *testing.T) {
 	t.Run("validation error missing name", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 
 		req := testutil.NewJSONRequest(t, map[string]any{
 			"context_type":     "static",
@@ -1978,7 +1979,7 @@ func TestApp_CreateAIContext_Additional(t *testing.T) {
 	t.Run("defaults context_type to static when omitted", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 
 		req := testutil.NewJSONRequest(t, map[string]any{
 			"name":             "Defaulted Context",
@@ -2011,7 +2012,7 @@ func TestApp_CreateAIContext_Additional(t *testing.T) {
 	t.Run("create API context type", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 
 		req := testutil.NewJSONRequest(t, map[string]any{
 			"name":             "API Context",
@@ -2046,7 +2047,7 @@ func TestApp_CreateAIContext_Additional(t *testing.T) {
 	t.Run("persist api_config for API context", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 
 		req := testutil.NewJSONRequest(t, map[string]any{
 			"name":         "API Context With Config",
@@ -2098,7 +2099,7 @@ func TestApp_UpdateAIContext(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 		aiCtx := createTestAIContext(t, app, org.ID, "Original Context")
 
 		req := testutil.NewJSONRequest(t, map[string]any{
@@ -2137,7 +2138,7 @@ func TestApp_UpdateAIContext(t *testing.T) {
 	t.Run("not found", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 
 		req := testutil.NewJSONRequest(t, map[string]any{
 			"name": "Ghost Context",
@@ -2153,7 +2154,7 @@ func TestApp_UpdateAIContext(t *testing.T) {
 	t.Run("partial update only changes provided fields", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 		aiCtx := createTestAIContext(t, app, org.ID, "Partial Update Ctx")
 
 		// Only update the name
@@ -2180,7 +2181,7 @@ func TestApp_UpdateAIContext(t *testing.T) {
 	t.Run("change context_type from static to api", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 		aiCtx := createTestAIContext(t, app, org.ID, "Type Change Ctx")
 
 		req := testutil.NewJSONRequest(t, map[string]any{
@@ -2201,7 +2202,7 @@ func TestApp_UpdateAIContext(t *testing.T) {
 	t.Run("update api_config for API context", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 		aiCtx := createTestAIContext(t, app, org.ID, "API Config Update Ctx")
 
 		req := testutil.NewJSONRequest(t, map[string]any{
@@ -2241,12 +2242,13 @@ func TestApp_ListAIContexts_OrgIsolation(t *testing.T) {
 		app := newTestApp(t)
 
 		org1 := testutil.CreateTestOrganization(t, app.DB)
-		user1 := testutil.CreateTestUser(t, app.DB, org1.ID)
+		user1 := createAdminUser(t, app, org1.ID)
 		createTestAIContext(t, app, org1.ID, "Org1 Context")
 
 		org2 := testutil.CreateTestOrganization(t, app.DB)
 		user2 := testutil.CreateTestUser(t, app.DB, org2.ID,
 			testutil.WithEmail(testutil.UniqueEmail("org2-ai")),
+			testutil.WithRoleID(&testutil.CreateAdminRole(t, app.DB, org2.ID).ID),
 		)
 		createTestAIContext(t, app, org2.ID, "Org2 Context")
 
@@ -2313,7 +2315,7 @@ func TestApp_ListChatbotSessions(t *testing.T) {
 	t.Run("success returns all sessions", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 		contact := testutil.CreateTestContact(t, app.DB, org.ID)
 
 		createSessionForChatbotTest(t, app, org.ID, contact.ID, "+1234567890", models.SessionStatusActive)
@@ -2339,7 +2341,7 @@ func TestApp_ListChatbotSessions(t *testing.T) {
 	t.Run("empty list", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 
 		req := testutil.NewGETRequest(t)
 		testutil.SetAuthContext(req, org.ID, user.ID)
@@ -2361,7 +2363,7 @@ func TestApp_ListChatbotSessions(t *testing.T) {
 	t.Run("filter by status active", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 		contact := testutil.CreateTestContact(t, app.DB, org.ID)
 
 		createSessionForChatbotTest(t, app, org.ID, contact.ID, "+1111111111", models.SessionStatusActive)
@@ -2392,7 +2394,7 @@ func TestApp_ListChatbotSessions(t *testing.T) {
 	t.Run("filter by status completed", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 		contact := testutil.CreateTestContact(t, app.DB, org.ID)
 
 		createSessionForChatbotTest(t, app, org.ID, contact.ID, "+2222222222", models.SessionStatusActive)
@@ -2421,13 +2423,14 @@ func TestApp_ListChatbotSessions(t *testing.T) {
 		app := newTestApp(t)
 
 		org1 := testutil.CreateTestOrganization(t, app.DB)
-		user1 := testutil.CreateTestUser(t, app.DB, org1.ID)
+		user1 := createAdminUser(t, app, org1.ID)
 		contact1 := testutil.CreateTestContact(t, app.DB, org1.ID)
 		createSessionForChatbotTest(t, app, org1.ID, contact1.ID, "+3333333333", models.SessionStatusActive)
 
 		org2 := testutil.CreateTestOrganization(t, app.DB)
 		user2 := testutil.CreateTestUser(t, app.DB, org2.ID,
 			testutil.WithEmail(testutil.UniqueEmail("org2-sess")),
+			testutil.WithRoleID(&testutil.CreateAdminRole(t, app.DB, org2.ID).ID),
 		)
 		contact2 := testutil.CreateTestContact(t, app.DB, org2.ID)
 		createSessionForChatbotTest(t, app, org2.ID, contact2.ID, "+4444444444", models.SessionStatusActive)
@@ -2474,7 +2477,7 @@ func TestApp_GetChatbotSession(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 		contact := testutil.CreateTestContact(t, app.DB, org.ID)
 		session := createSessionForChatbotTest(t, app, org.ID, contact.ID, "+5555555555", models.SessionStatusActive)
 
@@ -2499,7 +2502,7 @@ func TestApp_GetChatbotSession(t *testing.T) {
 	t.Run("not found", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 
 		req := testutil.NewGETRequest(t)
 		testutil.SetAuthContext(req, org.ID, user.ID)
@@ -2513,7 +2516,7 @@ func TestApp_GetChatbotSession(t *testing.T) {
 	t.Run("session with messages", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 		contact := testutil.CreateTestContact(t, app.DB, org.ID)
 		session := createSessionForChatbotTest(t, app, org.ID, contact.ID, "+6666666666", models.SessionStatusActive)
 
@@ -2562,6 +2565,7 @@ func TestApp_GetChatbotSession(t *testing.T) {
 		org2 := testutil.CreateTestOrganization(t, app.DB)
 		user2 := testutil.CreateTestUser(t, app.DB, org2.ID,
 			testutil.WithEmail(testutil.UniqueEmail("org2-getsess")),
+			testutil.WithRoleID(&testutil.CreateAdminRole(t, app.DB, org2.ID).ID),
 		)
 
 		// User from org2 tries to get org1's session
@@ -2591,6 +2595,7 @@ func TestApp_DeleteKeywordRule_CrossOrg(t *testing.T) {
 		org2 := testutil.CreateTestOrganization(t, app.DB)
 		user2 := testutil.CreateTestUser(t, app.DB, org2.ID,
 			testutil.WithEmail(testutil.UniqueEmail("org2-delkw")),
+			testutil.WithRoleID(&testutil.CreateAdminRole(t, app.DB, org2.ID).ID),
 		)
 
 		req := testutil.NewGETRequest(t)
@@ -2660,6 +2665,7 @@ func TestApp_DeleteAIContext_CrossOrg(t *testing.T) {
 		org2 := testutil.CreateTestOrganization(t, app.DB)
 		user2 := testutil.CreateTestUser(t, app.DB, org2.ID,
 			testutil.WithEmail(testutil.UniqueEmail("org2-delai")),
+			testutil.WithRoleID(&testutil.CreateAdminRole(t, app.DB, org2.ID).ID),
 		)
 
 		req := testutil.NewGETRequest(t)
@@ -2693,6 +2699,7 @@ func TestApp_GetKeywordRule_CrossOrg(t *testing.T) {
 		org2 := testutil.CreateTestOrganization(t, app.DB)
 		user2 := testutil.CreateTestUser(t, app.DB, org2.ID,
 			testutil.WithEmail(testutil.UniqueEmail("org2-getkw")),
+			testutil.WithRoleID(&testutil.CreateAdminRole(t, app.DB, org2.ID).ID),
 		)
 
 		req := testutil.NewGETRequest(t)
@@ -2752,6 +2759,7 @@ func TestApp_GetAIContext_CrossOrg(t *testing.T) {
 		org2 := testutil.CreateTestOrganization(t, app.DB)
 		user2 := testutil.CreateTestUser(t, app.DB, org2.ID,
 			testutil.WithEmail(testutil.UniqueEmail("org2-getai")),
+			testutil.WithRoleID(&testutil.CreateAdminRole(t, app.DB, org2.ID).ID),
 		)
 
 		req := testutil.NewGETRequest(t)
@@ -2774,7 +2782,7 @@ func TestApp_GetKeywordRule_ResponseFields(t *testing.T) {
 	t.Run("response includes all expected fields", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 
 		rule := &models.KeywordRule{
 			BaseModel:       models.BaseModel{ID: uuid.New()},
@@ -2864,7 +2872,7 @@ func TestApp_UpdateChatbotSettings_RejectsUnsendableButtons(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			app := newTestApp(t)
 			org := testutil.CreateTestOrganization(t, app.DB)
-			user := testutil.CreateTestUser(t, app.DB, org.ID)
+			user := createAdminUser(t, app, org.ID)
 
 			req := testutil.NewJSONRequest(t, map[string]any{tt.field: tt.buttons})
 			testutil.SetAuthContext(req, org.ID, user.ID)
@@ -2895,7 +2903,7 @@ func TestApp_UpdateChatbotSettings_AcceptsSingleURLButton(t *testing.T) {
 
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID)
+	user := createAdminUser(t, app, org.ID)
 
 	req := testutil.NewJSONRequest(t, map[string]any{
 		"greeting_message": "Hi!",
@@ -2907,4 +2915,257 @@ func TestApp_UpdateChatbotSettings_AcceptsSingleURLButton(t *testing.T) {
 
 	require.NoError(t, app.UpdateChatbotSettings(req))
 	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+}
+
+// =============================================================================
+// Permission checks
+// =============================================================================
+
+func chatbotTestUserWithPerms(t *testing.T, app *handlers.App, orgID uuid.UUID, keys ...string) *models.User {
+	t.Helper()
+	role := testutil.CreateTestRoleWithKeys(t, app.DB, orgID, "chatbot-perm", keys)
+	return testutil.CreateTestUser(t, app.DB, orgID, testutil.WithRoleID(&role.ID))
+}
+
+func TestApp_ChatbotSettings_RequirePermissions(t *testing.T) {
+	t.Parallel()
+
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	require.NoError(t, app.DB.Create(&models.ChatbotSettings{
+		BaseModel:       models.BaseModel{ID: uuid.New()},
+		OrganizationID:  org.ID,
+		IsEnabled:       true,
+		DefaultResponse: "Secret greeting",
+		AgentAssignment: models.AgentAssignmentConfig{AllowQueuePickup: true},
+	}).Error)
+
+	none := chatbotTestUserWithPerms(t, app, org.ID, "chat:read")
+	reader := chatbotTestUserWithPerms(t, app, org.ID, "settings.chatbot:read")
+	// Default agent role: transfers:pickup but no settings.chatbot.
+	agent := chatbotTestUserWithPerms(t, app, org.ID, "chat:read", "transfers:read", "transfers:pickup")
+
+	t.Run("get forbidden without permission", func(t *testing.T) {
+		req := testutil.NewGETRequest(t)
+		testutil.SetAuthContext(req, org.ID, none.ID)
+		require.NoError(t, app.GetChatbotSettings(req))
+		assert.Equal(t, fasthttp.StatusForbidden, testutil.GetResponseStatusCode(req))
+	})
+
+	t.Run("get full settings with settings.chatbot:read", func(t *testing.T) {
+		req := testutil.NewGETRequest(t)
+		testutil.SetAuthContext(req, org.ID, reader.ID)
+		require.NoError(t, app.GetChatbotSettings(req))
+		assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+		var resp struct {
+			Data map[string]map[string]any `json:"data"`
+		}
+		require.NoError(t, json.Unmarshal(testutil.GetResponseBody(req), &resp))
+		assert.Equal(t, "Secret greeting", resp.Data["settings"]["greeting_message"])
+		assert.Contains(t, resp.Data, "stats")
+	})
+
+	t.Run("transfers:pickup only sees allow_agent_queue_pickup", func(t *testing.T) {
+		req := testutil.NewGETRequest(t)
+		testutil.SetAuthContext(req, org.ID, agent.ID)
+		require.NoError(t, app.GetChatbotSettings(req))
+		assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+		var resp struct {
+			Data map[string]map[string]any `json:"data"`
+		}
+		require.NoError(t, json.Unmarshal(testutil.GetResponseBody(req), &resp))
+		assert.Equal(t, map[string]any{"allow_agent_queue_pickup": true}, resp.Data["settings"])
+		assert.NotContains(t, resp.Data, "stats")
+		assert.NotContains(t, string(testutil.GetResponseBody(req)), "Secret greeting")
+	})
+
+	for name, user := range map[string]*models.User{"none": none, "reader": reader, "agent": agent} {
+		t.Run("update forbidden for "+name, func(t *testing.T) {
+			req := testutil.NewJSONRequest(t, map[string]any{"greeting_message": "hijacked"})
+			testutil.SetAuthContext(req, org.ID, user.ID)
+			require.NoError(t, app.UpdateChatbotSettings(req))
+			assert.Equal(t, fasthttp.StatusForbidden, testutil.GetResponseStatusCode(req))
+		})
+	}
+
+	var settings models.ChatbotSettings
+	require.NoError(t, app.DB.Where("organization_id = ?", org.ID).First(&settings).Error)
+	assert.Equal(t, "Secret greeting", settings.DefaultResponse)
+}
+
+func TestApp_GetChatbotSettings_PickupDefaultsToAllowed(t *testing.T) {
+	t.Parallel()
+
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB) // no chatbot settings saved
+	agent := chatbotTestUserWithPerms(t, app, org.ID, "chat:read", "transfers:read", "transfers:pickup")
+
+	req := testutil.NewGETRequest(t)
+	testutil.SetAuthContext(req, org.ID, agent.ID)
+	require.NoError(t, app.GetChatbotSettings(req))
+	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	var resp struct {
+		Data map[string]map[string]any `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(testutil.GetResponseBody(req), &resp))
+	assert.Equal(t, true, resp.Data["settings"]["allow_agent_queue_pickup"])
+}
+
+func TestApp_KeywordRules_RequirePermissions(t *testing.T) {
+	t.Parallel()
+
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	rule := createTestKeywordRule(t, app, org.ID, "Guarded", []string{"guarded"})
+
+	none := chatbotTestUserWithPerms(t, app, org.ID, "chat:read")
+	reader := chatbotTestUserWithPerms(t, app, org.ID, "chatbot.keywords:read")
+
+	t.Run("list forbidden without chatbot.keywords:read", func(t *testing.T) {
+		req := testutil.NewGETRequest(t)
+		testutil.SetAuthContext(req, org.ID, none.ID)
+		require.NoError(t, app.ListKeywordRules(req))
+		assert.Equal(t, fasthttp.StatusForbidden, testutil.GetResponseStatusCode(req))
+	})
+
+	t.Run("list and get allowed with chatbot.keywords:read", func(t *testing.T) {
+		req := testutil.NewGETRequest(t)
+		testutil.SetAuthContext(req, org.ID, reader.ID)
+		require.NoError(t, app.ListKeywordRules(req))
+		assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+		req = testutil.NewGETRequest(t)
+		testutil.SetAuthContext(req, org.ID, reader.ID)
+		testutil.SetPathParam(req, "id", rule.ID.String())
+		require.NoError(t, app.GetKeywordRule(req))
+		assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+	})
+
+	for name, user := range map[string]*models.User{"none": none, "reader": reader} {
+		t.Run("create forbidden for "+name, func(t *testing.T) {
+			req := testutil.NewJSONRequest(t, map[string]any{
+				"keywords": []string{"x"}, "response_type": "text", "response_content": map[string]any{"body": "x"},
+			})
+			testutil.SetAuthContext(req, org.ID, user.ID)
+			require.NoError(t, app.CreateKeywordRule(req))
+			assert.Equal(t, fasthttp.StatusForbidden, testutil.GetResponseStatusCode(req))
+		})
+
+		t.Run("delete forbidden for "+name, func(t *testing.T) {
+			req := testutil.NewGETRequest(t)
+			testutil.SetAuthContext(req, org.ID, user.ID)
+			testutil.SetPathParam(req, "id", rule.ID.String())
+			require.NoError(t, app.DeleteKeywordRule(req))
+			assert.Equal(t, fasthttp.StatusForbidden, testutil.GetResponseStatusCode(req))
+		})
+	}
+
+	var count int64
+	app.DB.Model(&models.KeywordRule{}).Where("organization_id = ?", org.ID).Count(&count)
+	assert.Equal(t, int64(1), count)
+}
+
+func TestApp_AIContexts_RequirePermissions(t *testing.T) {
+	t.Parallel()
+
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	aiCtx := createTestAIContext(t, app, org.ID, "Guarded")
+
+	none := chatbotTestUserWithPerms(t, app, org.ID, "chat:read")
+	reader := chatbotTestUserWithPerms(t, app, org.ID, "chatbot.ai:read")
+
+	t.Run("list forbidden without chatbot.ai:read", func(t *testing.T) {
+		req := testutil.NewGETRequest(t)
+		testutil.SetAuthContext(req, org.ID, none.ID)
+		require.NoError(t, app.ListAIContexts(req))
+		assert.Equal(t, fasthttp.StatusForbidden, testutil.GetResponseStatusCode(req))
+	})
+
+	t.Run("list and get allowed with chatbot.ai:read", func(t *testing.T) {
+		req := testutil.NewGETRequest(t)
+		testutil.SetAuthContext(req, org.ID, reader.ID)
+		require.NoError(t, app.ListAIContexts(req))
+		assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+		req = testutil.NewGETRequest(t)
+		testutil.SetAuthContext(req, org.ID, reader.ID)
+		testutil.SetPathParam(req, "id", aiCtx.ID.String())
+		require.NoError(t, app.GetAIContext(req))
+		assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+	})
+
+	for name, user := range map[string]*models.User{"none": none, "reader": reader} {
+		t.Run("create forbidden for "+name, func(t *testing.T) {
+			req := testutil.NewJSONRequest(t, map[string]any{"name": "New", "static_content": "x"})
+			testutil.SetAuthContext(req, org.ID, user.ID)
+			require.NoError(t, app.CreateAIContext(req))
+			assert.Equal(t, fasthttp.StatusForbidden, testutil.GetResponseStatusCode(req))
+		})
+
+		t.Run("update forbidden for "+name, func(t *testing.T) {
+			req := testutil.NewJSONRequest(t, map[string]any{"name": "Renamed"})
+			testutil.SetAuthContext(req, org.ID, user.ID)
+			testutil.SetPathParam(req, "id", aiCtx.ID.String())
+			require.NoError(t, app.UpdateAIContext(req))
+			assert.Equal(t, fasthttp.StatusForbidden, testutil.GetResponseStatusCode(req))
+		})
+
+		t.Run("delete forbidden for "+name, func(t *testing.T) {
+			req := testutil.NewGETRequest(t)
+			testutil.SetAuthContext(req, org.ID, user.ID)
+			testutil.SetPathParam(req, "id", aiCtx.ID.String())
+			require.NoError(t, app.DeleteAIContext(req))
+			assert.Equal(t, fasthttp.StatusForbidden, testutil.GetResponseStatusCode(req))
+		})
+	}
+
+	var reloaded models.AIContext
+	require.NoError(t, app.DB.First(&reloaded, "id = ?", aiCtx.ID).Error)
+	assert.Equal(t, "Guarded", reloaded.Name)
+}
+
+func TestApp_ChatbotSessions_RequirePermissions(t *testing.T) {
+	t.Parallel()
+
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	contact := testutil.CreateTestContact(t, app.DB, org.ID)
+	session := createSessionForChatbotTest(t, app, org.ID, contact.ID, "+1234567890", models.SessionStatusActive)
+
+	none := chatbotTestUserWithPerms(t, app, org.ID, "chat:read", "analytics.agents:read")
+
+	t.Run("list forbidden without permission", func(t *testing.T) {
+		req := testutil.NewGETRequest(t)
+		testutil.SetAuthContext(req, org.ID, none.ID)
+		require.NoError(t, app.ListChatbotSessions(req))
+		assert.Equal(t, fasthttp.StatusForbidden, testutil.GetResponseStatusCode(req))
+	})
+
+	t.Run("get forbidden without permission", func(t *testing.T) {
+		req := testutil.NewGETRequest(t)
+		testutil.SetAuthContext(req, org.ID, none.ID)
+		testutil.SetPathParam(req, "id", session.ID.String())
+		require.NoError(t, app.GetChatbotSession(req))
+		assert.Equal(t, fasthttp.StatusForbidden, testutil.GetResponseStatusCode(req))
+	})
+
+	for _, perm := range []string{"settings.chatbot:read", "analytics:read"} {
+		user := chatbotTestUserWithPerms(t, app, org.ID, perm)
+		t.Run("list and get allowed with "+perm, func(t *testing.T) {
+			req := testutil.NewGETRequest(t)
+			testutil.SetAuthContext(req, org.ID, user.ID)
+			require.NoError(t, app.ListChatbotSessions(req))
+			assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+			req = testutil.NewGETRequest(t)
+			testutil.SetAuthContext(req, org.ID, user.ID)
+			testutil.SetPathParam(req, "id", session.ID.String())
+			require.NoError(t, app.GetChatbotSession(req))
+			assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+		})
+	}
 }

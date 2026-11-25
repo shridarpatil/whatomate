@@ -1,21 +1,20 @@
 <script setup lang="ts">
+import ChatbotTabs from '@/components/layout/ChatbotTabs.vue'
 import { ref, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { chatbotService } from '@/services/api'
 import { toast } from '@/lib/toast'
 import { PageHeader, ConfirmDialog, ErrorState } from '@/components/shared'
 import { getErrorMessage } from '@/lib/api-utils'
+import { useAuthStore } from '@/stores/auth'
 import {
   Bot,
-  Key,
-  Workflow,
   Sparkles,
   Power,
   Settings,
   TrendingUp,
   Users,
-  MessageSquare,
-  Clock
+  MessageSquare
 } from '@/lib/icons'
 
 const { t } = useI18n()
@@ -111,6 +110,35 @@ async function retryFetch() {
   }
 }
 
+const authStore = useAuthStore()
+// Turning the chatbot on/off and editing its settings need settings.chatbot write.
+const canManageChatbot = authStore.hasPermission('settings.chatbot', 'write')
+
+// Checklist steps link to other chatbot pages; only show the ones this user can open.
+const allSteps = computed(() => [
+  {
+    key: 'greeting', done: !!settings.value.greeting_message, to: '/settings/chatbot',
+    title: t('chatbot.stepGreeting'), detail: t('chatbot.stepGreetingDetail'), link: t('chatbot.addGreeting'),
+  },
+  {
+    key: 'keywords', done: stats.value.keywords_count > 0, to: '/chatbot/keywords',
+    title: t('chatbot.keywordRules'), detail: t('chatbot.rulesConfigured', stats.value.keywords_count), link: t('chatbot.openKeywordRules'),
+  },
+  {
+    key: 'flows', done: stats.value.flows_count > 0, to: '/chatbot/flows',
+    title: t('chatbot.conversationFlows'), detail: t('chatbot.flowsCreated', stats.value.flows_count), link: t('chatbot.openBotFlows'),
+  },
+  {
+    key: 'ai', done: stats.value.ai_contexts_count > 0, to: '/chatbot/ai',
+    title: t('chatbot.aiContexts'), detail: t('chatbot.contextsActive', stats.value.ai_contexts_count), link: t('chatbot.openAiContexts'),
+  },
+])
+const STEP_PERMISSION: Record<string, string> = {
+  greeting: 'settings.chatbot', keywords: 'chatbot.keywords', flows: 'flows.chatbot', ai: 'chatbot.ai',
+}
+const steps = computed(() => allSteps.value.filter(s => authStore.hasPermission(STEP_PERMISSION[s.key], 'read')))
+const stepsDone = computed(() => steps.value.filter(s => s.done).length)
+
 const statCards = computed(() => [
   { title: t('chatbot.totalSessions'), key: 'total_sessions', icon: Users },
   { title: t('chatbot.activeSessions'), key: 'active_sessions', icon: MessageSquare },
@@ -128,22 +156,23 @@ const statCards = computed(() => [
     >
       <template #actions>
         <div class="hstack gap-2">
-          <span class="badge" :data-variant="settings.enabled ? 'success' : 'secondary'">
-            {{ settings.enabled ? $t('chatbot.active') : $t('chatbot.inactive') }}
-          </span>
+          <span v-if="settings.enabled" class="badge" data-status="success">{{ $t('chatbot.active') }}</span>
+          <!-- While off, the banner below carries the "turn on" action. -->
           <button
+            v-if="settings.enabled && canManageChatbot"
             type="button"
             class="outline small"
-            :data-variant="settings.enabled ? 'danger' : undefined"
+            data-variant="danger"
             :disabled="isToggling"
             @click="showToggleConfirm = true"
           >
             <Power :size="16" />
-            {{ settings.enabled ? $t('chatbot.disable') : $t('chatbot.enable') }}
+            {{ $t('chatbot.disable') }}
           </button>
         </div>
       </template>
     </PageHeader>
+    <ChatbotTabs />
 
     <!-- Confirm Toggle Dialog -->
     <ConfirmDialog
@@ -169,112 +198,76 @@ const statCards = computed(() => [
     <!-- Content -->
     <div v-else class="flex-1 scroll-y p-4">
       <div class="vstack gap-6">
+        <!-- The chatbot being off is the most important fact on this page. -->
+        <div v-if="!isLoading && !settings.enabled" role="alert" data-variant="warning" class="hstack justify-between gap-4">
+          <div><strong>{{ $t('chatbot.offTitle') }}</strong> {{ $t('chatbot.offDescription') }}</div>
+          <button v-if="canManageChatbot" type="button" class="small" :disabled="isToggling" @click="showToggleConfirm = true">
+            <Power :size="16" />
+            {{ $t('chatbot.turnOn') }}
+          </button>
+        </div>
         <!-- Stats -->
-        <div class="row">
+        <div class="stat-grid">
           <template v-if="isLoading">
-            <div v-for="i in 4" :key="i" class="col-3">
-              <article class="card" aria-busy="true">
-                <div role="status" class="skeleton line"></div>
-                <div role="status" class="skeleton box"></div>
-              </article>
-            </div>
+            <article v-for="i in 4" :key="i" class="card vstack" data-widget="number" aria-busy="true">
+              <div role="status" class="skeleton line" data-size="label"></div>
+              <div role="status" class="skeleton line" data-size="value"></div>
+            </article>
           </template>
           <template v-else>
-            <div v-for="card in statCards" :key="card.key" class="col-3">
-              <article class="card">
-                <header class="hstack justify-between">
-                  <small class="text-light">{{ card.title }}</small>
-                  <component :is="card.icon" :size="20" />
-                </header>
-                <h2>{{ stats[card.key as keyof Stats].toLocaleString() }}</h2>
-              </article>
-            </div>
+            <article v-for="card in statCards" :key="card.key" class="card vstack" data-widget="number">
+              <header><h4>{{ card.title }}</h4></header>
+              <p data-widget-value>{{ stats[card.key as keyof Stats].toLocaleString() }}</p>
+            </article>
           </template>
         </div>
 
-        <!-- Quick Actions: plain divs, not article/header, so the link gets its accessible name from the card text -->
         <div class="row">
-          <div class="col-4">
-            <RouterLink to="/chatbot/keywords" class="unstyled">
-              <div class="card">
-                <div class="hstack gap-2">
-                  <Key :size="20" />
-                  <div>
-                    <h3>{{ $t('chatbot.keywordRules') }}</h3>
-                    <small class="text-light">{{ $t('chatbot.rulesConfigured', { count: stats.keywords_count }) }}</small>
-                  </div>
-                </div>
-              </div>
-            </RouterLink>
-          </div>
+          <!-- What the chatbot does today; unset options say what happens and link to the fix. -->
+          <article class="card vstack gap-4 col-7">
+            <header class="hstack justify-between flex-wrap gap-2">
+              <h3>{{ $t('chatbot.howItReplies') }}</h3>
+              <RouterLink v-if="canManageChatbot" to="/settings/chatbot" class="button outline small">
+                <Settings :size="16" />
+                {{ $t('chatbot.editSettings') }}
+              </RouterLink>
+            </header>
+            <dl data-facts>
+              <dt>{{ $t('chatbot.greetingMessage') }}</dt>
+              <dd>
+                <span v-if="settings.greeting_message" class="pre-wrap">{{ settings.greeting_message }}</span>
+                <template v-else><span class="text-light">{{ $t('chatbot.greetingUnset') }}</span> <RouterLink v-if="canManageChatbot" to="/settings/chatbot">{{ $t('chatbot.addGreeting') }}</RouterLink></template>
+              </dd>
+              <dt>{{ $t('chatbot.fallbackMessage') }}</dt>
+              <dd>
+                <span v-if="settings.fallback_message" class="pre-wrap">{{ settings.fallback_message }}</span>
+                <template v-else><span class="text-light">{{ $t('chatbot.fallbackUnset') }}</span> <RouterLink v-if="canManageChatbot" to="/settings/chatbot">{{ $t('chatbot.addFallback') }}</RouterLink></template>
+              </dd>
+              <dt>{{ $t('chatbot.sessionTimeout') }}</dt>
+              <dd>{{ $t('chatbot.sessionTimeoutValue', { count: settings.session_timeout_minutes }) }}</dd>
+              <dt>{{ $t('chatbot.aiProvider') }}</dt>
+              <dd>
+                <span v-if="settings.ai_enabled" class="badge" data-status="success">{{ settings.ai_provider || $t('chatbot.notConfigured') }}</span>
+                <template v-else><span class="badge" data-status="neutral">{{ $t('chatbot.disabled') }}</span> <RouterLink v-if="canManageChatbot" to="/settings/chatbot">{{ $t('chatbot.connectAi') }}</RouterLink></template>
+              </dd>
+            </dl>
+          </article>
 
-          <div class="col-4">
-            <RouterLink to="/chatbot/flows" class="unstyled">
-              <div class="card">
-                <div class="hstack gap-2">
-                  <Workflow :size="20" />
-                  <div>
-                    <h3>{{ $t('chatbot.conversationFlows') }}</h3>
-                    <small class="text-light">{{ $t('chatbot.flowsCreated', { count: stats.flows_count }) }}</small>
-                  </div>
-                </div>
-              </div>
-            </RouterLink>
-          </div>
-
-          <div class="col-4">
-            <RouterLink to="/chatbot/ai" class="unstyled">
-              <div class="card">
-                <div class="hstack gap-2">
-                  <Sparkles :size="20" />
-                  <div>
-                    <h3>{{ $t('chatbot.aiContexts') }}</h3>
-                    <small class="text-light">{{ $t('chatbot.contextsActive', { count: stats.ai_contexts_count }) }}</small>
-                  </div>
-                </div>
-              </div>
-            </RouterLink>
-          </div>
+          <!-- Set-up checklist built from what already exists. -->
+          <article class="card vstack gap-4 col-5">
+            <header class="hstack justify-between">
+              <h3>{{ $t('chatbot.getStarted') }}</h3>
+              <small class="text-light">{{ $t('chatbot.stepsDone', { done: stepsDone, total: steps.length }) }}</small>
+            </header>
+            <ol data-steps>
+              <li v-for="step in steps" :key="step.key" :data-done="step.done || undefined">
+                <strong>{{ step.title }}</strong>
+                <small class="text-light">{{ step.detail }}</small>
+                <RouterLink v-if="!step.done || step.key !== 'greeting'" :to="step.to">{{ step.link }}</RouterLink>
+              </li>
+            </ol>
+          </article>
         </div>
-
-        <!-- Current Settings -->
-        <article class="card">
-          <header class="hstack justify-between flex-wrap gap-2">
-            <h3>{{ $t('chatbot.currentConfiguration') }}</h3>
-            <RouterLink to="/settings/chatbot" class="button outline small">
-              <Settings :size="16" />
-              {{ $t('chatbot.editSettings') }}
-            </RouterLink>
-          </header>
-          <div class="row">
-            <div class="col-6 card p-4 vstack gap-1">
-              <small class="text-light">{{ $t('chatbot.greetingMessage') }}</small>
-              <p v-if="settings.greeting_message" class="pre-wrap">{{ settings.greeting_message }}</p>
-              <em v-else class="text-lighter">{{ $t('chatbot.notConfigured') }}</em>
-            </div>
-            <div class="col-6 card p-4 vstack gap-1">
-              <small class="text-light">{{ $t('chatbot.fallbackMessage') }}</small>
-              <p v-if="settings.fallback_message" class="pre-wrap">{{ settings.fallback_message }}</p>
-              <em v-else class="text-lighter">{{ $t('chatbot.notConfigured') }}</em>
-            </div>
-            <div class="col-6 card p-4 vstack gap-1">
-              <small class="text-light">{{ $t('chatbot.sessionTimeout') }}</small>
-              <strong class="hstack gap-2">
-                <Clock :size="16" />
-                {{ $t('chatbot.minutes', { count: settings.session_timeout_minutes }) }}
-              </strong>
-            </div>
-            <div class="col-6 card p-4 vstack gap-1">
-              <small class="text-light">{{ $t('chatbot.aiProvider') }}</small>
-              <div class="hstack gap-2">
-                <span v-if="settings.ai_enabled" class="badge" data-variant="success">
-                  {{ settings.ai_provider || $t('chatbot.notConfigured') }}
-                </span>
-                <span v-else class="badge" data-variant="secondary">{{ $t('chatbot.disabled') }}</span>
-              </div>
-            </div>
-          </div>
-        </article>
       </div>
     </div>
   </div>

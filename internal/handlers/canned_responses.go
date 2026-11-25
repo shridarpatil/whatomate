@@ -54,11 +54,12 @@ type CannedResponseResponse struct {
 	UpdatedAt  string                 `json:"updated_at"`
 }
 
-// ListCannedResponses returns all canned responses for the organization
+// ListCannedResponses returns all canned responses for the organization. The
+// chat screen's canned-response picker lists them too.
 func (a *App) ListCannedResponses(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
+	orgID, _, err := a.requireAnyAuth(r, Perm{models.ResourceCannedResponses, models.ActionRead}, Perm{models.ResourceChat, models.ActionRead})
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+		return nil
 	}
 
 	pg := parsePagination(r)
@@ -105,9 +106,9 @@ func (a *App) ListCannedResponses(r *fastglue.Request) error {
 
 // CreateCannedResponse creates a new canned response
 func (a *App) CreateCannedResponse(r *fastglue.Request) error {
-	orgID, userID, err := a.getOrgAndUserID(r)
+	orgID, userID, err := a.requireAuth(r, models.ResourceCannedResponses, models.ActionWrite)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+		return nil
 	}
 
 	var req CannedResponseRequest
@@ -157,9 +158,9 @@ func (a *App) CreateCannedResponse(r *fastglue.Request) error {
 
 // GetCannedResponse returns a single canned response
 func (a *App) GetCannedResponse(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
+	orgID, _, err := a.requireAuth(r, models.ResourceCannedResponses, models.ActionRead)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+		return nil
 	}
 
 	id, err := parsePathUUID(r, "id", "canned response")
@@ -179,9 +180,9 @@ func (a *App) GetCannedResponse(r *fastglue.Request) error {
 
 // UpdateCannedResponse updates an existing canned response
 func (a *App) UpdateCannedResponse(r *fastglue.Request) error {
-	orgID, userID, err := a.getOrgAndUserID(r)
+	orgID, userID, err := a.requireAuth(r, models.ResourceCannedResponses, models.ActionWrite)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+		return nil
 	}
 
 	id, err := parsePathUUID(r, "id", "canned response")
@@ -233,9 +234,9 @@ func (a *App) UpdateCannedResponse(r *fastglue.Request) error {
 
 // DeleteCannedResponse deletes a canned response
 func (a *App) DeleteCannedResponse(r *fastglue.Request) error {
-	orgID, userID, err := a.getOrgAndUserID(r)
+	orgID, userID, err := a.requireAuth(r, models.ResourceCannedResponses, models.ActionDelete)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+		return nil
 	}
 
 	id, err := parsePathUUID(r, "id", "canned response")
@@ -262,11 +263,12 @@ func (a *App) DeleteCannedResponse(r *fastglue.Request) error {
 	return r.SendEnvelope(map[string]string{"message": "Canned response deleted"})
 }
 
-// IncrementCannedResponseUsage increments the usage counter
+// IncrementCannedResponseUsage increments the usage counter. Called from chat
+// when an agent uses a canned response.
 func (a *App) IncrementCannedResponseUsage(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
+	orgID, _, err := a.requireAnyAuth(r, Perm{models.ResourceChat, models.ActionWrite}, Perm{models.ResourceCannedResponses, models.ActionRead})
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+		return nil
 	}
 
 	id, err := parsePathUUID(r, "id", "canned response")

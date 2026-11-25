@@ -215,13 +215,16 @@ func (a *App) HangupCallTransfer(r *fastglue.Request) error {
 
 // HoldCall puts an active call on hold and plays hold music to the caller.
 func (a *App) HoldCall(r *fastglue.Request) error {
-	_, _, err := a.requireAuth(r, models.ResourceCallTransfers, models.ActionWrite)
+	orgID, _, err := a.requireAuth(r, models.ResourceCallTransfers, models.ActionWrite)
 	if err != nil {
 		return nil
 	}
 
 	callLogID, err := parsePathUUID(r, "id", "call log")
 	if err != nil {
+		return nil
+	}
+	if err := a.requireOrgCallLog(r, callLogID, orgID); err != nil {
 		return nil
 	}
 
@@ -238,13 +241,16 @@ func (a *App) HoldCall(r *fastglue.Request) error {
 
 // ResumeCall takes an active call off hold and restores the audio bridge.
 func (a *App) ResumeCall(r *fastglue.Request) error {
-	_, _, err := a.requireAuth(r, models.ResourceCallTransfers, models.ActionWrite)
+	orgID, _, err := a.requireAuth(r, models.ResourceCallTransfers, models.ActionWrite)
 	if err != nil {
 		return nil
 	}
 
 	callLogID, err := parsePathUUID(r, "id", "call log")
 	if err != nil {
+		return nil
+	}
+	if err := a.requireOrgCallLog(r, callLogID, orgID); err != nil {
 		return nil
 	}
 
@@ -285,6 +291,9 @@ func (a *App) InitiateAgentTransfer(r *fastglue.Request) error {
 	callLogID, err := uuid.Parse(req.CallLogID)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid call_log_id", nil, "")
+	}
+	if err := a.requireOrgCallLog(r, callLogID, orgID); err != nil {
+		return nil
 	}
 
 	teamID, err := uuid.Parse(req.TeamID)
@@ -331,4 +340,17 @@ func (a *App) InitiateAgentTransfer(r *fastglue.Request) error {
 	return r.SendEnvelope(map[string]string{
 		"status": "transferring",
 	})
+}
+
+// requireOrgCallLog 404s unless the call log belongs to the caller's org. The
+// call manager looks live sessions up by call log ID alone, so handlers that
+// act on a session by ID must check the org first.
+func (a *App) requireOrgCallLog(r *fastglue.Request, callLogID, orgID uuid.UUID) error {
+	var count int64
+	a.DB.Model(&models.CallLog{}).Where("id = ? AND organization_id = ?", callLogID, orgID).Count(&count)
+	if count == 0 {
+		_ = r.SendErrorEnvelope(fasthttp.StatusNotFound, "Call log not found", nil, "")
+		return errEnvelopeSent
+	}
+	return nil
 }

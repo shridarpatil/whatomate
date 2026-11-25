@@ -15,9 +15,9 @@ const REMOVED = [
 ]
 
 export function loadAllowed() {
-  const files = readdirSync(join(root, 'src/vendor/oat/css'))
+  const files = readdirSync(join(root, 'node_modules/@knadh/oat/css'))
     .filter(f => f.endsWith('.css'))
-    .map(f => join(root, 'src/vendor/oat/css', f))
+    .map(f => join(root, 'node_modules/@knadh/oat/css', f))
   files.push(join(root, 'src/assets/layout.css'))
   const allowed = new Set()
   for (const f of files) {

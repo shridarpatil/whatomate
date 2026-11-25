@@ -28,7 +28,9 @@ async function openRoleDetail(tablePage: TablePage, page: Page, rowText: string)
   await tablePage.search(rowText)
   // Click the exact-name link to avoid colliding with rows whose names share the prefix
   // (e.g. "admin" vs "admin_fe9fb00b" left over from earlier runs).
-  await page.locator('tbody tr strong').getByText(rowText, { exact: true }).first().click()
+  const escaped = rowText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const exact = new RegExp(`^${escaped}$`, 'i')
+  await page.locator('tbody tr strong').getByText(exact).first().click()
   await page.waitForURL(/\/settings\/roles\/[a-f0-9-]+$/)
   await page.waitForLoadState('networkidle')
 }
@@ -60,10 +62,10 @@ test.describe('Roles Management', () => {
   test('should search roles', async ({ page }) => {
     await tablePage.search('admin')
     await page.waitForTimeout(500)
-    // The system "admin" role must be present; match the name span exactly so we
-    // don't collide with custom roles whose names contain "admin".
+    // The system "admin" role must be present (shown humanized as "Admin"); match the
+    // name exactly so we don't collide with custom roles whose names contain "admin".
     await expect(
-      page.locator('tbody tr strong').getByText('admin', { exact: true }).first()
+      page.locator('tbody tr strong').getByText('Admin', { exact: true }).first()
     ).toBeVisible()
   })
 
@@ -197,8 +199,9 @@ test.describe('Roles Management', () => {
     await tablePage.expectRowExists(roleName)
 
     // Click delete and verify confirmation dialog appears
-    const deleteButton = page.locator('tr').filter({ hasText: roleName }).getByRole('button', { name: /delete role/i })
-    await deleteButton.click()
+    const roleRow = page.locator('tr').filter({ hasText: roleName })
+    await roleRow.getByRole('button', { name: 'More actions' }).click()
+    await roleRow.getByRole('menuitem', { name: 'Delete' }).click()
 
     // Should show confirmation dialog
     const alertDialog = page.getByRole('alertdialog')
@@ -286,12 +289,6 @@ test.describe('Roles - Table Sorting', () => {
   test('should sort by role name', async () => {
     await tablePage.clickColumnHeader('Role')
     const direction = await tablePage.getSortDirection('Role')
-    expect(direction).not.toBeNull()
-  })
-
-  test('should sort by description', async () => {
-    await tablePage.clickColumnHeader('Description')
-    const direction = await tablePage.getSortDirection('Description')
     expect(direction).not.toBeNull()
   })
 

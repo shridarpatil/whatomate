@@ -17,12 +17,12 @@ test.describe('Profile Page', () => {
 
   test('should show account information card', async () => {
     await expect(profilePage.accountInfoCard).toBeVisible()
-    await expect(profilePage.accountInfoCard).toContainText('Account Information')
+    await expect(profilePage.accountInfoCard).toContainText('Account information')
   })
 
   test('should show change password card', async () => {
     await expect(profilePage.changePasswordCard).toBeVisible()
-    await expect(profilePage.changePasswordCard).toContainText('Change Password')
+    await expect(profilePage.changePasswordCard).toContainText('Change password')
   })
 
   test('should display user name', async () => {
@@ -126,7 +126,7 @@ test.describe('Profile Page Labels', () => {
   })
 
   test('should show New Password label', async () => {
-    await expect(profilePage.changePasswordCard.getByText('New Password', { exact: true })).toBeVisible()
+    await expect(profilePage.changePasswordCard.getByText('New password', { exact: true })).toBeVisible()
   })
 
   test('should show Confirm New Password label', async () => {

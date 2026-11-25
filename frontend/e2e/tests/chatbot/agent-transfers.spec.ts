@@ -113,8 +113,9 @@ test.describe('All Active Tab', () => {
   test('should show table headers', async ({ page }) => {
     const tableRows = await page.locator('tbody tr').count()
     if (tableRows > 0) {
-      await expect(page.getByText('Contact')).toBeVisible()
-      await expect(page.getByText('Phone')).toBeVisible()
+      // Phone is shown under the contact name, not as its own column
+      await expect(page.getByRole('columnheader', { name: 'Contact', exact: true })).toBeVisible()
+      await expect(page.getByRole('columnheader', { name: 'Assigned to', exact: true })).toBeVisible()
     }
   })
 })
@@ -175,12 +176,11 @@ test.describe('Transfer Actions', () => {
     const tableRows = await page.locator('tbody tr').count()
     if (tableRows > 0) {
       const firstRow = page.locator('tbody tr').first()
-      const assignBtn = firstRow.getByRole('button').filter({ has: page.locator('[data-icon="user-plus"]') })
-      if (await assignBtn.isVisible()) {
-        await assignBtn.click()
-        await expect(transfersPage.assignDialog).toBeVisible()
-        await transfersPage.cancelAssignment()
-      }
+      // Assign is each queue row's main action, so it is always present
+      const assignBtn = firstRow.getByRole('button', { name: /^Assign$/i })
+      await assignBtn.click()
+      await expect(transfersPage.assignDialog).toBeVisible()
+      await transfersPage.cancelAssignment()
     }
   })
 })
@@ -199,12 +199,11 @@ test.describe('Assign Dialog', () => {
     const tableRows = await page.locator('tbody tr').count()
     if (tableRows > 0) {
       const firstRow = page.locator('tbody tr').first()
-      const assignBtn = firstRow.getByRole('button').filter({ has: page.locator('[data-icon="user-plus"]') })
-      if (await assignBtn.isVisible()) {
-        await assignBtn.click()
-        await expect(transfersPage.assignDialog.getByText('Team Queue')).toBeVisible()
-        await transfersPage.cancelAssignment()
-      }
+      // Assign is each queue row's main action, so it is always present
+      const assignBtn = firstRow.getByRole('button', { name: /^Assign$/i })
+      await assignBtn.click()
+      await expect(transfersPage.assignDialog.getByText(/^Team queue/i).first()).toBeVisible()
+      await transfersPage.cancelAssignment()
     }
   })
 
@@ -213,12 +212,11 @@ test.describe('Assign Dialog', () => {
     const tableRows = await page.locator('tbody tr').count()
     if (tableRows > 0) {
       const firstRow = page.locator('tbody tr').first()
-      const assignBtn = firstRow.getByRole('button').filter({ has: page.locator('[data-icon="user-plus"]') })
-      if (await assignBtn.isVisible()) {
-        await assignBtn.click()
-        await expect(transfersPage.assignDialog.getByText('Assign to Agent')).toBeVisible()
-        await transfersPage.cancelAssignment()
-      }
+      // Assign is each queue row's main action, so it is always present
+      const assignBtn = firstRow.getByRole('button', { name: /^Assign$/i })
+      await assignBtn.click()
+      await expect(transfersPage.assignDialog.getByText(/^Assign to agent/i).first()).toBeVisible()
+      await transfersPage.cancelAssignment()
     }
   })
 
@@ -227,12 +225,11 @@ test.describe('Assign Dialog', () => {
     const tableRows = await page.locator('tbody tr').count()
     if (tableRows > 0) {
       const firstRow = page.locator('tbody tr').first()
-      const assignBtn = firstRow.getByRole('button').filter({ has: page.locator('[data-icon="user-plus"]') })
-      if (await assignBtn.isVisible()) {
-        await assignBtn.click()
-        await transfersPage.cancelAssignment()
-        await expect(transfersPage.assignDialog).not.toBeVisible()
-      }
+      // Assign is each queue row's main action, so it is always present
+      const assignBtn = firstRow.getByRole('button', { name: /^Assign$/i })
+      await assignBtn.click()
+      await transfersPage.cancelAssignment()
+      await expect(transfersPage.assignDialog).not.toBeVisible()
     }
   })
 })
@@ -248,17 +245,17 @@ test.describe('Tab Navigation', () => {
 
   test('should switch to Queue tab', async () => {
     await transfersPage.switchToQueue()
-    await expect(transfersPage.page.getByRole('heading', { name: /Transfer Queue/i })).toBeVisible()
+    await transfersPage.expectQueueTabVisible()
   })
 
   test('should switch to All Active tab', async () => {
     await transfersPage.switchToAllActive()
-    await expect(transfersPage.page.getByRole('heading', { name: /All Active Transfers/i })).toBeVisible()
+    await transfersPage.expectAllActiveTabVisible()
   })
 
   test('should switch to History tab', async () => {
     await transfersPage.switchToHistory()
-    await expect(transfersPage.page.getByText('Transfer History', { exact: true })).toBeVisible()
+    await transfersPage.expectHistoryTabVisible()
   })
 
   test('should switch back to My Transfers tab', async () => {
@@ -282,14 +279,14 @@ test.describe('SLA Indicators', () => {
   test('should show SLA column in queue', async ({ page }) => {
     const tableRows = await page.locator('tbody tr').count()
     if (tableRows > 0) {
-      await expect(page.getByText('SLA')).toBeVisible()
+      await expect(page.getByRole('columnheader', { name: 'SLA', exact: true })).toBeVisible()
     }
   })
 
   test('should show waiting time column', async ({ page }) => {
     const tableRows = await page.locator('tbody tr').count()
     if (tableRows > 0) {
-      await expect(page.getByText('Waiting')).toBeVisible()
+      await expect(page.getByRole('columnheader', { name: 'Waiting', exact: true })).toBeVisible()
     }
   })
 })

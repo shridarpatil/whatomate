@@ -198,17 +198,20 @@ const router = createRouter({
           meta: { permission: 'canned_responses', stableKey: true }
         },
         {
-          path: 'settings/contacts',
+          path: 'contacts',
           name: 'contacts',
           component: () => import('@/views/settings/ContactsView.vue'),
           meta: { permission: 'contacts' }
         },
         {
-          path: 'settings/contacts/:id',
+          path: 'contacts/:id',
           name: 'contact-detail',
           component: () => import('@/views/settings/ContactDetailView.vue'),
           meta: { permission: 'contacts' }
         },
+        // Contacts moved out of Settings; keep old links working.
+        { path: 'settings/contacts', redirect: '/contacts' },
+        { path: 'settings/contacts/:id', redirect: to => `/contacts/${to.params.id}` },
         {
           path: 'settings/tags',
           name: 'tags',
@@ -342,6 +345,7 @@ const router = createRouter({
 const navigationOrder = [
   { path: '/', permission: 'analytics' },
   { path: '/chat', permission: 'chat' },
+  { path: '/contacts', permission: 'contacts' },
   { path: '/chatbot', permission: 'settings.chatbot', childPaths: [
     { path: '/chatbot', permission: 'settings.chatbot' },
     { path: '/chatbot/keywords', permission: 'chatbot.keywords' },
@@ -364,7 +368,6 @@ const navigationOrder = [
     { path: '/settings/chatbot', permission: 'settings.chatbot' },
     { path: '/settings/accounts', permission: 'accounts' },
     { path: '/settings/canned-responses', permission: 'canned_responses' },
-    { path: '/settings/contacts', permission: 'contacts' },
     { path: '/settings/tags', permission: 'tags' },
     { path: '/settings/teams', permission: 'teams' },
     { path: '/settings/users', permission: 'users' },

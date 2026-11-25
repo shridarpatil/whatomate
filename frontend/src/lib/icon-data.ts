@@ -408,6 +408,11 @@ export const iconData: Record<string, Array<[tag: string, attrs: Record<string, 
   Moon: [
     ["path", {"d":"M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"}],
   ],
+  MoreHorizontal: [
+    ["circle", {"cx":"12","cy":"12","r":"1"}],
+    ["circle", {"cx":"19","cy":"12","r":"1"}],
+    ["circle", {"cx":"5","cy":"12","r":"1"}],
+  ],
   MoreVertical: [
     ["circle", {"cx":"12","cy":"12","r":"1"}],
     ["circle", {"cx":"12","cy":"5","r":"1"}],

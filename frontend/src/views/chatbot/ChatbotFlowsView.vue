@@ -1,12 +1,13 @@
 <script setup lang="ts">
+import ChatbotTabs from '@/components/layout/ChatbotTabs.vue'
 import { ref, onMounted, watch, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { chatbotService } from '@/services/api'
 import { toast } from '@/lib/toast'
-import { PageHeader, DataTable, DeleteConfirmDialog, SearchInput, IconButton, ErrorState, type Column } from '@/components/shared'
+import { PageHeader, DataTable, DeleteConfirmDialog, SearchInput, RowMenu, ErrorState, type Column } from '@/components/shared'
 import { getErrorMessage } from '@/lib/api-utils'
-import { Plus, Pencil, Trash2, Workflow } from '@/lib/icons'
+import { Plus, Trash2, Workflow } from '@/lib/icons'
 import { debounce } from '@/lib/utils'
 
 const { t } = useI18n()
@@ -37,11 +38,10 @@ const pageSize = 20
 
 const columns = computed<Column<ChatbotFlow>[]>(() => [
   { key: 'name', label: t('chatbotFlows.name'), sortable: true },
-  { key: 'description', label: t('chatbotFlows.description') },
   { key: 'trigger_keywords', label: t('chatbotFlows.keywords') },
   { key: 'steps_count', label: t('chatbotFlows.steps'), sortable: true },
   { key: 'status', label: t('chatbotFlows.status'), sortable: true, sortKey: 'enabled' },
-  { key: 'actions', label: t('chatbotFlows.actions'), align: 'right' },
+  { key: 'actions', label: t('common.actions'), align: 'right' },
 ])
 
 const sortKey = ref('name')
@@ -132,23 +132,23 @@ async function confirmDeleteFlow() {
     <PageHeader
       :title="$t('chatbotFlows.title')"
       :icon="Workflow"
-      back-link="/chatbot"
       :breadcrumbs="[{ label: $t('chatbotFlows.backToChatbot'), href: '/chatbot' }, { label: $t('nav.flows') }]"
     >
       <template #actions>
-        <button type="button" class="outline small" @click="createFlow">
+        <button type="button" class="small" @click="createFlow">
           <Plus :size="16" />
           {{ $t('chatbotFlows.createFlow') }}
         </button>
       </template>
     </PageHeader>
+    <ChatbotTabs />
 
     <div class="flex-1 scroll-y p-4">
-      <article class="card">
-        <header class="hstack justify-between flex-wrap gap-4">
-          <h3>{{ $t('chatbotFlows.yourFlows') }}</h3>
-          <SearchInput v-model="searchQuery" :placeholder="$t('chatbotFlows.searchFlows') + '...'" />
-        </header>
+      <article class="card vstack gap-4">
+        <div data-toolbar>
+          <div></div>
+          <SearchInput v-model="searchQuery" :placeholder="$t('chatbotFlows.searchFlows')" />
+        </div>
         <ErrorState
           v-if="error"
           :title="$t('common.loadErrorTitle')"
@@ -174,15 +174,13 @@ async function confirmDeleteFlow() {
           v-model:sort-direction="sortDirection"
         >
           <template #cell-name="{ item: flow }">
-            <strong>{{ flow.name }}</strong>
-          </template>
-          <template #cell-description="{ item: flow }">
-            <span class="text-light truncate">{{ flow.description || $t('chatbotFlows.noDescription') }}</span>
+            <RouterLink :to="`/chatbot/flows/${flow.id}/edit`"><strong>{{ flow.name }}</strong></RouterLink>
+            <small v-if="flow.description" class="text-light block truncate">{{ flow.description }}</small>
           </template>
           <template #cell-trigger_keywords="{ item: flow }">
             <div class="hstack gap-1 flex-wrap">
-              <span v-for="keyword in flow.trigger_keywords?.slice(0, 2)" :key="keyword" class="badge" data-variant="secondary">{{ keyword }}</span>
-              <span v-if="flow.trigger_keywords?.length > 2" class="badge outline">+{{ flow.trigger_keywords.length - 2 }}</span>
+              <span v-for="keyword in flow.trigger_keywords?.slice(0, 2)" :key="keyword" class="badge" data-label>{{ keyword }}</span>
+              <span v-if="flow.trigger_keywords?.length > 2" class="badge" data-label>+{{ flow.trigger_keywords.length - 2 }}</span>
               <small v-if="!flow.trigger_keywords?.length" class="text-light">—</small>
             </div>
           </template>
@@ -196,9 +194,14 @@ async function confirmDeleteFlow() {
             </label>
           </template>
           <template #cell-actions="{ item: flow }">
-            <div class="hstack gap-1 justify-end">
-              <IconButton :icon="Pencil" :label="$t('chatbotFlows.editFlowLabel')" @click="editFlow(flow)" />
-              <IconButton :icon="Trash2" :label="$t('chatbotFlows.deleteFlowLabel')" @click="openDeleteDialog(flow)" />
+            <div class="hstack items-center justify-end gap-1 flex-nowrap">
+              <button type="button" class="outline small" @click="editFlow(flow)">{{ $t('common.edit') }}</button>
+              <RowMenu>
+                <button type="button" role="menuitem" class="ghost" data-variant="danger" @click="openDeleteDialog(flow)">
+                  <Trash2 :size="14" />
+                  {{ $t('common.delete') }}
+                </button>
+              </RowMenu>
             </div>
           </template>
           <template #empty-action>

@@ -76,11 +76,12 @@ type redirectToken struct {
 	ExpiresAt time.Time
 }
 
-// ListCustomActions returns all custom actions for the organization
+// ListCustomActions returns all custom actions for the organization. The chat
+// screen lists them to offer them on a conversation.
 func (a *App) ListCustomActions(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
+	orgID, _, err := a.requireAnyAuth(r, Perm{models.ResourceCustomActions, models.ActionRead}, Perm{models.ResourceChat, models.ActionRead})
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+		return nil
 	}
 
 	pg := parsePagination(r)
@@ -114,9 +115,9 @@ func (a *App) ListCustomActions(r *fastglue.Request) error {
 
 // GetCustomAction returns a single custom action by ID
 func (a *App) GetCustomAction(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
+	orgID, _, err := a.requireAuth(r, models.ResourceCustomActions, models.ActionRead)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+		return nil
 	}
 
 	actionID, err := parsePathUUID(r, "id", "action")
@@ -134,9 +135,9 @@ func (a *App) GetCustomAction(r *fastglue.Request) error {
 
 // CreateCustomAction creates a new custom action
 func (a *App) CreateCustomAction(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
+	orgID, _, err := a.requireAuth(r, models.ResourceCustomActions, models.ActionWrite)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+		return nil
 	}
 
 	var req CustomActionRequest
@@ -181,9 +182,9 @@ func (a *App) CreateCustomAction(r *fastglue.Request) error {
 
 // UpdateCustomAction updates an existing custom action
 func (a *App) UpdateCustomAction(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
+	orgID, _, err := a.requireAuth(r, models.ResourceCustomActions, models.ActionWrite)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+		return nil
 	}
 
 	actionID, err := parsePathUUID(r, "id", "action")
@@ -243,9 +244,9 @@ func (a *App) UpdateCustomAction(r *fastglue.Request) error {
 
 // DeleteCustomAction deletes a custom action
 func (a *App) DeleteCustomAction(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
+	orgID, _, err := a.requireAuth(r, models.ResourceCustomActions, models.ActionDelete)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+		return nil
 	}
 
 	actionID, err := parsePathUUID(r, "id", "action")
@@ -266,11 +267,12 @@ func (a *App) DeleteCustomAction(r *fastglue.Request) error {
 	return r.SendEnvelope(map[string]string{"status": "deleted"})
 }
 
-// ExecuteCustomAction executes a custom action with the given context
+// ExecuteCustomAction executes a custom action with the given context. Run
+// from the chat screen.
 func (a *App) ExecuteCustomAction(r *fastglue.Request) error {
-	orgID, userID, err := a.getOrgAndUserID(r)
+	orgID, userID, err := a.requireAnyAuth(r, Perm{models.ResourceChat, models.ActionWrite}, Perm{models.ResourceCustomActions, models.ActionRead})
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+		return nil
 	}
 
 	actionID, err := parsePathUUID(r, "id", "action")

@@ -17,10 +17,10 @@ function clear() {
 </script>
 
 <template>
-  <div class="hstack gap-1 items-center">
-    <Search />
+  <!-- Icon sits inside the field (layout.css .search-field). -->
+  <div class="search-field">
+    <Search :size="16" aria-hidden="true" class="text-light" />
     <input
-      class="w-auto"
       v-model="model"
       type="text"
       role="searchbox"
@@ -35,7 +35,7 @@ function clear() {
       :aria-label="$t('common.clear')"
       @click="clear"
     >
-      <X />
+      <X :size="14" />
     </button>
   </div>
 </template>

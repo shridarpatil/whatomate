@@ -50,8 +50,9 @@ func (a *App) InitiateOutgoingCall(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid contact_id", nil, "")
 	}
 
+	// Users without contacts:read can only call contacts assigned to them.
 	var contact models.Contact
-	if err := a.DB.Where("id = ? AND organization_id = ?", contactID, orgID).
+	if err := a.scopeAssignedContact(a.DB.Where("id = ? AND organization_id = ?", contactID, orgID), userID, orgID).
 		First(&contact).Error; err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Contact not found", nil, "")
 	}
@@ -76,13 +77,16 @@ func (a *App) InitiateOutgoingCall(r *fastglue.Request) error {
 
 // HangupOutgoingCall handles POST /api/calls/outgoing/{id}/hangup
 func (a *App) HangupOutgoingCall(r *fastglue.Request) error {
-	_, userID, err := a.requireAuth(r, models.ResourceOutgoingCalls, models.ActionWrite)
+	orgID, userID, err := a.requireAuth(r, models.ResourceOutgoingCalls, models.ActionWrite)
 	if err != nil {
 		return nil
 	}
 
 	callLogID, err := parsePathUUID(r, "id", "call log")
 	if err != nil {
+		return nil
+	}
+	if err := a.requireOrgCallLog(r, callLogID, orgID); err != nil {
 		return nil
 	}
 
@@ -132,7 +136,8 @@ func (a *App) SendCallPermissionRequest(r *fastglue.Request) error {
 
 	// Verify contact exists
 	var contact models.Contact
-	if err := a.DB.Where("id = ? AND organization_id = ?", contactID, orgID).First(&contact).Error; err != nil {
+	if err := a.scopeAssignedContact(a.DB.Where("id = ? AND organization_id = ?", contactID, orgID), userID, orgID).
+		First(&contact).Error; err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Contact not found", nil, "")
 	}
 
@@ -178,9 +183,14 @@ func (a *App) SendCallPermissionRequest(r *fastglue.Request) error {
 // GetICEServers handles GET /api/calls/ice-servers
 // Returns the configured ICE (STUN/TURN) servers for the frontend to use in WebRTC peer connections.
 func (a *App) GetICEServers(r *fastglue.Request) error {
-	_, _, err := a.getOrgAndUserID(r)
+	// ICE servers (with TURN credentials) are only needed to set up WebRTC
+	// media: placing an outgoing call or accepting a call transfer.
+	_, _, err := a.requireAnyAuth(r,
+		Perm{models.ResourceOutgoingCalls, models.ActionWrite},
+		Perm{models.ResourceCallTransfers, models.ActionWrite},
+	)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+		return nil
 	}
 
 	type iceServer struct {
@@ -208,7 +218,7 @@ func (a *App) GetICEServers(r *fastglue.Request) error {
 // GetCallPermission handles GET /api/calls/permission/{contactId}?whatsapp_account=X
 // Checks call permission state directly via WhatsApp API.
 func (a *App) GetCallPermission(r *fastglue.Request) error {
-	orgID, _, err := a.requireAuth(r, models.ResourceOutgoingCalls, models.ActionRead)
+	orgID, userID, err := a.requireAuth(r, models.ResourceOutgoingCalls, models.ActionRead)
 	if err != nil {
 		return nil
 	}
@@ -225,7 +235,8 @@ func (a *App) GetCallPermission(r *fastglue.Request) error {
 
 	// Look up contact
 	var contact models.Contact
-	if err := a.DB.Where("id = ? AND organization_id = ?", contactID, orgID).First(&contact).Error; err != nil {
+	if err := a.scopeAssignedContact(a.DB.Where("id = ? AND organization_id = ?", contactID, orgID), userID, orgID).
+		First(&contact).Error; err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Contact not found", nil, "")
 	}
 

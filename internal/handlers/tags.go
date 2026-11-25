@@ -23,9 +23,13 @@ type TagResponse struct {
 	UpdatedAt string `json:"updated_at"`
 }
 
-// ListTags returns all tags for the organization
+// ListTags returns all tags for the organization. Chat and contacts screens
+// list tags to show and assign them, so chat:read or contacts:read also suffice.
 func (a *App) ListTags(r *fastglue.Request) error {
-	orgID, _, err := a.requireAuth(r, models.ResourceTags, models.ActionRead)
+	orgID, _, err := a.requireAnyAuth(r,
+		Perm{models.ResourceTags, models.ActionRead},
+		Perm{models.ResourceChat, models.ActionRead},
+		Perm{models.ResourceContacts, models.ActionRead})
 	if err != nil {
 		return nil
 	}

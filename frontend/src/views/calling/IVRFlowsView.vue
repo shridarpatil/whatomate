@@ -6,11 +6,11 @@ import { useCallingStore } from '@/stores/calling'
 import { accountsService, type IVRFlow, type IVRFlowData } from '@/services/api'
 import Modal from '@/components/oat/Modal.vue'
 import PageHeader from '@/components/shared/PageHeader.vue'
-import { Plus, Pencil, Trash2, Phone, RefreshCw } from '@/lib/icons'
+import { Plus, Trash2, Phone, RefreshCw, Power, PhoneIncoming } from '@/lib/icons'
 import { toast } from '@/lib/toast'
 import ConfirmDialog from '@/components/shared/ConfirmDialog.vue'
 import DeleteConfirmDialog from '@/components/shared/DeleteConfirmDialog.vue'
-import IconButton from '@/components/shared/IconButton.vue'
+import RowMenu from '@/components/shared/RowMenu.vue'
 import ErrorState from '@/components/shared/ErrorState.vue'
 
 const { t } = useI18n()
@@ -48,10 +48,6 @@ function resetCreateForm() {
 function openCreate() {
   resetCreateForm()
   showCreateDialog.value = true
-}
-
-function openEdit(flow: IVRFlow) {
-  router.push({ name: 'ivr-flow-editor', params: { id: flow.id } })
 }
 
 function confirmDelete(flow: IVRFlow) {
@@ -215,7 +211,7 @@ onMounted(async () => {
                 <th>{{ t('calling.account') }}</th>
                 <th>{{ t('calling.status') }}</th>
                 <th>{{ t('calling.options') }}</th>
-                <th class="align-right">{{ t('calling.actions') }}</th>
+                <th class="align-right">{{ t('common.actions') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -227,53 +223,57 @@ onMounted(async () => {
               <template v-else>
                 <tr v-for="flow in store.ivrFlows" :key="flow.id">
                   <td>
-                    <RouterLink :to="{ name: 'ivr-flow-editor', params: { id: flow.id } }" class="unstyled">
-                      <strong>{{ flow.name }}</strong>
-                      <p v-if="flow.description" class="text-light"><small>{{ flow.description }}</small></p>
-                    </RouterLink>
+                    <RouterLink :to="{ name: 'ivr-flow-editor', params: { id: flow.id } }"><strong>{{ flow.name }}</strong></RouterLink>
+                    <small v-if="flow.description" class="text-light block">{{ flow.description }}</small>
                   </td>
                   <td>{{ flow.whatsapp_account }}</td>
                   <td>
-                    <div class="hstack gap-2 flex-wrap">
-                      <button
-                        type="button"
-                        class="badge"
-                        :data-variant="flow.is_active ? 'success' : 'danger'"
-                        :aria-label="flow.is_active ? t('calling.toggleActiveAriaDisable', { name: flow.name }) : t('calling.toggleActiveAriaEnable', { name: flow.name })"
-                        @click="confirmToggleActive(flow)"
-                      >
+                    <div class="hstack gap-1 flex-wrap">
+                      <span class="badge" :data-status="flow.is_active ? 'success' : 'neutral'">
                         {{ flow.is_active ? t('calling.enabled') : t('calling.disabled') }}
-                      </button>
-                      <button
-                        v-if="flow.is_active"
-                        type="button"
-                        class="badge"
-                        :data-variant="flow.is_call_start ? 'success' : 'secondary'"
-                        :aria-label="flow.is_call_start ? t('calling.toggleCallStartAriaDisable', { name: flow.name }) : t('calling.toggleCallStartAriaEnable', { name: flow.name })"
-                        @click="confirmToggleCallStart(flow)"
-                      >
-                        {{ flow.is_call_start ? t('calling.callStart') : t('calling.secondary') }}
-                      </button>
-                      <span v-if="flow.is_active && flow.is_outgoing_end" class="badge" data-variant="success">
-                        {{ t('calling.outgoingEnd') }}
                       </span>
+                      <span v-if="flow.is_active && flow.is_call_start" class="badge" data-label>{{ t('calling.callStart') }}</span>
+                      <span v-if="flow.is_active && flow.is_outgoing_end" class="badge" data-label>{{ t('calling.outgoingEnd') }}</span>
                     </div>
                   </td>
-                  <td>
-                    {{ flow.menu?.nodes?.length || 0 }} nodes
+                  <td class="text-light">
+                    {{ t('calling.nodesCount', { count: flow.menu?.nodes?.length || 0 }) }}
                   </td>
                   <td>
-                    <div class="hstack gap-2 justify-end">
-                      <IconButton
-                        :icon="Pencil"
-                        :label="t('calling.editFlowAriaLabel', { name: flow.name })"
-                        @click="openEdit(flow)"
-                      />
-                      <IconButton
-                        :icon="Trash2"
-                        :label="t('calling.deleteFlowAriaLabel', { name: flow.name })"
-                        @click="confirmDelete(flow)"
-                      />
+                    <div class="hstack items-center justify-end gap-1 flex-nowrap">
+                      <RouterLink
+                        :to="{ name: 'ivr-flow-editor', params: { id: flow.id } }"
+                        class="button outline small"
+                        :aria-label="t('calling.editFlowAriaLabel', { name: flow.name })"
+                      >{{ t('common.edit') }}</RouterLink>
+                      <RowMenu>
+                        <button type="button" role="menuitem" class="ghost" @click="confirmToggleActive(flow)">
+                          <Power :size="14" />
+                          {{ flow.is_active ? t('common.disable') : t('common.enable') }}
+                        </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          class="ghost"
+                          :disabled="!flow.is_active"
+                          :title="!flow.is_active ? t('calling.callStartNeedsEnabled') : undefined"
+                          @click="confirmToggleCallStart(flow)"
+                        >
+                          <PhoneIncoming :size="14" />
+                          {{ flow.is_call_start ? t('calling.unsetCallStart') : t('calling.setCallStart') }}
+                        </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          class="ghost"
+                          data-variant="danger"
+                          :aria-label="t('calling.deleteFlowAriaLabel', { name: flow.name })"
+                          @click="confirmDelete(flow)"
+                        >
+                          <Trash2 :size="14" />
+                          {{ t('common.delete') }}
+                        </button>
+                      </RowMenu>
                     </div>
                   </td>
                 </tr>

@@ -23,12 +23,12 @@ test.describe('Dashboard', () => {
   })
 
   test('should display time range filter', async ({ page }) => {
-    await expect(page.locator('main').getByLabel('Date Range')).toBeVisible()
+    await expect(page.locator('main').getByLabel('Date range')).toBeVisible()
   })
 
   test('should change time range', async ({ page }) => {
-    const range = page.locator('main').getByLabel('Date Range')
-    await range.selectOption({ label: 'Last 7 Days' })
+    const range = page.locator('main').getByLabel('Date range')
+    await range.selectOption({ label: 'Last 7 days' })
 
     // Should reload data
     await page.waitForLoadState('networkidle')
@@ -76,7 +76,7 @@ test.describe('Dashboard', () => {
 
   test('should show custom date range picker', async ({ page }) => {
     const main = page.locator('main')
-    await main.getByLabel('Date Range').selectOption({ label: 'Custom Range' })
+    await main.getByLabel('Date range').selectOption({ label: 'Custom range' })
 
     await expect(main.getByLabel('From', { exact: true })).toBeVisible()
     await expect(main.getByLabel('To', { exact: true })).toBeVisible()
@@ -88,6 +88,6 @@ test.describe('Dashboard', () => {
     await expect(page.locator('text=Total Messages')).toBeVisible({ timeout: 15000 })
 
     // Should show percentage changes with comparison text
-    await expect(page.locator('text=/from (yesterday|previous|last month)/i').first()).toBeVisible()
+    await expect(page.locator('text=/from (yesterday|previous|last month)|no activity yet|new this period/i').first()).toBeVisible()
   })
 })

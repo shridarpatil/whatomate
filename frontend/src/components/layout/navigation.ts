@@ -46,7 +46,7 @@ export interface NavSection {
 export const navigationSections: NavSection[] = [
   {
     label: 'nav.sectionMain',
-    permissions: ['analytics', 'chat'],
+    permissions: ['analytics', 'chat', 'contacts'],
     items: [
       {
         name: 'nav.dashboard',
@@ -59,6 +59,12 @@ export const navigationSections: NavSection[] = [
         path: '/chat',
         icon: MessageSquare,
         permission: 'chat'
+      },
+      {
+        name: 'nav.contacts',
+        path: '/contacts',
+        icon: Contact,
+        permission: 'contacts'
       },
     ]
   },
@@ -75,7 +81,7 @@ export const navigationSections: NavSection[] = [
         children: [
           { name: 'nav.overview', path: '/chatbot', icon: Bot, permission: 'settings.chatbot' },
           { name: 'nav.keywords', path: '/chatbot/keywords', icon: Key, permission: 'chatbot.keywords' },
-          { name: 'nav.flows', path: '/chatbot/flows', icon: Workflow, permission: 'flows.chatbot' },
+          { name: 'nav.botFlows', path: '/chatbot/flows', icon: Workflow, permission: 'flows.chatbot' },
           { name: 'nav.aiContexts', path: '/chatbot/ai', icon: Sparkles, permission: 'chatbot.ai' },
           { name: 'nav.transfers', path: '/chatbot/transfers', icon: UserX, permission: 'transfers' }
         ]
@@ -93,7 +99,7 @@ export const navigationSections: NavSection[] = [
         permission: 'templates'
       },
       {
-        name: 'nav.flows',
+        name: 'nav.whatsappFlows',
         path: '/flows',
         icon: Workflow,
         permission: 'flows.whatsapp'
@@ -129,7 +135,7 @@ export const navigationSections: NavSection[] = [
   },
   {
     label: '',
-    permissions: ['settings.general', 'settings.chatbot', 'accounts', 'contacts', 'canned_responses', 'tags', 'teams', 'users', 'roles', 'api_keys', 'webhooks', 'custom_actions', 'settings.sso', 'audit_logs'],
+    permissions: ['settings.general', 'settings.chatbot', 'accounts', 'canned_responses', 'tags', 'teams', 'users', 'roles', 'api_keys', 'webhooks', 'custom_actions', 'settings.sso', 'audit_logs'],
     pinBottom: true,
     items: [
       {
@@ -137,17 +143,18 @@ export const navigationSections: NavSection[] = [
         path: '/settings',
         icon: Settings,
         permission: 'settings.general',
-        childPermissions: ['settings.general', 'settings.chatbot', 'accounts', 'contacts', 'canned_responses', 'tags', 'teams', 'users', 'roles', 'api_keys', 'webhooks', 'custom_actions', 'settings.sso', 'audit_logs'],
+        childPermissions: ['settings.general', 'settings.chatbot', 'accounts', 'canned_responses', 'tags', 'teams', 'users', 'roles', 'api_keys', 'webhooks', 'custom_actions', 'settings.sso', 'audit_logs'],
+        // Settings pages get their own grouped menu inside the page (settingsSections),
+        // so the sidebar stays short. `children` is kept for permission fallback only.
         children: [
           { name: 'nav.general', path: '/settings', icon: Settings, permission: 'settings.general' },
-          { name: 'nav.chatbot', path: '/settings/chatbot', icon: Bot, permission: 'settings.chatbot' },
           { name: 'nav.accounts', path: '/settings/accounts', icon: Users, permission: 'accounts' },
-          { name: 'nav.contacts', path: '/settings/contacts', icon: Contact, permission: 'contacts' },
+          { name: 'nav.users', path: '/settings/users', icon: Users, permission: 'users' },
+          { name: 'nav.teams', path: '/settings/teams', icon: Users, permission: 'teams' },
+          { name: 'nav.roles', path: '/settings/roles', icon: Shield, permission: 'roles' },
           { name: 'nav.cannedResponses', path: '/settings/canned-responses', icon: MessageSquareText, permission: 'canned_responses' },
           { name: 'nav.tags', path: '/settings/tags', icon: Tags, permission: 'tags' },
-          { name: 'nav.teams', path: '/settings/teams', icon: Users, permission: 'teams' },
-          { name: 'nav.users', path: '/settings/users', icon: Users, permission: 'users' },
-          { name: 'nav.roles', path: '/settings/roles', icon: Shield, permission: 'roles' },
+          { name: 'nav.chatbot', path: '/settings/chatbot', icon: Bot, permission: 'settings.chatbot' },
           { name: 'nav.apiKeys', path: '/settings/api-keys', icon: Key, permission: 'api_keys' },
           { name: 'nav.webhooks', path: '/settings/webhooks', icon: Webhook, permission: 'webhooks' },
           { name: 'nav.customActions', path: '/settings/custom-actions', icon: Zap, permission: 'custom_actions' },
@@ -157,6 +164,14 @@ export const navigationSections: NavSection[] = [
       }
     ]
   }
+]
+
+/** Groups for the in-page Settings menu (SettingsNav.vue). */
+export const settingsSections: { label: string; paths: string[] }[] = [
+  { label: 'nav.settingsWorkspace', paths: ['/settings', '/settings/accounts', '/settings/users', '/settings/teams', '/settings/roles'] },
+  { label: 'nav.settingsMessaging', paths: ['/settings/canned-responses', '/settings/tags', '/settings/chatbot'] },
+  { label: 'nav.settingsIntegrations', paths: ['/settings/api-keys', '/settings/webhooks', '/settings/custom-actions', '/settings/sso'] },
+  { label: 'nav.settingsSecurity', paths: ['/settings/audit-logs'] },
 ]
 
 // Flat list for backward compatibility (used by AppLayout computed)

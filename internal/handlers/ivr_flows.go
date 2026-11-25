@@ -613,8 +613,14 @@ func (a *App) ServeIVRAudio(r *fastglue.Request) error {
 
 // UploadOrgAudio handles multipart audio file uploads for org-level hold music and ringback tones.
 // The "type" query parameter must be "hold_music" or "ringback".
+// It saves hold_music_file/ringback_file on the org's calling settings, which
+// UpdateOrganizationSettings gates on settings.general:write; organizations:write
+// (the previous requirement) is kept so existing roles don't lose access.
 func (a *App) UploadOrgAudio(r *fastglue.Request) error {
-	orgID, _, err := a.requireAuth(r, models.ResourceOrganizations, models.ActionWrite)
+	orgID, _, err := a.requireAnyAuth(r,
+		Perm{models.ResourceSettingsGeneral, models.ActionWrite},
+		Perm{models.ResourceOrganizations, models.ActionWrite},
+	)
 	if err != nil {
 		return nil
 	}

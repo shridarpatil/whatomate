@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { PageHeader, SearchInput, DataTable, DeleteConfirmDialog, IconButton, ErrorState, type Column } from '@/components/shared'
+import { PageHeader, SearchInput, DataTable, DeleteConfirmDialog, RowMenu, ErrorState, type Column } from '@/components/shared'
+import { humanize } from '@/lib/status'
 import { useTeamsStore } from '@/stores/teams'
 import { useAuthStore } from '@/stores/auth'
 import { useOrganizationsStore } from '@/stores/organizations'
 import { type Team } from '@/services/api'
 import { toast } from '@/lib/toast'
-import { Plus, Pencil, Trash2, Users, RotateCcw, Scale, Hand } from '@/lib/icons'
+import { Plus, Trash2, Users } from '@/lib/icons'
 import { getErrorMessage } from '@/lib/api-utils'
 import { debounce, formatDate } from '@/lib/utils'
 import { ASSIGNMENT_STRATEGIES, getLabelFromValue } from '@/lib/constants'
@@ -57,8 +58,7 @@ const columns = computed<Column<Team>[]>(() => [
   { key: 'actions', label: t('common.actions'), align: 'right' },
 ])
 
-function getStrategyLabel(strategy: string): string { return getLabelFromValue(ASSIGNMENT_STRATEGIES, strategy) }
-function getStrategyIcon(strategy: string) { return { round_robin: RotateCcw, load_balanced: Scale, manual: Hand }[strategy] || RotateCcw }
+function getStrategyLabel(strategy: string): string { return humanize(getLabelFromValue(ASSIGNMENT_STRATEGIES, strategy)) }
 
 function handlePageChange(page: number) {
   currentPage.value = page
@@ -111,9 +111,9 @@ async function confirmDelete() {
 
 <template>
   <div class="flex flex-col h-full">
-    <PageHeader :title="$t('teams.title')" :icon="Users" back-link="/settings" :breadcrumbs="breadcrumbs">
+    <PageHeader :title="$t('teams.title')" :description="$t('teams.subtitle')" :icon="Users" :breadcrumbs="breadcrumbs">
       <template #actions>
-        <RouterLink v-if="canWriteTeams" to="/settings/teams/new" class="button outline small"><Plus :size="16" />{{ $t('teams.addTeam') }}</RouterLink>
+        <RouterLink v-if="canWriteTeams" to="/settings/teams/new" class="button small"><Plus :size="16" />{{ $t('teams.addTeam') }}</RouterLink>
       </template>
     </PageHeader>
 
@@ -127,40 +127,40 @@ async function confirmDelete() {
     />
 
     <div v-else class="flex-1 scroll-y p-4">
-      <article class="card">
-        <header class="hstack justify-between flex-wrap gap-4">
-          <h3>{{ $t('teams.yourTeams') }}</h3>
-          <SearchInput v-model="searchQuery" :placeholder="$t('teams.searchTeams') + '...'" />
-        </header>
+      <article class="card vstack gap-4">
+        <div data-toolbar>
+          <div></div>
+          <SearchInput v-model="searchQuery" :placeholder="$t('teams.searchTeams')" />
+        </div>
         <DataTable :items="teams" :columns="columns" :is-loading="isLoading" :empty-icon="Users" :empty-title="searchQuery ? $t('teams.noMatchingTeams') : $t('teams.noTeamsYet')" :empty-description="searchQuery ? $t('teams.noMatchingTeamsDesc') : $t('teams.noTeamsYetDesc')" v-model:sort-key="sortKey" v-model:sort-direction="sortDirection" server-pagination :current-page="currentPage" :total-items="totalItems" :page-size="pageSize" item-name="teams" @page-change="handlePageChange">
           <template #empty-action>
             <RouterLink v-if="canWriteTeams" to="/settings/teams/new" class="button outline small"><Plus :size="16" />{{ $t('teams.addTeam') }}</RouterLink>
           </template>
           <template #cell-team="{ item: team }">
-            <RouterLink :to="`/settings/teams/${team.id}`" class="hstack gap-2">
-              <Users :size="20" />
-              <strong class="truncate">{{ team.name }}</strong>
-            </RouterLink>
+            <RouterLink :to="`/settings/teams/${team.id}`"><strong class="truncate">{{ team.name }}</strong></RouterLink>
+            <small v-if="team.description" class="text-light block truncate">{{ team.description }}</small>
           </template>
           <template #cell-strategy="{ item: team }">
-            <div class="hstack gap-2">
-              <component :is="getStrategyIcon(team.assignment_strategy)" :size="16" />
-              <span>{{ getStrategyLabel(team.assignment_strategy) }}</span>
-            </div>
+            <span class="badge" data-label>{{ getStrategyLabel(team.assignment_strategy) }}</span>
           </template>
           <template #cell-members="{ item: team }">
-            <span class="badge outline">{{ team.member_count || 0 }}</span>
+            {{ team.member_count || 0 }}
           </template>
           <template #cell-status="{ item: team }">
-            <span class="badge" :data-variant="team.is_active ? 'success' : 'secondary'">{{ team.is_active ? $t('common.active') : $t('common.inactive') }}</span>
+            <span class="badge" :data-status="team.is_active ? 'success' : 'neutral'">{{ team.is_active ? $t('common.active') : $t('common.inactive') }}</span>
           </template>
           <template #cell-created="{ item: team }">
             <span class="text-light">{{ formatDate(team.created_at) }}</span>
           </template>
           <template #cell-actions="{ item: team }">
-            <div class="hstack gap-1 justify-end">
-              <RouterLink :to="`/settings/teams/${team.id}`" class="button ghost icon" :title="$t('teams.editTeamTooltip')" :aria-label="$t('teams.editTeamTooltip')"><Pencil :size="16" /></RouterLink>
-              <IconButton v-if="canDeleteTeams" :icon="Trash2" :label="$t('teams.deleteTeamTooltip')" @click="openDeleteDialog(team)" />
+            <div class="hstack items-center justify-end gap-1 flex-nowrap">
+              <RouterLink :to="`/settings/teams/${team.id}`" class="button outline small">{{ $t('common.edit') }}</RouterLink>
+              <RowMenu v-if="canDeleteTeams">
+                <button type="button" role="menuitem" class="ghost" data-variant="danger" @click="openDeleteDialog(team)">
+                  <Trash2 :size="14" />
+                  {{ $t('common.delete') }}
+                </button>
+              </RowMenu>
             </div>
           </template>
         </DataTable>

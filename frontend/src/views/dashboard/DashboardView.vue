@@ -103,7 +103,7 @@ const SHORTCUT_REGISTRY = computed(() => ({
   campaigns: { label: t('nav.campaigns'), to: '/campaigns', icon: Megaphone },
   templates: { label: t('nav.templates'), to: '/templates', icon: FileText },
   chatbot: { label: t('nav.chatbot'), to: '/chatbot', icon: Bot },
-  contacts: { label: t('nav.contacts'), to: '/settings/contacts', icon: Contact },
+  contacts: { label: t('nav.contacts'), to: '/contacts', icon: Contact },
   flows: { label: t('nav.flows'), to: '/flows', icon: Workflow },
   transfers: { label: t('nav.transfers'), to: '/chatbot/transfers', icon: UserX },
   agentAnalytics: { label: t('nav.agentAnalytics'), to: '/analytics/agents', icon: BarChart3 },
@@ -161,8 +161,8 @@ const getChart = (widget: DashboardWidget): WidgetChart => {
   const empty = { kind, labels: [] as string[], series: [] as ChartSeries[], values: [] as number[] }
   if (!data) return empty
 
-  // Grouped line chart: one series per group
-  if (kind === 'line' && groupedSeries && groupedSeries.datasets.length > 0) {
+  // Grouped line or bar chart: a time series per group (e.g. incoming and outgoing per day)
+  if (kind !== 'pie' && groupedSeries && groupedSeries.datasets.length > 0) {
     return {
       ...empty,
       labels: groupedSeries.labels,
@@ -170,7 +170,8 @@ const getChart = (widget: DashboardWidget): WidgetChart => {
     }
   }
 
-  // Pie/bar with group_by use data_points (group -> count)
+  // Pie with group_by uses data_points (group -> count for the period); so does a bar
+  // chart from a server that predates grouped bar series.
   if (kind === 'pie') {
     const source = dataPoints.length > 0 ? dataPoints : chartData
     return { ...empty, labels: source.map(d => d.label), values: source.map(d => d.value) }
@@ -700,7 +701,7 @@ onMounted(() => {
       </div>
 
       <!-- Widget grid -->
-      <div v-else-if="items.length > 0" ref="gridEl" class="row" :data-layout-editing="isReorderMode || undefined">
+      <div v-else-if="items.length > 0" ref="gridEl" class="row" data-dashboard-grid :data-layout-editing="isReorderMode || undefined">
         <div
           v-for="{ p, widget, index } in items"
           :key="widget.id"
@@ -775,7 +776,12 @@ onMounted(() => {
               <div v-if="isWidgetDataLoading" role="status" class="skeleton line" aria-busy="true"></div>
               <h2 v-else data-widget-value>{{ formatNumber(widgetData[widget.id]?.value || 0) }}</h2>
               <small v-if="widget.show_change && widgetData[widget.id]" class="hstack items-center gap-1" data-widget-change>
+                <!-- Nothing in the previous period: a percentage would be meaningless. -->
+                <span v-if="!widgetData[widget.id].prev_value" data-trend="flat">
+                  {{ widgetData[widget.id].value ? $t('dashboard.newThisPeriod') : $t('dashboard.noActivityYet') }}
+                </span>
                 <span
+                  v-else
                   class="hstack items-center gap-1"
                   :data-trend="widgetData[widget.id].change > 0 ? 'up' : widgetData[widget.id].change < 0 ? 'down' : 'flat'"
                 >
@@ -785,7 +791,7 @@ onMounted(() => {
                   />
                   {{ Math.abs(widgetData[widget.id].change || 0).toFixed(1) }}%
                 </span>
-                {{ comparisonPeriodLabel }}
+                <template v-if="widgetData[widget.id].prev_value">{{ comparisonPeriodLabel }}</template>
               </small>
             </template>
 
@@ -865,15 +871,8 @@ onMounted(() => {
                       </small>
                     </div>
                     <p class="text-light truncate">{{ row.sub_label }}</p>
-                    <div class="hstack gap-2">
-                      <span v-if="row.direction" class="badge" :data-variant="row.direction === 'incoming' ? 'success' : 'secondary'" :data-pill="row.direction === 'incoming' ? 'green' : 'blue'">{{ row.direction }}</span>
-                      <span
-                        v-if="row.status"
-                        class="badge"
-                        :data-variant="row.status === 'read' ? 'success' : row.status === 'failed' ? 'danger' : 'secondary'"
-                        :data-pill="row.status === 'delivered' ? 'blue' : row.status === 'read' ? 'green' : row.status === 'failed' ? 'red' : 'grey'"
-                      >{{ row.status }}</span>
-                    </div>
+                    <!-- Direction shows in the avatar colour; only a failed send needs a badge. -->
+                    <span v-if="row.status === 'failed'" class="badge" data-status="danger">{{ $t('common.failed') }}</span>
                   </div>
                 </li>
               </ul>

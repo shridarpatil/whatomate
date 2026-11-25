@@ -28,7 +28,7 @@ type ConversationNoteResponse struct {
 
 // ListConversationNotes returns paginated notes for a contact (latest at bottom).
 func (a *App) ListConversationNotes(r *fastglue.Request) error {
-	orgID, _, err := a.requireAuth(r, models.ResourceChat, models.ActionRead)
+	orgID, userID, err := a.requireAuth(r, models.ResourceChat, models.ActionRead)
 	if err != nil {
 		return nil
 	}
@@ -36,6 +36,9 @@ func (a *App) ListConversationNotes(r *fastglue.Request) error {
 	contactID, err := parsePathUUID(r, "id", "contact")
 	if err != nil {
 		return nil
+	}
+	if !a.canAccessContact(contactID, userID, orgID) {
+		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Contact not found", nil, "")
 	}
 
 	pg := parsePaginationWithDefaults(r, 30, 100)
@@ -53,7 +56,7 @@ func (a *App) ListConversationNotes(r *fastglue.Request) error {
 		beforeID, err := uuid.Parse(beforeIDStr)
 		if err == nil {
 			var beforeNote models.ConversationNote
-			if err := a.DB.Where("id = ?", beforeID).First(&beforeNote).Error; err == nil {
+			if err := a.DB.Where("id = ? AND organization_id = ?", beforeID, orgID).First(&beforeNote).Error; err == nil {
 				query = query.Where("created_at < ?", beforeNote.CreatedAt)
 			}
 		}
@@ -97,6 +100,9 @@ func (a *App) CreateConversationNote(r *fastglue.Request) error {
 	contactID, err := parsePathUUID(r, "id", "contact")
 	if err != nil {
 		return nil
+	}
+	if !a.canAccessContact(contactID, userID, orgID) {
+		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Contact not found", nil, "")
 	}
 
 	var req ConversationNoteRequest
@@ -161,6 +167,10 @@ func (a *App) UpdateConversationNote(r *fastglue.Request) error {
 		return nil
 	}
 
+	if !a.canAccessContact(note.ContactID, userID, orgID) {
+		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Note not found", nil, "")
+	}
+
 	// Only the creator can update their own notes
 	if note.CreatedByID != userID {
 		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "You can only edit your own notes", nil, "")
@@ -222,6 +232,10 @@ func (a *App) DeleteConversationNote(r *fastglue.Request) error {
 		return nil
 	}
 
+	if !a.canAccessContact(note.ContactID, userID, orgID) {
+		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Note not found", nil, "")
+	}
+
 	// Only the creator can delete their own notes
 	if note.CreatedByID != userID {
 		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "You can only delete your own notes", nil, "")
@@ -247,6 +261,18 @@ func (a *App) DeleteConversationNote(r *fastglue.Request) error {
 	}
 
 	return r.SendEnvelope(map[string]string{"message": "Note deleted"})
+}
+
+// canAccessContact reports whether the user may see the contact's
+// conversation: users with contacts:read reach any contact in the org, others
+// only contacts assigned to them (same rule as the chat, see
+// scopeAssignedContact).
+func (a *App) canAccessContact(contactID, userID, orgID uuid.UUID) bool {
+	if a.HasPermission(userID, models.ResourceContacts, models.ActionRead, orgID) {
+		return true
+	}
+	query := a.DB.Where("id = ? AND organization_id = ?", contactID, orgID)
+	return a.scopeAssignedContact(query, userID, orgID).First(&models.Contact{}).Error == nil
 }
 
 func noteToResponse(n models.ConversationNote) ConversationNoteResponse {

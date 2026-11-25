@@ -584,7 +584,8 @@ const messagingTiles = computed<StatTile[]>(() => {
       key: 'rate',
       icon: TrendingUp,
       label: t('metaInsights.deliveryRate'),
-      value: `${totals.sent > 0 ? (totals.delivered / totals.sent * 100).toFixed(1) : 0}%`
+      // No messages sent: a rate would be meaningless, so show a dash.
+      value: totals.sent > 0 ? `${(totals.delivered / totals.sent * 100).toFixed(1)}%` : '—'
     }
   ]
 })
@@ -725,13 +726,9 @@ function callTiles(group: { currency: string; agg: ReturnType<typeof aggregateCa
               <template v-else-if="aggregatedData">
                 <div class="row">
                 <div v-for="tile in messagingTiles" :key="tile.key" class="col-4">
-                  <article class="card">
-                    <div class="hstack items-center gap-2 text-light">
-                      <component :is="tile.icon" v-if="tile.icon" :size="16" />
-                      <span v-else class="badge" data-variant="secondary">{{ tile.badge }}</span>
-                      <small>{{ tile.label }}</small>
-                    </div>
-                    <h3>{{ tile.value }}</h3>
+                  <article class="card vstack" data-widget="number">
+                    <header class="hstack justify-between"><h4>{{ tile.label }}</h4><span v-if="tile.badge" class="badge" data-label>{{ tile.badge }}</span></header>
+                    <p data-widget-value>{{ tile.value }}</p>
                   </article>
                 </div>
               </div>
@@ -745,7 +742,7 @@ function callTiles(group: { currency: string; agg: ReturnType<typeof aggregateCa
                     :height="320"
                     :caption="$t('metaInsights.messageDeliveryOverTime')"
                   />
-                  <p v-else class="text-light">{{ $t('metaInsights.noDataForPeriod') }}</p>
+                  <div v-else data-empty><span>{{ $t('metaInsights.noDataForPeriod') }}</span></div>
                 </article>
               </template>
               <p v-else class="text-light align-center p-4">{{ $t('metaInsights.noMessagingData') }}</p>
@@ -764,13 +761,9 @@ function callTiles(group: { currency: string; agg: ReturnType<typeof aggregateCa
               </div>
                   <div class="row">
                 <div v-for="tile in pricingTiles(group)" :key="tile.key" class="col-6">
-                  <article class="card">
-                    <div class="hstack items-center gap-2 text-light">
-                      <component :is="tile.icon" v-if="tile.icon" :size="16" />
-                      <span v-else class="badge" data-variant="secondary">{{ tile.badge }}</span>
-                      <small>{{ tile.label }}</small>
-                    </div>
-                    <h3>{{ tile.value }}</h3>
+                  <article class="card vstack" data-widget="number">
+                    <header class="hstack justify-between"><h4>{{ tile.label }}</h4><span v-if="tile.badge" class="badge" data-label>{{ tile.badge }}</span></header>
+                    <p data-widget-value>{{ tile.value }}</p>
                   </article>
                 </div>
               </div>
@@ -784,7 +777,7 @@ function callTiles(group: { currency: string; agg: ReturnType<typeof aggregateCa
                       :height="320"
                       :caption="$t('metaInsights.messagesCostByCategory')"
                     />
-                    <p v-else class="text-light">{{ $t('metaInsights.noDataForPeriod') }}</p>
+                    <div v-else data-empty><span>{{ $t('metaInsights.noDataForPeriod') }}</span></div>
                   </article>
 
                   <!-- Detailed Breakdown -->
@@ -889,13 +882,9 @@ function callTiles(group: { currency: string; agg: ReturnType<typeof aggregateCa
               </div>
                   <div class="row">
                 <div v-for="tile in templateTiles(group)" :key="tile.key" class="col-4">
-                  <article class="card">
-                    <div class="hstack items-center gap-2 text-light">
-                      <component :is="tile.icon" v-if="tile.icon" :size="16" />
-                      <span v-else class="badge" data-variant="secondary">{{ tile.badge }}</span>
-                      <small>{{ tile.label }}</small>
-                    </div>
-                    <h3>{{ tile.value }}</h3>
+                  <article class="card vstack" data-widget="number">
+                    <header class="hstack justify-between"><h4>{{ tile.label }}</h4><span v-if="tile.badge" class="badge" data-label>{{ tile.badge }}</span></header>
+                    <p data-widget-value>{{ tile.value }}</p>
                   </article>
                 </div>
               </div>
@@ -974,13 +963,9 @@ function callTiles(group: { currency: string; agg: ReturnType<typeof aggregateCa
               </div>
                   <div class="row">
                 <div v-for="tile in callTiles(group)" :key="tile.key" class="col-4">
-                  <article class="card">
-                    <div class="hstack items-center gap-2 text-light">
-                      <component :is="tile.icon" v-if="tile.icon" :size="16" />
-                      <span v-else class="badge" data-variant="secondary">{{ tile.badge }}</span>
-                      <small>{{ tile.label }}</small>
-                    </div>
-                    <h3>{{ tile.value }}</h3>
+                  <article class="card vstack" data-widget="number">
+                    <header class="hstack justify-between"><h4>{{ tile.label }}</h4><span v-if="tile.badge" class="badge" data-label>{{ tile.badge }}</span></header>
+                    <p data-widget-value>{{ tile.value }}</p>
                   </article>
                 </div>
               </div>
@@ -994,7 +979,7 @@ function callTiles(group: { currency: string; agg: ReturnType<typeof aggregateCa
                       :height="320"
                       :caption="$t('metaInsights.callsOverTime')"
                     />
-                    <p v-else class="text-light">{{ $t('metaInsights.noDataForPeriod') }}</p>
+                    <div v-else data-empty><span>{{ $t('metaInsights.noDataForPeriod') }}</span></div>
                   </article>
                 </div>
               </template>

@@ -8,6 +8,7 @@ import { wsService } from '@/services/websocket'
 import { authService } from '@/services/api'
 import OrganizationSwitcher from './OrganizationSwitcher.vue'
 import UserMenu from './UserMenu.vue'
+import SettingsNav from './SettingsNav.vue'
 import ActiveCallPanel from '@/components/calling/ActiveCallPanel.vue'
 import { ScrollToTop } from '@/components/shared'
 import { navigationSections, type NavSection } from './navigation'
@@ -80,6 +81,9 @@ const navSections = computed(() => {
     .filter(section => section.items.length > 0)
 })
 
+// Settings pages carry their own grouped menu (SettingsNav) instead of a sidebar sub-list.
+const isSettings = computed(() => route.path === '/settings' || route.path.startsWith('/settings/'))
+
 const mainSections = computed(() => navSections.value.filter(s => !s.pinBottom))
 const bottomSections = computed(() => navSections.value.filter(s => s.pinBottom))
 
@@ -148,7 +152,7 @@ const handleLogout = async () => {
               </RouterLink>
 
               <!-- Submenu items -->
-              <ul v-if="item.children && item.active">
+              <ul v-if="item.children && item.active && item.path !== '/chatbot'">
                 <li v-for="child in item.children" :key="child.path">
                   <RouterLink
                     :to="child.path"
@@ -179,7 +183,7 @@ const handleLogout = async () => {
                 <span>{{ $t(item.name) }}</span>
               </RouterLink>
 
-              <ul v-if="item.children && item.active">
+              <ul v-if="item.children && item.active && item.path !== '/settings'">
                 <li v-for="child in item.children" :key="child.path">
                   <RouterLink
                     :to="child.path"
@@ -203,11 +207,16 @@ const handleLogout = async () => {
 
     <!-- Main content -->
     <main id="main-content" class="scroll-y min-h-0">
-      <RouterView v-slot="{ Component, route: viewRoute }">
-        <Transition name="page" mode="out-in">
-          <component :is="Component" :key="viewRoute.meta.stableKey ? String(viewRoute.name) : viewRoute.path" />
-        </Transition>
-      </RouterView>
+      <div :class="isSettings ? 'settings-shell' : 'h-full'">
+        <SettingsNav v-if="isSettings" />
+        <div class="h-full min-h-0 min-w-0">
+          <RouterView v-slot="{ Component, route: viewRoute }">
+            <Transition name="page" mode="out-in">
+              <component :is="Component" :key="viewRoute.meta.stableKey ? String(viewRoute.name) : viewRoute.path" />
+            </Transition>
+          </RouterView>
+        </div>
+      </div>
       <ActiveCallPanel />
       <ScrollToTop />
     </main>

@@ -75,9 +75,12 @@ test.describe('Keyword Rules - List View', () => {
     expect(id, 'API seed must succeed').toBeTruthy()
     await keywordsPage.goto()
 
-    const deleteBtn = page.locator('tbody').getByRole('button', { name: /delete/i }).first()
-    await expect(deleteBtn).toBeVisible({ timeout: 10000 })
-    await deleteBtn.click()
+    // Delete lives in the row's "More actions" menu
+    const firstRow = page.locator('tbody tr').first()
+    const menuBtn = firstRow.getByRole('button', { name: 'More actions' })
+    await expect(menuBtn).toBeVisible({ timeout: 10000 })
+    await menuBtn.click()
+    await firstRow.getByRole('menuitem', { name: 'Delete' }).click()
     await expect(keywordsPage.alertDialog).toBeVisible({ timeout: 5000 })
     await keywordsPage.alertDialog.getByRole('button', { name: /Cancel/i }).click()
   })

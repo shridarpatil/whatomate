@@ -94,6 +94,8 @@ func (a *App) ListContacts(r *fastglue.Request) error {
 	pg := parsePagination(r)
 	search := string(r.RequestCtx.QueryArgs().Peek("search"))
 	tagsParam := string(r.RequestCtx.QueryArgs().Peek("tags"))
+	// assigned=me: contacts assigned to the caller; assigned=none: unassigned contacts.
+	assigned := string(r.RequestCtx.QueryArgs().Peek("assigned"))
 
 	var contacts []models.Contact
 	query := a.ScopeToOrg(a.DB, userID, orgID)
@@ -101,6 +103,13 @@ func (a *App) ListContacts(r *fastglue.Request) error {
 	// Users without contacts:read permission can only see contacts assigned to them
 	// or contacts with an active chat transfer to them
 	query = a.scopeAssignedContact(query, userID, orgID)
+
+	switch assigned {
+	case "me":
+		query = query.Where("assigned_user_id = ?", userID)
+	case "none":
+		query = query.Where("assigned_user_id IS NULL")
+	}
 
 	if search != "" {
 		// Limit search string length to prevent abuse

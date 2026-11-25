@@ -98,7 +98,7 @@ test.describe('Users Management', () => {
 
     // Update Full Name on the detail page
     const updatedName = 'Updated User Name'
-    const nameInput = page.getByLabel(/^Full Name/)
+    const nameInput = page.getByLabel(/^Full name/i)
     await nameInput.fill(updatedName)
     await page.waitForTimeout(300)
 

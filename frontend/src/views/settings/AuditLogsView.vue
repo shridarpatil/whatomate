@@ -6,6 +6,7 @@ import { auditLogsService, type AuditLogEntry } from '@/services/api'
 import { useUsersStore } from '@/stores/users'
 import { useDateRange } from '@/composables/useDateRange'
 import { ScrollText } from '@/lib/icons'
+import { humanize } from '@/lib/status'
 import { formatDate, formatLabel } from '@/lib/utils'
 
 const { t } = useI18n()
@@ -51,7 +52,24 @@ const columns = computed<Column<AuditLogEntry>[]>(() => [
   { key: 'resource_type', label: t('auditLogs.resource') },
   { key: 'changes', label: t('auditLogs.changes') },
   { key: 'created_at', label: t('auditLogs.date'), sortable: true },
+  { key: 'actions', label: t('common.actions'), align: 'right' },
 ])
+
+const resourceTypes = [
+  { value: 'account', label: 'Account' },
+  { value: 'ai_context', label: 'AI context' },
+  { value: 'campaign', label: 'Campaign' },
+  { value: 'chatbot_settings', label: 'Chatbot settings' },
+  { value: 'chatbot_flow', label: 'Chatbot flow' },
+  { value: 'ivr_flow', label: 'IVR flow' },
+  { value: 'keyword_rule', label: 'Keyword rule' },
+  { value: 'team', label: 'Team' },
+  { value: 'template', label: 'Template' },
+]
+
+function resourceLabel(type: string): string {
+  return resourceTypes.find(r => r.value === type)?.label ?? humanize(type)
+}
 
 function handlePageChange(page: number) {
   currentPage.value = page
@@ -84,14 +102,6 @@ function applyFilter() {
   fetchLogs()
 }
 
-function actionVariant(action: string): string {
-  switch (action) {
-    case 'created': return 'success'
-    case 'deleted': return 'danger'
-    default: return 'secondary'
-  }
-}
-
 function changeSummary(log: AuditLogEntry): string {
   if (!log.changes || log.changes.length === 0) return '—'
   if (log.action === 'created') return `${log.changes.length} fields set`
@@ -114,36 +124,24 @@ onMounted(async () => {
     />
 
     <div class="flex-1 scroll-y p-4">
-      <article class="card">
-        <header class="hstack justify-between flex-wrap gap-4">
+      <article class="card vstack gap-4">
+        <div data-toolbar>
           <div>
-            <h3>{{ t('auditLogs.allActivity') }}</h3>
-            <p class="text-light">{{ t('auditLogs.allActivityDesc') }}</p>
-          </div>
-          <div class="hstack gap-2 flex-wrap">
-            <select v-model="filterUser" :aria-label="t('auditLogs.allUsers')">
+            <select class="w-auto" v-model="filterUser" :aria-label="t('auditLogs.allUsers')">
               <option value="all">{{ t('auditLogs.allUsers') }}</option>
               <option v-for="user in usersStore.users" :key="user.id" :value="user.id">
                 {{ user.full_name || user.email }}
               </option>
             </select>
-            <select v-model="filterAction" :aria-label="t('auditLogs.allActions')">
+            <select class="w-auto" v-model="filterAction" :aria-label="t('auditLogs.allActions')">
               <option value="all">{{ t('auditLogs.allActions') }}</option>
               <option value="created">{{ t('auditLogs.created') }}</option>
               <option value="updated">{{ t('auditLogs.updated') }}</option>
               <option value="deleted">{{ t('auditLogs.deleted') }}</option>
             </select>
-            <select v-model="filterResourceType" :aria-label="t('auditLogs.allResources')">
+            <select class="w-auto" v-model="filterResourceType" :aria-label="t('auditLogs.allResources')">
               <option value="all">{{ t('auditLogs.allResources') }}</option>
-              <option value="account">Account</option>
-              <option value="ai_context">AI Context</option>
-              <option value="campaign">Campaign</option>
-              <option value="chatbot_settings">Chatbot Settings</option>
-              <option value="chatbot_flow">Chatbot Flow</option>
-              <option value="ivr_flow">IVR Flow</option>
-              <option value="keyword_rule">Keyword Rule</option>
-              <option value="team">Team</option>
-              <option value="template">Template</option>
+              <option v-for="rt in resourceTypes" :key="rt.value" :value="rt.value">{{ rt.label }}</option>
             </select>
             <DateRangePicker
               v-model:selected-range="selectedRange"
@@ -153,7 +151,7 @@ onMounted(async () => {
               @apply-custom="applyCustomRange"
             />
           </div>
-        </header>
+        </div>
         <DataTable
           :items="logs"
           :columns="columns"
@@ -177,13 +175,11 @@ onMounted(async () => {
           </template>
 
           <template #cell-action="{ item: log }">
-            <span class="badge" :data-variant="actionVariant(log.action)">
-              {{ t(`auditLogs.${log.action}`) }}
-            </span>
+            <span class="badge" data-label>{{ t(`auditLogs.${log.action}`, humanize(log.action)) }}</span>
           </template>
 
           <template #cell-resource_type="{ item: log }">
-            <span class="text-light">{{ formatLabel(log.resource_type) }}</span>
+            {{ resourceLabel(log.resource_type) }}
           </template>
 
           <template #cell-changes="{ item: log }">
@@ -192,6 +188,12 @@ onMounted(async () => {
 
           <template #cell-created_at="{ item: log }">
             <span class="text-light">{{ formatDate(log.created_at) }}</span>
+          </template>
+
+          <template #cell-actions="{ item: log }">
+            <div class="hstack items-center justify-end gap-1 flex-nowrap">
+              <RouterLink :to="`/settings/audit-logs/${log.id}`" class="button outline small">{{ t('common.view') }}</RouterLink>
+            </div>
           </template>
         </DataTable>
       </article>

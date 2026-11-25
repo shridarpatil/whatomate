@@ -6,16 +6,13 @@ export interface ChartSeries {
   color?: string
 }
 
-/** Fixed slot order; a series keeps the slot of its index. */
+/** Fixed slot order; a series keeps the slot of its index (theme.css --chart-1..4). */
 export const SERIES_COLORS = [
-  'var(--primary)',
-  'var(--warning)',
-  'var(--danger)',
-  'var(--muted-foreground)',
+  'var(--chart-1)',
+  'var(--chart-2)',
+  'var(--chart-3)',
+  'var(--chart-4)',
 ]
-/** Secondary encodings so identity never relies on colour alone (slot 0 is solid). */
-export const SERIES_DASHES = ['', '8 4', '2 3', '10 3 2 3']
-export const SERIES_MARKERS: MarkerShape[] = ['circle', 'square', 'triangle', 'diamond']
 
 /** Fallback chart width (px) before the wrapper is measured. */
 export const VIEW_WIDTH = 600

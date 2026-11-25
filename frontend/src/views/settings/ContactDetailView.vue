@@ -19,7 +19,6 @@ import Combobox from '@/components/oat/Combobox.vue'
 import { filterOptions, type ComboOption } from '@/components/oat/combobox'
 import {
   Users,
-  Phone,
   Trash2,
   Save,
   MessageSquare,
@@ -58,7 +57,7 @@ const form = ref({
 
 const breadcrumbs = computed(() => [
   { label: t('nav.settings'), href: '/settings' },
-  { label: t('contacts.title'), href: '/settings/contacts' },
+  { label: t('contacts.title'), href: '/contacts' },
   { label: contact.value?.profile_name || contact.value?.name || contact.value?.phone_number || '' },
 ])
 
@@ -132,7 +131,7 @@ async function deleteContact() {
   try {
     await contactsService.delete(contact.value.id)
     toast.success(t('common.deletedSuccess', { resource: t('resources.Contact') }))
-    router.push('/settings/contacts')
+    router.push('/contacts')
   } catch (e) {
     toast.error(getErrorMessage(e, t('common.failedDelete', { resource: t('resources.contact') })))
   }
@@ -191,7 +190,7 @@ onMounted(async () => {
     <DetailPageLayout
       :title="contact?.profile_name || contact?.name || contact?.phone_number || ''"
       :icon="Users"
-      back-link="/settings/contacts"
+      back-link="/contacts"
       :breadcrumbs="breadcrumbs"
       :is-loading="isLoading"
       :is-not-found="isNotFound"
@@ -212,18 +211,10 @@ onMounted(async () => {
       </template>
 
       <article class="card">
-        <header class="hstack justify-between">
+        <header>
           <h3>{{ $t('teams.details', 'Details') }}</h3>
-          <span v-if="contact?.marketing_opt_out" class="badge" data-variant="secondary">{{ $t('contacts.marketingOptOut', 'Marketing Opt-out') }}</span>
         </header>
         <div class="vstack gap-4">
-          <div class="hstack gap-2">
-            <Phone :size="20" />
-            <div class="min-w-0">
-              <p class="truncate"><strong>{{ contact?.profile_name || contact?.name || contact?.phone_number }}</strong></p>
-              <small class="text-light truncate">{{ contact?.phone_number }}</small>
-            </div>
-          </div>
 
           <label data-field>
             {{ $t('contacts.profileName', 'Profile Name') }}
@@ -243,17 +234,17 @@ onMounted(async () => {
                 {{ form.whatsapp_account }}
               </option>
               <option v-for="account in accounts" :key="account.id" :value="account.name">
-                {{ account.name }} ({{ account.phone_number }})
+                {{ account.phone_number ? `${account.name} (${account.phone_number})` : account.name }}
               </option>
             </select>
           </label>
 
           <div class="vstack gap-2">
-            <span id="contact-tags-label">{{ $t('contacts.tags') }}</span>
+            <span id="contact-tags-label" data-field-label>{{ $t('contacts.tags') }}</span>
             <details v-if="canWrite" aria-labelledby="contact-tags-label">
               <summary>
                 <span v-if="form.tags.length === 0" class="text-light">{{ $t('contacts.selectTags') }}</span>
-                <span v-else>{{ form.tags.length }} {{ $t('contacts.tagsSelected') }}</span>
+                <span v-else>{{ $t('contacts.tagsSelectedCount', form.tags.length) }}</span>
               </summary>
               <div class="vstack gap-2">
                 <input
@@ -272,7 +263,7 @@ onMounted(async () => {
               </div>
             </details>
             <div v-if="form.tags.length > 0" class="hstack gap-1 flex-wrap">
-              <span v-for="tagName in form.tags" :key="tagName" class="badge" data-variant="secondary">
+              <span v-for="tagName in form.tags" :key="tagName" class="badge" data-label>
                 {{ tagName }}
                 <button
                   v-if="canWrite"
@@ -288,7 +279,7 @@ onMounted(async () => {
           </div>
 
           <div class="vstack gap-2">
-            <span id="contact-agent-label">{{ $t('contacts.assignedAgent', 'Assigned Agent') }}</span>
+            <span id="contact-agent-label" data-field-label>{{ $t('contacts.assignedAgent', 'Assigned agent') }}</span>
             <Combobox
               :model-value="form.assigned_user_id"
               :options="agentOptions"
@@ -302,9 +293,9 @@ onMounted(async () => {
           </div>
 
           <div class="hstack justify-between">
-            <span>{{ $t('contacts.marketingOptOut', 'Marketing Opt-out') }}</span>
-            <span class="badge" :data-variant="contact?.marketing_opt_out ? 'danger' : 'secondary'">
-              {{ contact?.marketing_opt_out ? $t('common.yes', 'Yes') : $t('common.no', 'No') }}
+            <span data-field-label>{{ $t('contacts.marketingOptOut', 'Marketing opt-out') }}</span>
+            <span class="badge" :data-status="contact?.marketing_opt_out ? 'warning' : 'neutral'">
+              {{ contact?.marketing_opt_out ? $t('contacts.optedOut', 'Opted out') : $t('contacts.notOptedOut', 'Not opted out') }}
             </span>
           </div>
         </div>

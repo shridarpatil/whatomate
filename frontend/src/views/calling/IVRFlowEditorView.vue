@@ -59,15 +59,16 @@ const nodeTypes: any = {
 }
 
 // Node palette
-const palette: { type: IVRNodeType; label: string; icon: any }[] = [
-  { type: 'greeting', label: 'Greeting', icon: Volume2 },
-  { type: 'menu', label: 'Menu', icon: Grid3X3 },
-  { type: 'gather', label: 'Gather', icon: Hash },
-  { type: 'http_callback', label: 'HTTP', icon: Globe },
-  { type: 'transfer', label: 'Transfer', icon: Users },
-  { type: 'goto_flow', label: 'Goto Flow', icon: ExternalLink },
-  { type: 'timing', label: 'Timing', icon: Clock },
-  { type: 'hangup', label: 'Hangup', icon: PhoneOff },
+// Labels come from flowBuilder.palette.<type> (shared wording with the bot flow editor).
+const palette: { type: IVRNodeType; icon: any }[] = [
+  { type: 'greeting', icon: Volume2 },
+  { type: 'menu', icon: Grid3X3 },
+  { type: 'gather', icon: Hash },
+  { type: 'http_callback', icon: Globe },
+  { type: 'transfer', icon: Users },
+  { type: 'goto_flow', icon: ExternalLink },
+  { type: 'timing', icon: Clock },
+  { type: 'hangup', icon: PhoneOff },
 ]
 
 // Vue Flow instance
@@ -408,18 +409,18 @@ onMounted(() => {
         >
           <ArrowLeft />
         </button>
-        <input v-model="flowName" class="flex-1 min-w-0" placeholder="Flow Name" :aria-label="$t('calling.name')">
+        <input v-model="flowName" class="flex-1 min-w-0" :placeholder="$t('calling.flowNamePlaceholder')" :aria-label="$t('calling.name')">
         <label class="hstack gap-2">
           <input v-model="isActive" type="checkbox" role="switch">
-          <small>Active</small>
+          <small>{{ $t('common.active') }}</small>
         </label>
-        <label class="hstack gap-2">
+        <label class="hstack gap-2" :title="$t('calling.callStartHint')">
           <input v-model="isCallStart" type="checkbox" role="switch" :disabled="!isActive">
-          <small>Incoming Call Start</small>
+          <small>{{ $t('calling.callStart') }}</small>
         </label>
-        <label class="hstack gap-2">
+        <label class="hstack gap-2" :title="$t('calling.outgoingEndHint')">
           <input v-model="isOutgoingEnd" type="checkbox" role="switch" :disabled="!isActive">
-          <small>Outgoing Post-Call</small>
+          <small>{{ $t('calling.outgoingEnd') }}</small>
         </label>
         <button type="button" class="small" :disabled="saving" :aria-busy="saving ? 'true' : undefined" data-spinner="small" @click="saveFlow">
           <Save />
@@ -428,7 +429,8 @@ onMounted(() => {
       </div>
 
       <!-- Node Palette -->
-      <div class="hstack gap-2 scroll-x" role="toolbar" :aria-label="t('flowBuilder.add')">
+      <div class="hstack gap-2 scroll-x" role="toolbar" aria-labelledby="ivr-palette-label">
+        <small id="ivr-palette-label" class="text-light shrink-0">{{ $t('flowBuilder.addNode') }}</small>
         <button
           v-for="p in palette"
           :key="p.type"
@@ -437,7 +439,7 @@ onMounted(() => {
           @click="addNodeFromPalette(p.type)"
         >
           <component :is="p.icon" />
-          {{ p.label }}
+          {{ $t(`flowBuilder.palette.${p.type}`) }}
         </button>
       </div>
     </div>

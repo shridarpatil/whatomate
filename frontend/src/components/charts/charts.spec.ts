@@ -42,15 +42,17 @@ describe('LineChart', () => {
   it('has no legend for one series', () => {
     const root = mount(LineChart, { labels, series: [two[0]] })
     expect(root.querySelector('ul')).toBeNull()
-    // minimal single-series look: no markers, soft area fill, no y tick labels
-    expect(root.querySelectorAll('path[stroke="var(--background)"]').length).toBe(0)
-    expect(root.querySelector('path[fill-opacity="0.1"]')).toBeTruthy()
-    expect(root.querySelectorAll('text[text-anchor="end"]').length).toBe(0)
+    // single-series look: plain dots instead of shape markers, soft area fill, y tick labels
+    expect(root.querySelectorAll('path[stroke="var(--card)"]').length).toBe(0)
+    expect(root.querySelectorAll('circle[data-point]').length).toBeGreaterThan(0)
+    expect(root.querySelector('path[fill-opacity="0.12"]')).toBeTruthy()
+    expect(root.querySelectorAll('text[text-anchor="end"]').length).toBeGreaterThan(0)
   })
   it('draws markers, no area and y tick labels for multiple series', () => {
     const root = mount(LineChart, { labels, series: two })
-    expect(root.querySelectorAll('path[stroke="var(--background)"]').length).toBeGreaterThanOrEqual(6)
-    expect(root.querySelector('path[fill-opacity="0.1"]')).toBeNull()
+    expect(root.querySelectorAll('path[stroke="var(--card)"]').length).toBeGreaterThanOrEqual(6)
+    expect(root.querySelector('path[fill-opacity="0.12"]')).toBeNull()
+    expect(root.querySelector('circle[data-point]')).toBeNull()
     expect(root.querySelectorAll('text[text-anchor="end"]').length).toBeGreaterThan(0)
   })
   it('shows a tooltip on focus', async () => {
@@ -86,6 +88,15 @@ describe('BarChart', () => {
   it('has no legend for one series', () => {
     expect(mount(BarChart, { labels, series: [two[0]] }).querySelector('ul')).toBeNull()
   })
+  it('draws earlier single-series bars lighter than the latest', () => {
+    const fills = [...mount(BarChart, { labels, series: [{ label: 'S', data: [1, 2, 3], color: 'red' }] }).querySelectorAll('path[data-bar]')].map(p => p.getAttribute('fill'))
+    expect(fills[2]).toBe('red')
+    expect(fills[0]).toContain('color-mix')
+  })
+  it('labels grouped bars with their non-zero values', () => {
+    const root = mount(BarChart, { labels, series: [{ label: 'S1', data: [1, 0, 3] }, two[1]] })
+    expect([...root.querySelectorAll('text[data-bar-value]')].map(t => t.textContent)).toEqual(['1', '3', '2', '3', '1'])
+  })
   it.each([
     ['empty', { labels: [], series: [] }],
     ['one bar', { labels: ['a'], series: [{ label: 'S', data: [5] }] }],
@@ -101,14 +112,19 @@ describe('PieChart', () => {
     const root = mount(PieChart, { labels: ['x', 'y'], values: [1, 2], colors: ['red', 'blue'] })
     expect([...root.querySelectorAll('svg path')].map(p => p.getAttribute('fill'))).toEqual(['red', 'blue'])
   })
-  it('draws a slice per non-zero value with a legend', () => {
-    const root = mount(PieChart, { labels: ['x', 'y', 'z'], values: [1, 2, 0] })
+  it('draws a slice per non-zero value with a legend of values and shares', () => {
+    const root = mount(PieChart, { labels: ['x', 'y', 'z'], values: [1, 3, 0] })
     expect(root.querySelectorAll('svg path').length).toBe(2)
     expect(root.querySelectorAll('ul li').length).toBe(3)
+    expect(root.querySelector('ul li:nth-child(2)')?.textContent).toContain('75%')
   })
-  it('has no legend for a single slice and draws the full ring', async () => {
+  it('shows the total in the middle of a donut', () => {
+    const root = mount(PieChart, { labels: ['x', 'y'], values: [1200, 34], donut: true })
+    expect(root.querySelector('svg text')?.textContent).toBe((1234).toLocaleString())
+  })
+  it('keeps the legend for a single slice and draws the full ring', async () => {
     const root = mount(PieChart, { labels: ['x'], values: [4], donut: true })
-    expect(root.querySelector('ul')).toBeNull()
+    expect(root.querySelectorAll('ul li').length).toBe(1)
     expect(root.querySelectorAll('svg path').length).toBe(1)
     root.querySelector('path')!.dispatchEvent(new Event('focus'))
     await nextTick()
