@@ -244,9 +244,10 @@ func (a *App) CreateUser(r *fastglue.Request) error {
 		return nil
 	}
 
-	// Validate required fields
-	if req.Email == "" || req.Password == "" || req.FullName == "" {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Email, password, and full_name are required", nil, "")
+	// Validate required fields. Password is optional: users without one can
+	// only sign in with SSO.
+	if req.Email == "" || req.FullName == "" {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Email and full_name are required", nil, "")
 	}
 
 	// Validate email format
@@ -277,11 +278,15 @@ func (a *App) CreateUser(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusConflict, "Email already exists", nil, "")
 	}
 
-	// Hash password
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
-	if err != nil {
-		a.Log.Error("Failed to hash password", "error", err)
-		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create user", nil, "")
+	// Hash password (an empty hash means no password login)
+	var hashedPassword []byte
+	if req.Password != "" {
+		var err error
+		hashedPassword, err = bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+		if err != nil {
+			a.Log.Error("Failed to hash password", "error", err)
+			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create user", nil, "")
+		}
 	}
 
 	isSuperAdmin := false

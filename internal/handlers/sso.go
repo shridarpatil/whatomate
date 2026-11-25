@@ -798,3 +798,83 @@ func getString(data map[string]any, key string) string {
 	}
 	return ""
 }
+
+// SSOPolicy is the organization-wide SSO setting.
+type SSOPolicy struct {
+	// SSORequired blocks password login for everyone except the org's admins
+	// (and super admins), once the org has an enabled SSO provider.
+	SSORequired bool `json:"sso_required"`
+}
+
+// GetSSOPolicy returns the organization's SSO policy.
+func (a *App) GetSSOPolicy(r *fastglue.Request) error {
+	orgID, _, err := a.requireAuth(r, models.ResourceSettingsSSO, models.ActionRead)
+	if err != nil {
+		return nil
+	}
+
+	var org models.Organization
+	if err := a.DB.Select("id", "settings").First(&org, "id = ?", orgID).Error; err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Organization not found", nil, "")
+	}
+	return r.SendEnvelope(SSOPolicy{SSORequired: orgSSORequired(&org)})
+}
+
+// UpdateSSOPolicy changes the organization's SSO policy.
+func (a *App) UpdateSSOPolicy(r *fastglue.Request) error {
+	orgID, userID, err := a.requireAuth(r, models.ResourceSettingsSSO, models.ActionWrite)
+	if err != nil {
+		return nil
+	}
+
+	var req SSOPolicy
+	if err := a.decodeRequest(r, &req); err != nil {
+		return nil
+	}
+
+	var org models.Organization
+	if err := a.DB.Select("id", "settings").First(&org, "id = ?", orgID).Error; err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Organization not found", nil, "")
+	}
+	if org.Settings == nil {
+		org.Settings = models.JSONB{}
+	}
+	org.Settings["sso_required"] = req.SSORequired
+	if err := a.DB.Model(&org).Update("settings", org.Settings).Error; err != nil {
+		a.Log.Error("Failed to save SSO policy", "error", err)
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to save SSO policy", nil, "")
+	}
+
+	a.Log.Info("SSO policy updated", "organization_id", orgID, "user_id", userID, "sso_required", req.SSORequired)
+	return r.SendEnvelope(req)
+}
+
+func orgSSORequired(org *models.Organization) bool {
+	v, _ := org.Settings["sso_required"].(bool)
+	return v
+}
+
+// passwordLoginBlocked reports whether the user's home organization requires
+// SSO for them. Org admins (the system admin role) and super admins are exempt
+// so someone can still get in when the identity provider is down. The policy
+// only applies once the org has an enabled provider; otherwise it would lock
+// everyone out. Lookup errors don't block: password login stays as it was.
+func (a *App) passwordLoginBlocked(user *models.User) bool {
+	if user.IsSuperAdmin || (user.Role != nil && user.Role.IsSystem && user.Role.Name == "admin") {
+		return false
+	}
+	var org models.Organization
+	if err := a.DB.Select("id", "settings").First(&org, "id = ?", user.OrganizationID).Error; err != nil {
+		return false
+	}
+	if !orgSSORequired(&org) {
+		return false
+	}
+	var enabled int64
+	if err := a.DB.Model(&models.SSOProvider{}).
+		Where("organization_id = ? AND is_enabled = ?", user.OrganizationID, true).
+		Count(&enabled).Error; err != nil {
+		return false
+	}
+	return enabled > 0
+}

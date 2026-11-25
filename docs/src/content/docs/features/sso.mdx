@@ -102,7 +102,7 @@ Two operating modes, controlled by `allow_auto_create`:
 Only users whose email already exists in the system can sign in via SSO. Unknown emails are rejected with "User not found. Contact your administrator." This is the recommended mode for production — it pairs SSO convenience with explicit user provisioning.
 
 Workflow:
-1. Admin creates the user under **Settings → Members** (or invites via the UI).
+1. Admin creates the user under **Settings → Members** (or invites via the UI). The password is optional: leave it blank for users who should only sign in with SSO.
 2. User signs in with their SSO provider for the first time. The user record is matched by email and the SSO provider/ID are stored on the user for future logins.
 
 ### Auto-create (`allow_auto_create = true`)
@@ -110,6 +110,15 @@ Workflow:
 Any user who completes SSO is automatically given an account in this organization with the role specified by `default_role`, **provided** their email domain matches `allowed_domains` (if set).
 
 This is convenient for closed environments — e.g. a Google Workspace tenant where every `@acme.com` email is a trusted employee. **Always pair with `allowed_domains` when enabling**, otherwise anyone with a valid Google/GitHub/etc. account can self-provision into your org.
+
+## Require SSO
+
+Turn on **Require SSO** on the SSO settings page to stop members signing in with a password. Once the organization has an enabled provider, password login answers "This account must sign in with SSO" for everyone except:
+
+- users with the organization's **admin** role, so someone can still get in if the provider is down
+- super admins
+
+The check runs only after a correct password, so it doesn't tell someone guessing passwords whether an account exists or is SSO-only. Sessions that already exist stay valid until they expire.
 
 ## Per-organization, not global
 
