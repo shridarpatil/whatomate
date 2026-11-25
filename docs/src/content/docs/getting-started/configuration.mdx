@@ -24,6 +24,8 @@ port = 8080
 read_timeout = 30
 write_timeout = 30
 base_path = ""                # Set to "/subpath" if behind nginx proxy_pass at a sub-path
+public_url = ""               # Public address, e.g. "https://chat.example.com". Used for SSO redirect URLs.
+outbound_allow_cidrs = []     # Private IP ranges outgoing calls may reach, e.g. ["10.0.0.0/8"]. Empty = public only.
 allowed_origins = ""          # Comma-separated CORS origins. Empty = allow all (dev only).
 
 [database]
@@ -143,6 +145,8 @@ full_name = "Admin"
 | `host`, `port` | Default `0.0.0.0:8080`. |
 | `read_timeout`, `write_timeout` | Seconds. |
 | `base_path` | Leave empty unless serving at a sub-path (`https://app.example.com/whatomate`) behind a proxy. |
+| `public_url` | The address users reach Whatomate at, scheme and host only (e.g. `https://chat.example.com`). SSO redirect URLs are built from it. Empty = taken from the request's `Host` header. |
+| `outbound_allow_cidrs` | Private IP ranges that SSO providers, webhooks and custom actions may reach, e.g. `["192.168.10.5/32"]` or `["10.0.0.0/8"]`; a bare IP means that one address. Env: `WHATOMATE_SERVER__OUTBOUND_ALLOW_CIDRS="10.0.0.0/8,192.168.1.5"`. By default outgoing calls to these URLs refuse loopback, private, link-local (including cloud metadata `169.254.169.254`), carrier-grade NAT, multicast and reserved addresses, on every redirect too (at most 3 are followed). **A listed range overrides every block and is reachable from every organization's webhooks and custom actions**, so list only what you need. |
 | `allowed_origins` | Comma-separated list, e.g. `"https://app.example.com,https://admin.example.com"`. **Empty allows all origins** — only safe in development. |
 
 ### `[database]`

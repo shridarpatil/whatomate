@@ -253,7 +253,10 @@ func (a *App) CallbackSSO(r *fastglue.Request) error {
 
 	// Build OAuth config and exchange code for token
 	oauthConfig := a.buildOAuthConfig(provider, &ssoConfig, r)
-	token, err := oauthConfig.Exchange(context.Background(), code)
+	// Same guarded client as the user info call, so a provider on a private
+	// network needs its address in server.outbound_allow_cidrs for both.
+	exchangeCtx := context.WithValue(context.Background(), oauth2.HTTPClient, a.HTTPClient)
+	token, err := oauthConfig.Exchange(exchangeCtx, code)
 	if err != nil {
 		a.Log.Error("Failed to exchange OAuth code", "error", err, "provider", provider)
 		a.redirectWithError(r, "Failed to authenticate with provider")

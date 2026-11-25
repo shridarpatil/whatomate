@@ -18,6 +18,7 @@ read_timeout = 30
 write_timeout = 30
 base_path = ""  # Set to "/subpath" if behind nginx proxy pass
 public_url = ""  # Public address users reach the app at, e.g. "https://chat.example.com" (scheme + host only). Used for SSO redirect URLs; empty = taken from the request Host header.
+outbound_allow_cidrs = []  # Private IP ranges that SSO providers, webhooks and custom actions may reach, e.g. ["192.168.10.5/32"] or ["10.0.0.0/8"] for a self-hosted IdP. Empty = public internet only. Listed ranges are reachable from every org's webhooks too, so keep them narrow.
 allowed_origins = ""  # Comma-separated CORS origins (e.g., "https://app.example.com,https://admin.example.com"). Empty = allow all (dev only).
 
 [database]

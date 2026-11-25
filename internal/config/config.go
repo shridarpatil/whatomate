@@ -5,6 +5,7 @@ import (
 	"crypto/sha1" //nolint:gosec // SHA-1 is mandated by the coturn TURN REST API (RFC draft)
 	"encoding/base64"
 	"fmt"
+	"net/netip"
 	"net/url"
 	"strconv"
 	"strings"
@@ -14,6 +15,7 @@ import (
 	"github.com/knadh/koanf/providers/env"
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/v2"
+	"github.com/shridarpatil/whatomate/internal/safehttp"
 )
 
 // Config holds all configuration for the application
@@ -109,13 +111,19 @@ type AppConfig struct {
 }
 
 type ServerConfig struct {
-	Host           string `koanf:"host"`
-	Port           int    `koanf:"port"`
-	ReadTimeout    int    `koanf:"read_timeout"`
-	WriteTimeout   int    `koanf:"write_timeout"`
-	BasePath       string `koanf:"base_path"`       // Base path for frontend (e.g., "/whatomate" for proxy pass)
-	PublicURL      string `koanf:"public_url"`      // Public origin users reach the app at (e.g., "https://chat.example.com"); used for SSO callback URLs
-	AllowedOrigins string `koanf:"allowed_origins"` // Comma-separated list of allowed CORS origins
+	Host         string `koanf:"host"`
+	Port         int    `koanf:"port"`
+	ReadTimeout  int    `koanf:"read_timeout"`
+	WriteTimeout int    `koanf:"write_timeout"`
+	BasePath     string `koanf:"base_path"`  // Base path for frontend (e.g., "/whatomate" for proxy pass)
+	PublicURL    string `koanf:"public_url"` // Public origin users reach the app at (e.g., "https://chat.example.com"); used for SSO callback URLs
+
+	// OutboundAllowCIDRs are private ranges that user- or admin-supplied URLs
+	// (SSO identity providers, webhooks, custom actions) may still reach, e.g.
+	// a self-hosted IdP. Empty = public internet only. Parsed into OutboundAllow.
+	OutboundAllowCIDRs []string       `koanf:"outbound_allow_cidrs"`
+	OutboundAllow      []netip.Prefix `koanf:"-"`
+	AllowedOrigins     string         `koanf:"allowed_origins"` // Comma-separated list of allowed CORS origins
 }
 
 type DatabaseConfig struct {
@@ -231,6 +239,12 @@ func Load(configPath string) (*Config, error) {
 		return nil, err
 	}
 	cfg.Server.PublicURL = publicURL
+
+	allow, err := safehttp.ParseCIDRs(cfg.Server.OutboundAllowCIDRs)
+	if err != nil {
+		return nil, fmt.Errorf("server.outbound_allow_cidrs: %w", err)
+	}
+	cfg.Server.OutboundAllow = allow
 
 	return &cfg, nil
 }

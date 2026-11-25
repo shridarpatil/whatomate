@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"net/url"
 	"strings"
 	"testing"
@@ -14,6 +15,7 @@ import (
 	"github.com/shridarpatil/whatomate/internal/config"
 	"github.com/shridarpatil/whatomate/internal/handlers"
 	"github.com/shridarpatil/whatomate/internal/models"
+	"github.com/shridarpatil/whatomate/internal/safehttp"
 	"github.com/shridarpatil/whatomate/test/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -888,5 +890,34 @@ func TestApp_GetSSOCallbackURL(t *testing.T) {
 		testutil.SetPathParam(req, "provider", "google")
 		require.NoError(t, app.GetSSOCallbackURL(req))
 		assert.Equal(t, fasthttp.StatusForbidden, testutil.GetResponseStatusCode(req))
+	})
+}
+
+// The token exchange goes through the guarded client, like user info: an IdP
+// on a private network needs its address in server.outbound_allow_cidrs.
+func TestApp_CallbackSSO_PrivateIdPNeedsOutboundAllow(t *testing.T) {
+	run := func(t *testing.T, allow []netip.Prefix) (*fastglue.Request, *fakeOAuthProvider) {
+		app := newSSOApp(t)
+		app.HTTPClient = safehttp.NewClient(allow, 5*time.Second)
+		fake := newFakeOAuth(t) // httptest server on 127.0.0.1
+		email := testutil.UniqueEmail("sso-private-idp")
+		fake.UserEmail = email
+		org := testutil.CreateTestOrganization(t, app.DB)
+		createCustomSSOProvider(t, app, org.ID, fake)
+		testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(email))
+		return runSSOCallback(t, app, org.ID, "private-idp-"+uuid.NewString()), fake
+	}
+
+	t.Run("blocked without an allow entry", func(t *testing.T) {
+		req, fake := run(t, nil)
+		assert.Contains(t, string(req.RequestCtx.Response.Header.Peek("Location")), "sso_error=")
+		assert.Empty(t, testutil.GetResponseCookie(req, "whm_access"))
+		assert.Empty(t, fake.LastTokenCode, "the token exchange must be refused before reaching the IdP")
+	})
+
+	t.Run("allowed when its address is listed", func(t *testing.T) {
+		req, _ := run(t, []netip.Prefix{netip.MustParsePrefix("127.0.0.1/32")})
+		assert.NotContains(t, string(req.RequestCtx.Response.Header.Peek("Location")), "sso_error=")
+		assert.NotEmpty(t, testutil.GetResponseCookie(req, "whm_access"))
 	})
 }

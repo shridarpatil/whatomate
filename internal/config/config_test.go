@@ -238,3 +238,35 @@ func TestLoad_PublicURLRejectsInvalid(t *testing.T) {
 		})
 	}
 }
+
+func TestLoad_OutboundAllowCIDRs(t *testing.T) {
+	cfg, err := config.Load(writeConfig(t, `
+[server]
+outbound_allow_cidrs = ["192.168.10.5/32", "10.20.0.0/16"]
+`))
+	require.NoError(t, err)
+	require.Len(t, cfg.Server.OutboundAllow, 2)
+	assert.Equal(t, "192.168.10.5/32", cfg.Server.OutboundAllow[0].String())
+}
+
+func TestLoad_OutboundAllowCIDRsFromEnv(t *testing.T) {
+	t.Setenv("WHATOMATE_SERVER__OUTBOUND_ALLOW_CIDRS", "192.168.10.5/32,192.168.20.7")
+	cfg, err := config.Load("")
+	require.NoError(t, err)
+	require.Len(t, cfg.Server.OutboundAllow, 2)
+	assert.Equal(t, "192.168.20.7/32", cfg.Server.OutboundAllow[1].String())
+}
+
+func TestLoad_OutboundAllowCIDRsEmptyByDefault(t *testing.T) {
+	cfg, err := config.Load("")
+	require.NoError(t, err)
+	assert.Empty(t, cfg.Server.OutboundAllow)
+}
+
+func TestLoad_OutboundAllowCIDRsRejectsInvalid(t *testing.T) {
+	_, err := config.Load(writeConfig(t, `
+[server]
+outbound_allow_cidrs = ["auth.example.com"]
+`))
+	assert.Error(t, err)
+}

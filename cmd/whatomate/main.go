@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -19,6 +18,7 @@ import (
 	"github.com/shridarpatil/whatomate/internal/handlers"
 	"github.com/shridarpatil/whatomate/internal/middleware"
 	"github.com/shridarpatil/whatomate/internal/queue"
+	"github.com/shridarpatil/whatomate/internal/safehttp"
 	"github.com/shridarpatil/whatomate/internal/storage"
 	"github.com/shridarpatil/whatomate/internal/tts"
 	"github.com/shridarpatil/whatomate/internal/websocket"
@@ -188,15 +188,10 @@ func runServer(args []string) {
 
 	// Initialize app with dependencies
 	// Shared HTTP client with connection pooling for external API calls
-	httpClient := &http.Client{
-		Timeout: 30 * time.Second,
-		Transport: &http.Transport{
-			DialContext:         handlers.SSRFSafeDialer(),
-			MaxIdleConns:        100,
-			MaxIdleConnsPerHost: 10,
-			IdleConnTimeout:     90 * time.Second,
-		},
-	}
+	// Shared client for outgoing calls. Its dialer refuses private and
+	// reserved addresses unless listed in server.outbound_allow_cidrs, because
+	// webhook, custom action and SSO URLs come from users and org admins.
+	httpClient := safehttp.NewClient(cfg.Server.OutboundAllow, 30*time.Second)
 
 	app := &handlers.App{
 		Config:     cfg,
