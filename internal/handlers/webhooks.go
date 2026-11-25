@@ -51,38 +51,6 @@ func validateWebhookURL(rawURL string) error {
 	return nil
 }
 
-// SSRFSafeDialer returns a DialContext function that blocks connections to
-// private/loopback IPs after DNS resolution. Use this in http.Transport
-// for webhook and custom action HTTP calls.
-func SSRFSafeDialer() func(ctx context.Context, network, addr string) (net.Conn, error) {
-	dialer := &net.Dialer{Timeout: 10 * time.Second}
-	return func(ctx context.Context, network, addr string) (net.Conn, error) {
-		host, port, err := net.SplitHostPort(addr)
-		if err != nil {
-			return nil, err
-		}
-
-		ips, err := net.DefaultResolver.LookupHost(ctx, host)
-		if err != nil {
-			return nil, err
-		}
-
-		for _, ipStr := range ips {
-			ip := net.ParseIP(ipStr)
-			if ip == nil {
-				continue
-			}
-			if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() ||
-				ip.IsLinkLocalMulticast() || ip.IsUnspecified() {
-				return nil, fmt.Errorf("connection to private address %s is not allowed", ipStr)
-			}
-		}
-
-		// Connect to first resolved IP
-		return dialer.DialContext(ctx, network, net.JoinHostPort(ips[0], port))
-	}
-}
-
 // WebhookRequest represents the request body for creating/updating a webhook
 type WebhookRequest struct {
 	Name     string            `json:"name"`

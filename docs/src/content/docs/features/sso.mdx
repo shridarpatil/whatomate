@@ -137,6 +137,7 @@ Every SSO config is scoped to an organization. A few consequences worth understa
 | **Brute force on callback** | `rate_limit.sso_max_attempts` (default 10/min/IP) caps both `init` and `callback`. Set `rate_limit.trust_proxy = true` if behind a reverse proxy. |
 | **Domain spoofing** | Use `allowed_domains` when `allow_auto_create` is on. |
 | **Disabled accounts** | Users with `is_active = false` are rejected at the end of the SSO flow. |
+| **Provider URLs pointing at internal services** | The token and user info calls refuse private and reserved addresses unless listed in `server.outbound_allow_cidrs`. |
 
 ## Custom OIDC Providers
 
@@ -147,6 +148,8 @@ For Okta, Auth0, Keycloak, Authentik, etc., choose **Custom** and supply:
 | `auth_url` | `https://kc.example.com/realms/main/protocol/openid-connect/auth` |
 | `token_url` | `https://kc.example.com/realms/main/protocol/openid-connect/token` |
 | `user_info_url` | `https://kc.example.com/realms/main/protocol/openid-connect/userinfo` |
+
+If the provider runs on a private network (a self-hosted Zitadel or Keycloak whose hostname resolves to `10.x`, `172.16–31.x` or `192.168.x`), list its address in [`server.outbound_allow_cidrs`](/whatomate/getting-started/configuration/), for example `outbound_allow_cidrs = ["192.168.10.5/32"]`. Otherwise sign-in fails with "Failed to authenticate with provider" or "Failed to get user information", and the server log says the private address is not allowed.
 
 Whatomate requests the `openid email profile` scopes and expects the userinfo response to contain at least one of: `sub` or `id`, plus `email`, plus `name` or `preferred_username`. Most OIDC providers return this out of the box.
 
