@@ -150,7 +150,7 @@ export const usersService = {
   list: (params?: { search?: string; page?: number; limit?: number; role_id?: string; online_only?: boolean }) =>
     api.get('/users', { params }),
   get: (id: string) => api.get(`/users/${id}`),
-  create: (data: { email: string; password: string; full_name: string; role_id?: string }) =>
+  create: (data: { email: string; password?: string; full_name: string; role_id?: string }) =>
     api.post('/users', data),
   update: (id: string, data: { email?: string; password?: string; full_name?: string; role_id?: string; is_active?: boolean }) =>
     api.put(`/users/${id}`, data),

@@ -7,6 +7,7 @@ import Modal from '@/components/oat/Modal.vue'
 import { toast } from '@/lib/toast'
 import { ShieldCheck, Settings2, ExternalLink, Info, Copy, Check } from '@/lib/icons'
 import { getErrorMessage } from '@/lib/api-utils'
+import { useAuthStore } from '@/stores/auth'
 
 const { t } = useI18n()
 
@@ -240,8 +241,40 @@ function getConfiguredProvider(providerKey: string): SSOProvider | undefined {
   return providers.value.find(p => p.provider === providerKey)
 }
 
+// Require SSO: password login only for admins once a provider is enabled.
+const authStore = useAuthStore()
+const canWrite = computed(() => authStore.hasPermission('settings.sso', 'write'))
+const ssoRequired = ref(false)
+const isSavingPolicy = ref(false)
+const hasEnabledProvider = computed(() => providers.value.some(p => p.is_enabled))
+
+async function fetchPolicy() {
+  try {
+    const response = await api.get('/settings/sso-policy')
+    ssoRequired.value = !!response.data.data?.sso_required
+  } catch {
+    // Shown as off; the providers request reports load errors.
+  }
+}
+
+async function saveSSORequired(event: Event) {
+  const value = (event.target as HTMLInputElement).checked
+  isSavingPolicy.value = true
+  try {
+    await api.put('/settings/sso-policy', { sso_required: value })
+    ssoRequired.value = value
+    toast.success(t('common.updatedSuccess', { resource: t('sso.requireSSO') }))
+  } catch (error) {
+    (event.target as HTMLInputElement).checked = ssoRequired.value
+    toast.error(getErrorMessage(error, t('common.failedSave', { resource: t('sso.requireSSO') })))
+  } finally {
+    isSavingPolicy.value = false
+  }
+}
+
 onMounted(() => {
   fetchProviders()
+  fetchPolicy()
 })
 </script>
 
@@ -265,6 +298,24 @@ onMounted(() => {
           <strong class="hstack gap-2"><Info :size="16" /> {{ $t('sso.configuration') }}</strong>
           {{ $t('sso.configurationDesc') }}
         </div>
+
+        <!-- Require SSO -->
+        <article class="card">
+          <label data-field>
+            <span class="hstack justify-between">
+              <strong>{{ $t('sso.requireSSO') }}</strong>
+              <input
+                type="checkbox"
+                role="switch"
+                :checked="ssoRequired"
+                :disabled="!canWrite || isSavingPolicy"
+                @change="saveSSORequired"
+              />
+            </span>
+            <small data-hint>{{ $t('sso.requireSSODesc') }}</small>
+            <small v-if="ssoRequired && !hasEnabledProvider" data-hint>{{ $t('sso.requireSSONoProvider') }}</small>
+          </label>
+        </article>
 
         <!-- Provider Cards -->
         <div class="row">

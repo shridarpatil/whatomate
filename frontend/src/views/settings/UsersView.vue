@@ -102,14 +102,13 @@ async function fetchUsers() {
 async function createUser() {
   if (!formData.value.email.trim() || !formData.value.full_name.trim()) { toast.error(t('users.fillEmailName')); return }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.value.email.trim())) { toast.error(t('validation.email')); return }
-  if (!formData.value.password.trim()) { toast.error(t('users.passwordRequired')); return }
   if (!formData.value.role_id) { toast.error(t('users.selectRoleRequired')); return }
 
   isSubmitting.value = true
   try {
     await usersStore.createUser({
       email: formData.value.email,
-      password: formData.value.password,
+      password: formData.value.password || undefined,
       full_name: formData.value.full_name,
       role_id: formData.value.role_id || undefined,
       is_super_admin: isSuperAdmin.value && formData.value.is_super_admin ? true : undefined,
@@ -278,7 +277,7 @@ async function copyInviteLink() {
       <div class="vstack gap-4">
         <label data-field>{{ $t('users.fullName') }} *<input id="full_name" v-model="formData.full_name" :placeholder="$t('users.fullNamePlaceholder')" /></label>
         <label data-field>{{ $t('common.email') }} *<input id="email" v-model="formData.email" type="email" :placeholder="$t('users.emailPlaceholder')" /></label>
-        <label data-field>{{ $t('users.password') }} *<input id="password" v-model="formData.password" type="password" :placeholder="$t('users.passwordPlaceholder')" /></label>
+        <label data-field>{{ $t('users.password') }}<input id="password" v-model="formData.password" type="password" autocomplete="new-password" :placeholder="$t('users.passwordPlaceholder')" /><small data-hint>{{ $t('users.passwordOptionalHint') }}</small></label>
         <label data-field>
           {{ $t('users.role') }} *
           <select id="role" v-model="formData.role_id">

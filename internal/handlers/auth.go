@@ -80,9 +80,19 @@ func (a *App) Login(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Account is disabled", nil, "")
 	}
 
-	// Verify password
+	// Verify password. A user without one (SSO-only) gets the same answer and
+	// the same bcrypt delay as a wrong password, so the two can't be told apart.
+	if user.PasswordHash == "" {
+		_ = bcrypt.CompareHashAndPassword([]byte("$2a$10$xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"), []byte(req.Password))
+		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Invalid credentials", nil, "")
+	}
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Invalid credentials", nil, "")
+	}
+
+	// Checked only after a correct password, so it tells a guesser nothing.
+	if a.passwordLoginBlocked(&user) {
+		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "This account must sign in with SSO", nil, "")
 	}
 
 	// Generate tokens

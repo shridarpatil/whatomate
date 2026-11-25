@@ -802,6 +802,8 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 	g.PUT("/api/settings/sso/{provider}", app.UpdateSSOProvider)
 	g.DELETE("/api/settings/sso/{provider}", app.DeleteSSOProvider)
 	g.GET("/api/settings/sso/{provider}/callback-url", app.GetSSOCallbackURL)
+	g.GET("/api/settings/sso-policy", app.GetSSOPolicy)
+	g.PUT("/api/settings/sso-policy", app.UpdateSSOPolicy)
 
 	// Webhooks
 	g.GET("/api/webhooks", app.ListWebhooks)

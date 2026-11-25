@@ -25,7 +25,7 @@ export interface User {
 
 export interface CreateUserData {
   email: string
-  password: string
+  password?: string
   full_name: string
   role_id?: string
   is_super_admin?: boolean
