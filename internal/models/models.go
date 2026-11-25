@@ -248,6 +248,7 @@ type SSOProvider struct {
 	AllowAutoCreate bool      `gorm:"default:false" json:"allow_auto_create"`      // Auto-create new users on SSO login
 	DefaultRoleName string    `gorm:"size:50;default:'agent'" json:"default_role"` // Role name for auto-created users (references CustomRole.Name)
 	AllowedDomains  string    `gorm:"type:text" json:"allowed_domains,omitempty"`  // Comma-separated email domains
+	DisplayName     string    `gorm:"size:100" json:"display_name,omitempty"`      // Login button label; empty uses the provider's default name
 
 	// Custom OIDC provider fields (only used when Provider = "custom")
 	AuthURL     string `gorm:"size:500" json:"auth_url,omitempty"`

@@ -18,6 +18,7 @@ interface SSOProvider {
   allow_auto_create: boolean
   default_role: string
   allowed_domains: string
+  display_name?: string
   auth_url?: string
   token_url?: string
   user_info_url?: string
@@ -85,6 +86,7 @@ const editForm = ref({
   allow_auto_create: false,
   default_role: 'agent',
   allowed_domains: '',
+  display_name: '',
   auth_url: '',
   token_url: '',
   user_info_url: ''
@@ -134,6 +136,7 @@ function openEditDialog(providerKey: string) {
     allow_auto_create: existing?.allow_auto_create || false,
     default_role: existing?.default_role || 'agent',
     allowed_domains: existing?.allowed_domains || '',
+    display_name: existing?.display_name || '',
     auth_url: existing?.auth_url || '',
     token_url: existing?.token_url || '',
     user_info_url: existing?.user_info_url || ''
@@ -180,6 +183,7 @@ async function saveProvider() {
 
     // Custom provider fields
     if (editingProvider.value === 'custom') {
+      payload.display_name = editForm.value.display_name.trim()
       payload.auth_url = editForm.value.auth_url.trim()
       payload.token_url = editForm.value.token_url.trim()
       payload.user_info_url = editForm.value.user_info_url.trim()
@@ -347,6 +351,11 @@ onMounted(() => {
 
         <!-- Custom Provider URLs -->
         <template v-if="editingProvider === 'custom'">
+          <label data-field>
+            {{ $t('sso.displayName') }}
+            <input id="display_name" v-model="editForm.display_name" maxlength="100" :placeholder="$t('sso.displayNamePlaceholder')" />
+            <small data-hint>{{ $t('sso.displayNameHint') }}</small>
+          </label>
           <label data-field>
             {{ $t('sso.authUrl') }}
             <input id="auth_url" v-model="editForm.auth_url" :placeholder="$t('sso.authUrlPlaceholder')" />

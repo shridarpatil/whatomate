@@ -63,6 +63,7 @@ Settings live under **Settings → SSO** (admin-only). All providers share the s
 | `allow_auto_create` | — | If on, unknown users get an account on first SSO login. See below. |
 | `default_role` | — | Role **name** assigned to auto-created users. Defaults to `agent`. Must be a real role for the org (look it up under **Settings → Roles**). |
 | `allowed_domains` | — | Comma-separated email domains, e.g. `acme.com,acme.co.in`. Empty = any domain accepted. |
+| `display_name` | custom only | Login button label, shown as "Sign in with <label>". Empty shows "Custom SSO". Up to 100 characters. |
 | `auth_url` | custom only | OAuth 2.0 authorization endpoint. |
 | `token_url` | custom only | OAuth 2.0 token endpoint. |
 | `user_info_url` | custom only | OIDC userinfo endpoint. Must return `sub` (or `id`), `email`, and `name` (or `preferred_username`). |
