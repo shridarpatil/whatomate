@@ -644,6 +644,89 @@ func TestApp_CallbackSSO_DisabledExistingUserRejected(t *testing.T) {
 	assert.Empty(t, testutil.GetResponseCookie(req, "whm_access"))
 }
 
+// runSSOCallback stores a state for org/custom and runs the callback.
+func runSSOCallback(t *testing.T, app *handlers.App, orgID uuid.UUID, nonce string) *fastglue.Request {
+	t.Helper()
+	state := handlers.SSOState{
+		OrgID: orgID.String(), Provider: "custom", Nonce: nonce, ExpiresAt: time.Now().Add(5 * time.Minute),
+	}
+	stored, _ := json.Marshal(state)
+	require.NoError(t, app.Redis.Set(context.Background(), "sso:state:"+nonce, stored, 5*time.Minute).Err())
+
+	req := testutil.NewGETRequest(t)
+	testutil.SetPathParam(req, "provider", "custom")
+	testutil.SetQueryParam(req, "code", "c")
+	testutil.SetQueryParam(req, "state", nonce)
+	require.NoError(t, app.CallbackSSO(req))
+	return req
+}
+
+// An org's SSO provider must not sign in a user who belongs to another org,
+// even when the provider asserts that user's email.
+func TestApp_CallbackSSO_UserFromAnotherOrgRejected(t *testing.T) {
+	app := newSSOApp(t)
+	fake := newFakeOAuth(t)
+	email := testutil.UniqueEmail("sso-other-org")
+	fake.UserEmail = email
+
+	attackerOrg := testutil.CreateTestOrganization(t, app.DB)
+	victimOrg := testutil.CreateTestOrganization(t, app.DB)
+	createCustomSSOProvider(t, app, attackerOrg.ID, fake, func(p *models.SSOProvider) {
+		p.AllowAutoCreate = true
+	})
+	victim := testutil.CreateTestUser(t, app.DB, victimOrg.ID, testutil.WithEmail(email))
+
+	req := runSSOCallback(t, app, attackerOrg.ID, "other-org-nonce")
+
+	loc := string(req.RequestCtx.Response.Header.Peek("Location"))
+	assert.Contains(t, loc, "sso_error=")
+	assert.Empty(t, testutil.GetResponseCookie(req, "whm_access"))
+	assert.Empty(t, testutil.GetResponseCookie(req, "whm_refresh"))
+
+	var refreshed models.User
+	require.NoError(t, app.DB.Where("id = ?", victim.ID).First(&refreshed).Error)
+	assert.Empty(t, refreshed.SSOProvider, "victim's account must not be linked to the other org's provider")
+}
+
+// Being added to an org does not let that org's SSO provider sign the user in:
+// the account belongs to its home org.
+func TestApp_CallbackSSO_MemberWithDifferentHomeOrgRejected(t *testing.T) {
+	app := newSSOApp(t)
+	fake := newFakeOAuth(t)
+	email := testutil.UniqueEmail("sso-member")
+	fake.UserEmail = email
+
+	providerOrg := testutil.CreateTestOrganization(t, app.DB)
+	homeOrg := testutil.CreateTestOrganization(t, app.DB)
+	createCustomSSOProvider(t, app, providerOrg.ID, fake)
+	user := testutil.CreateTestUser(t, app.DB, homeOrg.ID, testutil.WithEmail(email))
+	require.NoError(t, app.DB.Create(&models.UserOrganization{
+		UserID: user.ID, OrganizationID: providerOrg.ID,
+	}).Error)
+
+	req := runSSOCallback(t, app, providerOrg.ID, "member-nonce")
+
+	assert.Contains(t, string(req.RequestCtx.Response.Header.Peek("Location")), "sso_error=")
+	assert.Empty(t, testutil.GetResponseCookie(req, "whm_access"))
+}
+
+// Super admins reach every org, so no single org's IdP may vouch for them.
+func TestApp_CallbackSSO_SuperAdminRejected(t *testing.T) {
+	app := newSSOApp(t)
+	fake := newFakeOAuth(t)
+	email := testutil.UniqueEmail("sso-super")
+	fake.UserEmail = email
+
+	org := testutil.CreateTestOrganization(t, app.DB)
+	createCustomSSOProvider(t, app, org.ID, fake)
+	testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(email), testutil.WithSuperAdmin())
+
+	req := runSSOCallback(t, app, org.ID, "super-admin-nonce")
+
+	assert.Contains(t, string(req.RequestCtx.Response.Header.Peek("Location")), "sso_error=")
+	assert.Empty(t, testutil.GetResponseCookie(req, "whm_access"))
+}
+
 // --- SSO settings permission checks ---
 
 func TestApp_SSOSettings_RequirePermissions(t *testing.T) {
