@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/pkg/whatsapp"
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
@@ -17,9 +18,9 @@ const businessProfileHTTPTimeout = 30 * time.Second
 
 // GetBusinessProfile returns the business profile for a WhatsApp account
 func (a *App) GetBusinessProfile(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
+	orgID, _, err := a.requireAuth(r, models.ResourceAccounts, models.ActionRead)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+		return nil
 	}
 
 	id, err := parsePathUUID(r, "id", "account")
@@ -46,9 +47,9 @@ func (a *App) GetBusinessProfile(r *fastglue.Request) error {
 
 // UpdateBusinessProfile updates the business profile for a WhatsApp account
 func (a *App) UpdateBusinessProfile(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
+	orgID, _, err := a.requireAuth(r, models.ResourceAccounts, models.ActionWrite)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+		return nil
 	}
 
 	id, err := parsePathUUID(r, "id", "account")
@@ -87,9 +88,9 @@ func (a *App) UpdateBusinessProfile(r *fastglue.Request) error {
 
 // UpdateProfilePicture handles the profile picture upload
 func (a *App) UpdateProfilePicture(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
+	orgID, _, err := a.requireAuth(r, models.ResourceAccounts, models.ActionWrite)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+		return nil
 	}
 
 	id, err := parsePathUUID(r, "id", "account")

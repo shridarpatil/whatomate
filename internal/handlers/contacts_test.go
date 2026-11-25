@@ -1496,6 +1496,53 @@ func TestApp_ListContacts_SearchByProfileName(t *testing.T) {
 	assert.Equal(t, "UniqueAlphaName", resp.Data.Contacts[0].ProfileName)
 }
 
+func TestApp_ListContacts_AssignedFilter(t *testing.T) {
+	t.Parallel()
+
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	adminRole := testutil.CreateAdminRole(t, app.DB, org.ID)
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&adminRole.ID))
+	other := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&adminRole.ID))
+
+	newContact := func(phone string, assignee *uuid.UUID) {
+		require.NoError(t, app.DB.Create(&models.Contact{
+			BaseModel:      models.BaseModel{ID: uuid.New()},
+			OrganizationID: org.ID,
+			PhoneNumber:    phone,
+			AssignedUserID: assignee,
+		}).Error)
+	}
+	newContact("+1000000001", &user.ID)
+	newContact("+1000000002", &other.ID)
+	newContact("+1000000003", nil)
+
+	list := func(assigned string) []string {
+		req := testutil.NewGETRequest(t)
+		testutil.SetAuthContext(req, org.ID, user.ID)
+		if assigned != "" {
+			testutil.SetQueryParam(req, "assigned", assigned)
+		}
+		require.NoError(t, app.ListContacts(req))
+		require.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+		var resp struct {
+			Data struct {
+				Contacts []handlers.ContactResponse `json:"contacts"`
+			} `json:"data"`
+		}
+		require.NoError(t, json.Unmarshal(testutil.GetResponseBody(req), &resp))
+		phones := make([]string, 0, len(resp.Data.Contacts))
+		for _, c := range resp.Data.Contacts {
+			phones = append(phones, c.PhoneNumber)
+		}
+		return phones
+	}
+
+	assert.Len(t, list(""), 3)
+	assert.Len(t, list("me"), 1)
+	assert.Len(t, list("none"), 1)
+}
+
 func TestApp_ListContacts_Page2(t *testing.T) {
 	t.Parallel()
 

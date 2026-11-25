@@ -21,7 +21,7 @@ func TestApp_GetOrganizationSettings_Success(t *testing.T) {
 
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("get-settings")))
+	user := settingsWriter(t, app, org.ID, "get-settings")
 
 	// Set organization settings
 	org.Settings = models.JSONB{
@@ -58,7 +58,7 @@ func TestApp_GetOrganizationSettings_Defaults(t *testing.T) {
 
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("get-settings-defaults")))
+	user := settingsWriter(t, app, org.ID, "get-settings-defaults")
 
 	// Organization with nil settings should return defaults
 	req := testutil.NewGETRequest(t)
@@ -220,7 +220,7 @@ func TestApp_UpdateOrganizationSettings_InvalidJSON(t *testing.T) {
 
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("invalid-json")))
+	user := settingsWriter(t, app, org.ID, "invalid-json")
 
 	// Create a request with invalid JSON body
 	req := testutil.NewGETRequest(t)
@@ -302,7 +302,7 @@ func TestApp_GetOrganizationSettings_CallingDefaults(t *testing.T) {
 	app.Config.Calling.TransferTimeoutSecs = 60
 
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("calling-defaults")))
+	user := settingsWriter(t, app, org.ID, "calling-defaults")
 
 	req := testutil.NewGETRequest(t)
 	testutil.SetAuthContext(req, org.ID, user.ID)
@@ -333,7 +333,7 @@ func TestApp_GetOrganizationSettings_CallingOverrides(t *testing.T) {
 	app.Config.Calling.TransferTimeoutSecs = 60
 
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("calling-overrides")))
+	user := settingsWriter(t, app, org.ID, "calling-overrides")
 
 	// Set org-level calling overrides
 	org.Settings = models.JSONB{
@@ -772,4 +772,63 @@ func TestApp_UpdateOrganizationSettings_MetaCredsOnlyNeedAccountsWrite(t *testin
 	testutil.SetAuthContext(req, org.ID, user.ID)
 	require.NoError(t, app.UpdateOrganizationSettings(req))
 	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+}
+
+// GET /api/org/settings backs only the general settings page, so it needs
+// settings.general:read (agents don't read it).
+func TestApp_GetOrganizationSettings_RequiresReadPermission(t *testing.T) {
+	t.Parallel()
+
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	role := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "agent-like", []string{"chat:read", "chat:write", "contacts:read"})
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
+
+	req := testutil.NewGETRequest(t)
+	testutil.SetAuthContext(req, org.ID, user.ID)
+	require.NoError(t, app.GetOrganizationSettings(req))
+	assert.Equal(t, fasthttp.StatusForbidden, testutil.GetResponseStatusCode(req))
+
+	reader := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "settings-reader", []string{"settings.general:read"})
+	readerUser := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&reader.ID))
+	req = testutil.NewGETRequest(t)
+	testutil.SetAuthContext(req, org.ID, readerUser.ID)
+	require.NoError(t, app.GetOrganizationSettings(req))
+	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+}
+
+func TestApp_UpdateOrganizationSettings_NoPermissionEmptyBody(t *testing.T) {
+	t.Parallel()
+
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	user := testutil.CreateTestUser(t, app.DB, org.ID)
+
+	req := testutil.NewJSONRequest(t, map[string]any{})
+	testutil.SetAuthContext(req, org.ID, user.ID)
+	require.NoError(t, app.UpdateOrganizationSettings(req))
+	assert.Equal(t, fasthttp.StatusForbidden, testutil.GetResponseStatusCode(req))
+}
+
+func TestApp_UploadOrgAudio_RequiresPermission(t *testing.T) {
+	t.Parallel()
+
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	user := testutil.CreateTestUser(t, app.DB, org.ID)
+
+	req := testutil.NewJSONRequest(t, nil)
+	testutil.SetAuthContext(req, org.ID, user.ID)
+	req.RequestCtx.QueryArgs().Set("type", "hold_music")
+	require.NoError(t, app.UploadOrgAudio(req))
+	assert.Equal(t, fasthttp.StatusForbidden, testutil.GetResponseStatusCode(req))
+
+	// settings.general:write passes the permission check (then fails on the
+	// missing multipart body, which proves it got past auth).
+	writer := settingsWriter(t, app, org.ID, "audio-writer")
+	req = testutil.NewJSONRequest(t, nil)
+	testutil.SetAuthContext(req, org.ID, writer.ID)
+	req.RequestCtx.QueryArgs().Set("type", "hold_music")
+	require.NoError(t, app.UploadOrgAudio(req))
+	assert.Equal(t, fasthttp.StatusBadRequest, testutil.GetResponseStatusCode(req))
 }

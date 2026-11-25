@@ -272,6 +272,27 @@ func (a *App) requireAuth(r *fastglue.Request, resource, action string) (orgID, 
 	return orgID, userID, nil
 }
 
+// Perm is one resource:action permission, used with requireAnyAuth.
+type Perm struct{ Resource, Action string }
+
+// requireAnyAuth is requireAuth for endpoints that more than one permission may
+// open — e.g. listing templates is allowed with templates:read (to manage them)
+// or chat:read (to pick one while chatting). The user needs at least one.
+func (a *App) requireAnyAuth(r *fastglue.Request, perms ...Perm) (orgID, userID uuid.UUID, err error) {
+	orgID, userID, err = a.getOrgAndUserID(r)
+	if err != nil {
+		_ = r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+		return uuid.Nil, uuid.Nil, errEnvelopeSent
+	}
+	for _, p := range perms {
+		if a.HasPermission(userID, p.Resource, p.Action, orgID) {
+			return orgID, userID, nil
+		}
+	}
+	_ = r.SendErrorEnvelope(fasthttp.StatusForbidden, "Insufficient permissions", nil, "")
+	return uuid.Nil, uuid.Nil, errEnvelopeSent
+}
+
 // decodeRequest decodes a JSON request body into the provided struct.
 // Returns nil on success, otherwise sends a 400 error envelope and returns errEnvelopeSent.
 func (a *App) decodeRequest(r *fastglue.Request, v any) error {

@@ -119,9 +119,9 @@ var AvailableWebhookEvents = []map[string]string{
 
 // ListWebhooks returns all webhooks for the organization
 func (a *App) ListWebhooks(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
+	orgID, _, err := a.requireAuth(r, models.ResourceWebhooks, models.ActionRead)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+		return nil
 	}
 
 	pg := parsePagination(r)
@@ -161,9 +161,9 @@ func (a *App) ListWebhooks(r *fastglue.Request) error {
 
 // GetWebhook returns a single webhook by ID
 func (a *App) GetWebhook(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
+	orgID, _, err := a.requireAuth(r, models.ResourceWebhooks, models.ActionRead)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+		return nil
 	}
 
 	webhookID, err := parsePathUUID(r, "id", "webhook")
@@ -181,9 +181,9 @@ func (a *App) GetWebhook(r *fastglue.Request) error {
 
 // CreateWebhook creates a new webhook
 func (a *App) CreateWebhook(r *fastglue.Request) error {
-	orgID, userID, err := a.getOrgAndUserID(r)
+	orgID, userID, err := a.requireAuth(r, models.ResourceWebhooks, models.ActionWrite)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+		return nil
 	}
 
 	var req WebhookRequest
@@ -241,9 +241,9 @@ func (a *App) CreateWebhook(r *fastglue.Request) error {
 
 // UpdateWebhook updates an existing webhook
 func (a *App) UpdateWebhook(r *fastglue.Request) error {
-	orgID, userID, err := a.getOrgAndUserID(r)
+	orgID, userID, err := a.requireAuth(r, models.ResourceWebhooks, models.ActionWrite)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+		return nil
 	}
 
 	webhookID, err := parsePathUUID(r, "id", "webhook")
@@ -308,9 +308,9 @@ func (a *App) UpdateWebhook(r *fastglue.Request) error {
 
 // DeleteWebhook deletes a webhook
 func (a *App) DeleteWebhook(r *fastglue.Request) error {
-	orgID, userID, err := a.getOrgAndUserID(r)
+	orgID, userID, err := a.requireAuth(r, models.ResourceWebhooks, models.ActionDelete)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+		return nil
 	}
 
 	webhookID, err := parsePathUUID(r, "id", "webhook")
@@ -339,9 +339,9 @@ func (a *App) DeleteWebhook(r *fastglue.Request) error {
 
 // TestWebhook sends a test event to a webhook
 func (a *App) TestWebhook(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
+	orgID, _, err := a.requireAuth(r, models.ResourceWebhooks, models.ActionWrite)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+		return nil
 	}
 
 	webhookID, err := parsePathUUID(r, "id", "webhook")

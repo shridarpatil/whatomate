@@ -6,6 +6,8 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/google/uuid"
+	"github.com/shridarpatil/whatomate/internal/handlers"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/pkg/whatsapp"
 	"github.com/shridarpatil/whatomate/test/testutil"
@@ -52,7 +54,7 @@ func TestApp_GetCallPermission(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			app := newTestApp(t)
 			org := testutil.CreateTestOrganization(t, app.DB)
-			role := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "call-reader", []string{"outgoing_calls:read"})
+			role := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "call-reader", []string{"outgoing_calls:read", "contacts:read"})
 			user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
 			account := testutil.CreateTestWhatsAppAccountWith(t, app.DB, org.ID, func(account *models.WhatsAppAccount) {
 				account.BusinessCallingEnabled = tt.callingEnabled
@@ -94,4 +96,88 @@ func TestApp_GetCallPermission(t *testing.T) {
 			assert.Equal(t, tt.wantRequests, requests.Load())
 		})
 	}
+}
+
+func TestApp_GetCallPermission_UnassignedContactHidden(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	// outgoing_calls:read without contacts:read → only assigned contacts
+	role := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "call-reader", []string{"outgoing_calls:read"})
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
+	account := testutil.CreateTestWhatsAppAccountWith(t, app.DB, org.ID, func(*models.WhatsAppAccount) {})
+	contact := testutil.CreateTestContactWith(t, app.DB, org.ID, testutil.WithContactAccount(account.Name))
+
+	req := testutil.NewGETRequest(t)
+	testutil.SetAuthContext(req, org.ID, user.ID)
+	testutil.SetPathParam(req, "contactId", contact.ID.String())
+	testutil.SetQueryParam(req, "whatsapp_account", account.Name)
+	require.NoError(t, app.GetCallPermission(req))
+	assert.Equal(t, fasthttp.StatusNotFound, testutil.GetResponseStatusCode(req))
+
+	require.NoError(t, app.DB.Model(contact).Update("assigned_user_id", user.ID).Error)
+	req = testutil.NewGETRequest(t)
+	testutil.SetAuthContext(req, org.ID, user.ID)
+	testutil.SetPathParam(req, "contactId", contact.ID.String())
+	testutil.SetQueryParam(req, "whatsapp_account", account.Name)
+	require.NoError(t, app.GetCallPermission(req))
+	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+}
+
+func TestApp_GetICEServers_Permissions(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+
+	for name, tc := range map[string]struct {
+		perms []string
+		want  int
+	}{
+		"no calling permission": {[]string{"chat:read", "chat:write"}, fasthttp.StatusForbidden},
+		"outgoing_calls:write":  {[]string{"outgoing_calls:write"}, fasthttp.StatusOK},
+		"call_transfers:write":  {[]string{"call_transfers:write"}, fasthttp.StatusOK},
+	} {
+		t.Run(name, func(t *testing.T) {
+			role := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, name, tc.perms)
+			user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
+
+			req := testutil.NewGETRequest(t)
+			testutil.SetAuthContext(req, org.ID, user.ID)
+			require.NoError(t, app.GetICEServers(req))
+			assert.Equal(t, tc.want, testutil.GetResponseStatusCode(req))
+		})
+	}
+}
+
+// createTestCallLog creates a call log (with its contact) in the given org.
+func createTestCallLog(t *testing.T, app *handlers.App, orgID uuid.UUID) *models.CallLog {
+	t.Helper()
+	contact := testutil.CreateTestContact(t, app.DB, orgID)
+	callLog := &models.CallLog{
+		BaseModel:       models.BaseModel{ID: uuid.New()},
+		OrganizationID:  orgID,
+		WhatsAppAccount: "test-account",
+		ContactID:       contact.ID,
+		CallerPhone:     contact.PhoneNumber,
+		Direction:       models.CallDirectionOutgoing,
+	}
+	require.NoError(t, app.DB.Create(callLog).Error)
+	return callLog
+}
+
+func TestApp_HangupOutgoingCall_OtherOrgCallLog(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	otherOrg := testutil.CreateTestOrganization(t, app.DB)
+	role := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "caller", []string{"outgoing_calls:write"})
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
+	foreign := createTestCallLog(t, app, otherOrg.ID)
+
+	req := testutil.NewJSONRequest(t, nil)
+	testutil.SetAuthContext(req, org.ID, user.ID)
+	testutil.SetPathParam(req, "id", foreign.ID.String())
+	require.NoError(t, app.HangupOutgoingCall(req))
+	assert.Equal(t, fasthttp.StatusNotFound, testutil.GetResponseStatusCode(req))
+
+	var got models.CallLog
+	require.NoError(t, app.DB.First(&got, "id = ?", foreign.ID).Error)
+	assert.Empty(t, got.DisconnectedBy)
 }

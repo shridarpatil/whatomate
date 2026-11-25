@@ -601,3 +601,173 @@ func TestApp_Widget_CrossOrg_CannotDelete(t *testing.T) {
 	app.DB.Model(&models.Widget{}).Where("id = ?", widget1.ID).Count(&count)
 	assert.Equal(t, int64(1), count)
 }
+
+// Line and bar charts grouped by a field are time series (one series per group);
+// only pie charts get the per-group totals for the period.
+func TestApp_GetWidgetData_GroupedChartShapes(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	perms := getAnalyticsPermissions(t, app)
+	role := testutil.CreateTestRoleExact(t, app.DB, org.ID, "Analytics User", false, false, perms)
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("widget-data")), testutil.WithPassword("password"), testutil.WithRoleID(&role.ID))
+
+	for _, tc := range []struct {
+		chartType  string
+		wantSeries bool
+	}{
+		{"line", true},
+		{"bar", true},
+		{"pie", false},
+	} {
+		t.Run(tc.chartType, func(t *testing.T) {
+			widget := createTestWidget(t, app, org.ID, &user.ID, "Messages by direction "+tc.chartType, true, false)
+			require.NoError(t, app.DB.Model(widget).Updates(map[string]any{
+				"display_type":   "chart",
+				"chart_type":     tc.chartType,
+				"group_by_field": "direction",
+			}).Error)
+
+			req := testutil.NewGETRequest(t)
+			testutil.SetAuthContext(req, org.ID, user.ID)
+			testutil.SetPathParam(req, "id", widget.ID.String())
+			require.NoError(t, app.GetWidgetData(req))
+			require.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+			var resp struct {
+				Data handlers.WidgetDataResponse `json:"data"`
+			}
+			require.NoError(t, json.Unmarshal(testutil.GetResponseBody(req), &resp))
+			if tc.wantSeries {
+				assert.NotNil(t, resp.Data.GroupedSeries, "expected a grouped time series")
+				assert.Empty(t, resp.Data.DataPoints)
+			} else {
+				assert.Nil(t, resp.Data.GroupedSeries)
+			}
+		})
+	}
+}
+
+// A shortcuts widget stores its display type as data_source; editing it again (which
+// sends that value back) must succeed, not fail with "Invalid data source".
+func TestApp_UpdateWidget_ShortcutsTwice(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	perms := getAnalyticsPermissions(t, app)
+	role := testutil.CreateTestRoleExact(t, app.DB, org.ID, "Analytics Editor", false, false, perms)
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("shortcuts-edit")), testutil.WithPassword("password"), testutil.WithRoleID(&role.ID))
+	widget := createTestWidget(t, app, org.ID, &user.ID, "Quick actions", false, false)
+	require.NoError(t, app.DB.Model(widget).Updates(map[string]any{"display_type": "shortcuts", "data_source": "shortcuts"}).Error)
+
+	for _, shortcuts := range [][]string{{"chat"}, {"chat", "campaigns"}} {
+		req := testutil.NewJSONRequest(t, map[string]any{
+			"name":         "Quick actions",
+			"data_source":  "shortcuts",
+			"display_type": "shortcuts",
+			"config":       map[string]any{"shortcuts": shortcuts},
+		})
+		testutil.SetAuthContext(req, org.ID, user.ID)
+		testutil.SetPathParam(req, "id", widget.ID.String())
+		require.NoError(t, app.UpdateWidget(req))
+		assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req), string(testutil.GetResponseBody(req)))
+	}
+
+	// Turning it into a number widget still needs a real data source.
+	req := testutil.NewJSONRequest(t, map[string]any{"display_type": "number"})
+	testutil.SetAuthContext(req, org.ID, user.ID)
+	testutil.SetPathParam(req, "id", widget.ID.String())
+	require.NoError(t, app.UpdateWidget(req))
+	assert.Equal(t, fasthttp.StatusBadRequest, testutil.GetResponseStatusCode(req))
+}
+
+// --- Widget data / layout permission checks ---
+
+func TestApp_WidgetDataEndpoints_NoPermission(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	role := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "chat only", []string{"chat:read", "chat:write"})
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
+	widget := createTestWidget(t, app, org.ID, &user.ID, "Mine", false, false)
+
+	t.Run("data-sources", func(t *testing.T) {
+		req := testutil.NewGETRequest(t)
+		testutil.SetAuthContext(req, org.ID, user.ID)
+		require.NoError(t, app.GetWidgetDataSources(req))
+		assert.Equal(t, fasthttp.StatusForbidden, testutil.GetResponseStatusCode(req))
+	})
+	t.Run("all data", func(t *testing.T) {
+		req := testutil.NewGETRequest(t)
+		testutil.SetAuthContext(req, org.ID, user.ID)
+		require.NoError(t, app.GetAllWidgetsData(req))
+		assert.Equal(t, fasthttp.StatusForbidden, testutil.GetResponseStatusCode(req))
+	})
+	t.Run("widget data", func(t *testing.T) {
+		req := testutil.NewGETRequest(t)
+		testutil.SetAuthContext(req, org.ID, user.ID)
+		testutil.SetPathParam(req, "id", widget.ID.String())
+		require.NoError(t, app.GetWidgetData(req))
+		assert.Equal(t, fasthttp.StatusForbidden, testutil.GetResponseStatusCode(req))
+	})
+	t.Run("layout", func(t *testing.T) {
+		req := testutil.NewJSONRequest(t, map[string]any{
+			"layout": []map[string]any{{"id": widget.ID, "grid_x": 3, "grid_y": 0, "grid_w": 4, "grid_h": 2}},
+		})
+		testutil.SetAuthContext(req, org.ID, user.ID)
+		require.NoError(t, app.SaveWidgetLayout(req))
+		assert.Equal(t, fasthttp.StatusForbidden, testutil.GetResponseStatusCode(req))
+
+		var got models.Widget
+		require.NoError(t, app.DB.First(&got, "id = ?", widget.ID).Error)
+		assert.NotEqual(t, 3, got.GridX, "layout must not change without analytics:write")
+	})
+}
+
+func TestApp_WidgetDataEndpoints_WithAnalyticsRead(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	role := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "analytics reader", []string{"analytics:read"})
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
+	widget := createTestWidget(t, app, org.ID, &user.ID, "Mine", false, false)
+
+	req := testutil.NewGETRequest(t)
+	testutil.SetAuthContext(req, org.ID, user.ID)
+	require.NoError(t, app.GetWidgetDataSources(req))
+	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	req = testutil.NewGETRequest(t)
+	testutil.SetAuthContext(req, org.ID, user.ID)
+	require.NoError(t, app.GetAllWidgetsData(req))
+	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	req = testutil.NewGETRequest(t)
+	testutil.SetAuthContext(req, org.ID, user.ID)
+	testutil.SetPathParam(req, "id", widget.ID.String())
+	require.NoError(t, app.GetWidgetData(req))
+	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	// Read-only users can't save the layout.
+	req = testutil.NewJSONRequest(t, map[string]any{
+		"layout": []map[string]any{{"id": widget.ID, "grid_x": 3, "grid_y": 0, "grid_w": 4, "grid_h": 2}},
+	})
+	testutil.SetAuthContext(req, org.ID, user.ID)
+	require.NoError(t, app.SaveWidgetLayout(req))
+	assert.Equal(t, fasthttp.StatusForbidden, testutil.GetResponseStatusCode(req))
+}
+
+func TestApp_SaveWidgetLayout_WithAnalyticsWrite(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	role := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "analytics editor", []string{"analytics:read", "analytics:write"})
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
+	widget := createTestWidget(t, app, org.ID, &user.ID, "Mine", false, false)
+
+	req := testutil.NewJSONRequest(t, map[string]any{
+		"layout": []map[string]any{{"id": widget.ID, "grid_x": 3, "grid_y": 0, "grid_w": 4, "grid_h": 2}},
+	})
+	testutil.SetAuthContext(req, org.ID, user.ID)
+	require.NoError(t, app.SaveWidgetLayout(req))
+	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	var got models.Widget
+	require.NoError(t, app.DB.First(&got, "id = ?", widget.ID).Error)
+	assert.Equal(t, 3, got.GridX)
+}

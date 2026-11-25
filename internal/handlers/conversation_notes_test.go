@@ -14,9 +14,18 @@ import (
 	"gorm.io/gorm"
 )
 
+// chatRWRole can chat with every contact in the org (contacts:read lifts the
+// assigned-contact scoping).
 func chatRWRole(t *testing.T, db *gorm.DB, orgID uuid.UUID) *models.CustomRole {
 	t.Helper()
-	return testutil.CreateTestRoleWithKeys(t, db, orgID, "chat-rw", []string{"chat:read", "chat:write"})
+	return testutil.CreateTestRoleWithKeys(t, db, orgID, "chat-rw", []string{"chat:read", "chat:write", "contacts:read"})
+}
+
+// chatAssignedOnlyRole chats without contacts:read, so it only reaches
+// contacts assigned to the user.
+func chatAssignedOnlyRole(t *testing.T, db *gorm.DB, orgID uuid.UUID) *models.CustomRole {
+	t.Helper()
+	return testutil.CreateTestRoleWithKeys(t, db, orgID, "chat-assigned", []string{"chat:read", "chat:write"})
 }
 
 // --- ListConversationNotes ---
@@ -325,4 +334,93 @@ func TestApp_DeleteConversationNote_CrossOrgIsolation(t *testing.T) {
 	var stillExists int64
 	app.DB.Model(&models.ConversationNote{}).Where("id = ?", note.ID).Count(&stillExists)
 	assert.Equal(t, int64(1), stillExists)
+}
+
+// --- Contact scoping for users without contacts:read ---
+
+func TestApp_ConversationNotes_UnassignedContactHidden(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	role := chatAssignedOnlyRole(t, app.DB, org.ID)
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
+	author := testutil.CreateTestUser(t, app.DB, org.ID)
+	contact := testutil.CreateTestContact(t, app.DB, org.ID) // not assigned to user
+
+	other := &models.ConversationNote{
+		BaseModel:      models.BaseModel{ID: uuid.New()},
+		OrganizationID: org.ID,
+		ContactID:      contact.ID,
+		CreatedByID:    author.ID,
+		Content:        "private",
+	}
+	require.NoError(t, app.DB.Create(other).Error)
+	own := &models.ConversationNote{
+		BaseModel:      models.BaseModel{ID: uuid.New()},
+		OrganizationID: org.ID,
+		ContactID:      contact.ID,
+		CreatedByID:    user.ID,
+		Content:        "mine, from when it was assigned",
+	}
+	require.NoError(t, app.DB.Create(own).Error)
+
+	req := testutil.NewGETRequest(t)
+	testutil.SetAuthContext(req, org.ID, user.ID)
+	testutil.SetPathParam(req, "id", contact.ID.String())
+	require.NoError(t, app.ListConversationNotes(req))
+	assert.Equal(t, fasthttp.StatusNotFound, testutil.GetResponseStatusCode(req))
+	assert.NotContains(t, string(testutil.GetResponseBody(req)), "private")
+
+	req = testutil.NewJSONRequest(t, map[string]any{"content": "hello"})
+	testutil.SetAuthContext(req, org.ID, user.ID)
+	testutil.SetPathParam(req, "id", contact.ID.String())
+	require.NoError(t, app.CreateConversationNote(req))
+	assert.Equal(t, fasthttp.StatusNotFound, testutil.GetResponseStatusCode(req))
+
+	req = testutil.NewJSONRequest(t, map[string]any{"content": "edited"})
+	testutil.SetAuthContext(req, org.ID, user.ID)
+	testutil.SetPathParam(req, "id", contact.ID.String())
+	testutil.SetPathParam(req, "note_id", own.ID.String())
+	require.NoError(t, app.UpdateConversationNote(req))
+	assert.Equal(t, fasthttp.StatusNotFound, testutil.GetResponseStatusCode(req))
+
+	req = testutil.NewJSONRequest(t, nil)
+	testutil.SetAuthContext(req, org.ID, user.ID)
+	testutil.SetPathParam(req, "id", contact.ID.String())
+	testutil.SetPathParam(req, "note_id", own.ID.String())
+	require.NoError(t, app.DeleteConversationNote(req))
+	assert.Equal(t, fasthttp.StatusNotFound, testutil.GetResponseStatusCode(req))
+
+	var count int64
+	app.DB.Model(&models.ConversationNote{}).Where("contact_id = ?", contact.ID).Count(&count)
+	assert.Equal(t, int64(2), count)
+}
+
+func TestApp_ConversationNotes_AssignedContactAllowed(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	role := chatAssignedOnlyRole(t, app.DB, org.ID)
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
+	contact := testutil.CreateTestContact(t, app.DB, org.ID)
+	require.NoError(t, app.DB.Model(contact).Update("assigned_user_id", user.ID).Error)
+
+	req := testutil.NewJSONRequest(t, map[string]any{"content": "hello"})
+	testutil.SetAuthContext(req, org.ID, user.ID)
+	testutil.SetPathParam(req, "id", contact.ID.String())
+	require.NoError(t, app.CreateConversationNote(req))
+	require.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	req = testutil.NewGETRequest(t)
+	testutil.SetAuthContext(req, org.ID, user.ID)
+	testutil.SetPathParam(req, "id", contact.ID.String())
+	require.NoError(t, app.ListConversationNotes(req))
+	require.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	var resp struct {
+		Data struct {
+			Notes []handlers.ConversationNoteResponse `json:"notes"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(testutil.GetResponseBody(req), &resp))
+	require.Len(t, resp.Data.Notes, 1)
+	assert.Equal(t, "hello", resp.Data.Notes[0].Content)
 }

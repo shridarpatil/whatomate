@@ -50,7 +50,7 @@ func TestApp_ListCustomActions(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 
 		createTestCustomAction(t, app, org.ID, "Action A", models.ActionTypeWebhook,
 			map[string]any{"url": "https://example.com/hook"}, true, 2)
@@ -80,7 +80,7 @@ func TestApp_ListCustomActions(t *testing.T) {
 	t.Run("EmptyList", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 
 		req := testutil.NewGETRequest(t)
 		testutil.SetAuthContext(req, org.ID, user.ID)
@@ -108,7 +108,7 @@ func TestApp_GetCustomAction(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 
 		action := createTestCustomAction(t, app, org.ID, "My Webhook", models.ActionTypeWebhook,
 			map[string]any{"url": "https://example.com/hook", "method": "POST"}, true, 0)
@@ -136,7 +136,7 @@ func TestApp_GetCustomAction(t *testing.T) {
 	t.Run("NotFound", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 
 		req := testutil.NewGETRequest(t)
 		testutil.SetAuthContext(req, org.ID, user.ID)
@@ -156,7 +156,7 @@ func TestApp_CreateCustomAction(t *testing.T) {
 	t.Run("Success_Webhook", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 
 		req := testutil.NewJSONRequest(t, map[string]any{
 			"name":        "Send to CRM",
@@ -197,7 +197,7 @@ func TestApp_CreateCustomAction(t *testing.T) {
 	t.Run("Success_URL", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 
 		req := testutil.NewJSONRequest(t, map[string]any{
 			"name":        "Open Profile",
@@ -225,7 +225,7 @@ func TestApp_CreateCustomAction(t *testing.T) {
 	t.Run("Success_JavaScript", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 
 		req := testutil.NewJSONRequest(t, map[string]any{
 			"name":        "Copy Phone",
@@ -252,7 +252,7 @@ func TestApp_CreateCustomAction(t *testing.T) {
 	t.Run("ValidationError_MissingName", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 
 		req := testutil.NewJSONRequest(t, map[string]any{
 			"action_type": "webhook",
@@ -271,7 +271,7 @@ func TestApp_CreateCustomAction(t *testing.T) {
 	t.Run("ValidationError_MissingActionType", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 
 		req := testutil.NewJSONRequest(t, map[string]any{
 			"name": "No Type",
@@ -290,7 +290,7 @@ func TestApp_CreateCustomAction(t *testing.T) {
 	t.Run("ValidationError_InvalidActionType", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 
 		req := testutil.NewJSONRequest(t, map[string]any{
 			"name":        "Bad Type",
@@ -310,7 +310,7 @@ func TestApp_CreateCustomAction(t *testing.T) {
 	t.Run("ValidationError_WebhookMissingURL", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 
 		req := testutil.NewJSONRequest(t, map[string]any{
 			"name":        "No URL Webhook",
@@ -328,7 +328,7 @@ func TestApp_CreateCustomAction(t *testing.T) {
 	t.Run("ValidationError_URLMissingURL", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 
 		req := testutil.NewJSONRequest(t, map[string]any{
 			"name":        "No URL Action",
@@ -346,7 +346,7 @@ func TestApp_CreateCustomAction(t *testing.T) {
 	t.Run("ValidationError_JavaScriptMissingCode", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 
 		req := testutil.NewJSONRequest(t, map[string]any{
 			"name":        "No Code JS",
@@ -387,7 +387,7 @@ func TestApp_UpdateCustomAction(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 
 		action := createTestCustomAction(t, app, org.ID, "Original Name", models.ActionTypeWebhook,
 			map[string]any{"url": "https://example.com/hook"}, true, 0)
@@ -420,7 +420,7 @@ func TestApp_UpdateCustomAction(t *testing.T) {
 	t.Run("Success_UpdateConfig", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 
 		action := createTestCustomAction(t, app, org.ID, "Webhook Action", models.ActionTypeWebhook,
 			map[string]any{"url": "https://old.example.com/hook"}, true, 0)
@@ -450,7 +450,7 @@ func TestApp_UpdateCustomAction(t *testing.T) {
 	t.Run("NotFound", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 
 		req := testutil.NewJSONRequest(t, map[string]any{
 			"name":      "Updated",
@@ -469,7 +469,7 @@ func TestApp_UpdateCustomAction(t *testing.T) {
 
 		org1 := testutil.CreateTestOrganization(t, app.DB)
 		org2 := testutil.CreateTestOrganization(t, app.DB)
-		user2 := testutil.CreateTestUser(t, app.DB, org2.ID)
+		user2 := createAdminUser(t, app, org2.ID)
 
 		action := createTestCustomAction(t, app, org1.ID, "Org1 Action", models.ActionTypeWebhook,
 			map[string]any{"url": "https://example.com/hook"}, true, 0)
@@ -496,7 +496,7 @@ func TestApp_DeleteCustomAction(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 
 		action := createTestCustomAction(t, app, org.ID, "To Delete", models.ActionTypeWebhook,
 			map[string]any{"url": "https://example.com/hook"}, true, 0)
@@ -527,7 +527,7 @@ func TestApp_DeleteCustomAction(t *testing.T) {
 	t.Run("NotFound", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 
 		req := testutil.NewGETRequest(t)
 		testutil.SetAuthContext(req, org.ID, user.ID)
@@ -543,7 +543,7 @@ func TestApp_DeleteCustomAction(t *testing.T) {
 
 		org1 := testutil.CreateTestOrganization(t, app.DB)
 		org2 := testutil.CreateTestOrganization(t, app.DB)
-		user2 := testutil.CreateTestUser(t, app.DB, org2.ID)
+		user2 := createAdminUser(t, app, org2.ID)
 
 		action := createTestCustomAction(t, app, org1.ID, "Org1 Action", models.ActionTypeWebhook,
 			map[string]any{"url": "https://example.com/hook"}, true, 0)
@@ -573,8 +573,8 @@ func TestApp_ListCustomActions_CrossOrgIsolation(t *testing.T) {
 
 	org1 := testutil.CreateTestOrganization(t, app.DB)
 	org2 := testutil.CreateTestOrganization(t, app.DB)
-	user1 := testutil.CreateTestUser(t, app.DB, org1.ID)
-	user2 := testutil.CreateTestUser(t, app.DB, org2.ID)
+	user1 := createAdminUser(t, app, org1.ID)
+	user2 := createAdminUser(t, app, org2.ID)
 
 	createTestCustomAction(t, app, org1.ID, "Org1 Action", models.ActionTypeWebhook,
 		map[string]any{"url": "https://example.com/hook1"}, true, 0)
@@ -627,7 +627,7 @@ func TestApp_GetCustomAction_CrossOrgIsolation(t *testing.T) {
 
 	org1 := testutil.CreateTestOrganization(t, app.DB)
 	org2 := testutil.CreateTestOrganization(t, app.DB)
-	user2 := testutil.CreateTestUser(t, app.DB, org2.ID)
+	user2 := createAdminUser(t, app, org2.ID)
 
 	action := createTestCustomAction(t, app, org1.ID, "Org1 Secret Action", models.ActionTypeWebhook,
 		map[string]any{"url": "https://example.com/hook"}, true, 0)
@@ -649,7 +649,7 @@ func TestApp_GetCustomAction_InvalidID(t *testing.T) {
 
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID)
+	user := createAdminUser(t, app, org.ID)
 
 	req := testutil.NewGETRequest(t)
 	testutil.SetAuthContext(req, org.ID, user.ID)
@@ -667,7 +667,7 @@ func TestApp_UpdateCustomAction_InvalidActionType(t *testing.T) {
 
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID)
+	user := createAdminUser(t, app, org.ID)
 
 	action := createTestCustomAction(t, app, org.ID, "Test Action", models.ActionTypeWebhook,
 		map[string]any{"url": "https://example.com/hook"}, true, 0)
@@ -691,7 +691,7 @@ func TestApp_UpdateCustomAction_InvalidConfig(t *testing.T) {
 
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID)
+	user := createAdminUser(t, app, org.ID)
 
 	action := createTestCustomAction(t, app, org.ID, "Webhook Action", models.ActionTypeWebhook,
 		map[string]any{"url": "https://example.com/hook"}, true, 0)
@@ -731,7 +731,7 @@ func TestApp_ExecuteCustomAction(t *testing.T) {
 
 		app := newTestApp(t, withHTTPClient(&http.Client{Timeout: 5 * time.Second}))
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 		contact := testutil.CreateTestContact(t, app.DB, org.ID)
 
 		action := createTestCustomAction(t, app, org.ID, "CRM Webhook", models.ActionTypeWebhook,
@@ -766,7 +766,7 @@ func TestApp_ExecuteCustomAction(t *testing.T) {
 
 		app := newTestApp(t, withHTTPClient(&http.Client{Timeout: 5 * time.Second}))
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 		contact := testutil.CreateTestContact(t, app.DB, org.ID)
 
 		action := createTestCustomAction(t, app, org.ID, "Open CRM", models.ActionTypeURL,
@@ -801,7 +801,7 @@ func TestApp_ExecuteCustomAction(t *testing.T) {
 
 		app := newTestApp(t, withHTTPClient(&http.Client{Timeout: 5 * time.Second}))
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 		contact := testutil.CreateTestContact(t, app.DB, org.ID)
 
 		action := createTestCustomAction(t, app, org.ID, "Copy Phone", models.ActionTypeJavascript,
@@ -836,7 +836,7 @@ func TestApp_ExecuteCustomAction(t *testing.T) {
 
 		app := newTestApp(t, withHTTPClient(&http.Client{Timeout: 5 * time.Second}))
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 		contact := testutil.CreateTestContact(t, app.DB, org.ID)
 
 		action := createTestCustomAction(t, app, org.ID, "Open External", models.ActionTypeJavascript,
@@ -871,7 +871,7 @@ func TestApp_ExecuteCustomAction(t *testing.T) {
 
 		app := newTestApp(t, withHTTPClient(&http.Client{Timeout: 5 * time.Second}))
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 		contact := testutil.CreateTestContact(t, app.DB, org.ID)
 
 		// Create an inactive action
@@ -894,7 +894,7 @@ func TestApp_ExecuteCustomAction(t *testing.T) {
 
 		app := newTestApp(t, withHTTPClient(&http.Client{Timeout: 5 * time.Second}))
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 
 		req := testutil.NewJSONRequest(t, map[string]any{
 			"contact_id": uuid.New().String(),
@@ -912,7 +912,7 @@ func TestApp_ExecuteCustomAction(t *testing.T) {
 
 		app := newTestApp(t, withHTTPClient(&http.Client{Timeout: 5 * time.Second}))
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 
 		action := createTestCustomAction(t, app, org.ID, "Test Action", models.ActionTypeWebhook,
 			map[string]any{"url": "https://example.com/hook"}, true, 0)
@@ -933,7 +933,7 @@ func TestApp_ExecuteCustomAction(t *testing.T) {
 
 		app := newTestApp(t, withHTTPClient(&http.Client{Timeout: 5 * time.Second}))
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 
 		action := createTestCustomAction(t, app, org.ID, "Test Action", models.ActionTypeWebhook,
 			map[string]any{"url": "https://example.com/hook"}, true, 0)
@@ -956,7 +956,7 @@ func TestApp_ExecuteCustomAction(t *testing.T) {
 
 		org1 := testutil.CreateTestOrganization(t, app.DB)
 		org2 := testutil.CreateTestOrganization(t, app.DB)
-		user2 := testutil.CreateTestUser(t, app.DB, org2.ID)
+		user2 := createAdminUser(t, app, org2.ID)
 		contact2 := testutil.CreateTestContact(t, app.DB, org2.ID)
 
 		// Create action in org1
@@ -1003,7 +1003,7 @@ func TestApp_ExecuteCustomAction(t *testing.T) {
 
 		app := newTestApp(t, withHTTPClient(&http.Client{Timeout: 5 * time.Second}))
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 		contact := testutil.CreateTestContact(t, app.DB, org.ID)
 
 		action := createTestCustomAction(t, app, org.ID, "Failing Webhook", models.ActionTypeWebhook,
@@ -1044,7 +1044,7 @@ func TestApp_ExecuteCustomAction(t *testing.T) {
 
 		app := newTestApp(t, withHTTPClient(&http.Client{Timeout: 5 * time.Second}))
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 		contact := testutil.CreateTestContact(t, app.DB, org.ID)
 
 		// Use a URL with variable template
@@ -1079,7 +1079,7 @@ func TestApp_CustomActionRedirect(t *testing.T) {
 
 		app := newTestApp(t, withHTTPClient(&http.Client{Timeout: 5 * time.Second}))
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 		contact := testutil.CreateTestContact(t, app.DB, org.ID)
 
 		action := createTestCustomAction(t, app, org.ID, "Open URL", models.ActionTypeURL,
@@ -1142,7 +1142,7 @@ func TestApp_CustomActionRedirect(t *testing.T) {
 
 		app := newTestApp(t, withHTTPClient(&http.Client{Timeout: 5 * time.Second}))
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		user := createAdminUser(t, app, org.ID)
 		contact := testutil.CreateTestContact(t, app.DB, org.ID)
 
 		action := createTestCustomAction(t, app, org.ID, "One-Time URL", models.ActionTypeURL,
@@ -1190,7 +1190,7 @@ func TestApp_CreateCustomAction_MissingConfig(t *testing.T) {
 
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID)
+	user := createAdminUser(t, app, org.ID)
 
 	// Config is nil / not provided
 	req := testutil.NewJSONRequest(t, map[string]any{
@@ -1212,7 +1212,7 @@ func TestApp_CreateCustomAction_DuplicateName(t *testing.T) {
 
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID)
+	user := createAdminUser(t, app, org.ID)
 
 	createTestCustomAction(t, app, org.ID, "Same Name", models.ActionTypeWebhook,
 		map[string]any{"url": "https://example.com/hook1"}, true, 0)
@@ -1244,7 +1244,7 @@ func TestApp_UpdateCustomAction_ChangeActionType(t *testing.T) {
 
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID)
+	user := createAdminUser(t, app, org.ID)
 
 	action := createTestCustomAction(t, app, org.ID, "Convert Action", models.ActionTypeWebhook,
 		map[string]any{"url": "https://example.com/hook"}, true, 0)
@@ -1337,4 +1337,56 @@ func TestApp_UpdateCustomAction_Unauthorized(t *testing.T) {
 	err := app.UpdateCustomAction(req)
 	require.NoError(t, err)
 	assert.Equal(t, fasthttp.StatusUnauthorized, testutil.GetResponseStatusCode(req))
+}
+
+// --- Permission Tests ---
+
+func TestApp_CustomActions_Permissions(t *testing.T) {
+	t.Parallel()
+
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+
+	userWith := func(perms ...string) *models.User {
+		role := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "custom-action-perms", perms)
+		return testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
+	}
+	list := func(user *models.User) int {
+		req := testutil.NewGETRequest(t)
+		testutil.SetAuthContext(req, org.ID, user.ID)
+		require.NoError(t, app.ListCustomActions(req))
+		return testutil.GetResponseStatusCode(req)
+	}
+	create := func(user *models.User) int {
+		req := testutil.NewJSONRequest(t, map[string]any{"name": "Nope", "action_type": "url"})
+		testutil.SetAuthContext(req, org.ID, user.ID)
+		require.NoError(t, app.CreateCustomAction(req))
+		return testutil.GetResponseStatusCode(req)
+	}
+	execute := func(user *models.User) int {
+		req := testutil.NewJSONRequest(t, map[string]any{"contact_id": uuid.New().String()})
+		testutil.SetAuthContext(req, org.ID, user.ID)
+		testutil.SetPathParam(req, "id", uuid.New().String())
+		require.NoError(t, app.ExecuteCustomAction(req))
+		return testutil.GetResponseStatusCode(req)
+	}
+
+	t.Run("user without relevant permissions is forbidden", func(t *testing.T) {
+		user := userWith("contacts:read")
+		assert.Equal(t, fasthttp.StatusForbidden, list(user))
+		assert.Equal(t, fasthttp.StatusForbidden, create(user))
+		assert.Equal(t, fasthttp.StatusForbidden, execute(user))
+	})
+
+	t.Run("chat:read can list but not create or execute", func(t *testing.T) {
+		user := userWith("chat:read")
+		assert.Equal(t, fasthttp.StatusOK, list(user))
+		assert.Equal(t, fasthttp.StatusForbidden, create(user))
+		assert.Equal(t, fasthttp.StatusForbidden, execute(user))
+	})
+
+	t.Run("chat:write passes the permission check to execute", func(t *testing.T) {
+		// The action does not exist, so the handler gets past the permission check and 404s.
+		assert.Equal(t, fasthttp.StatusNotFound, execute(userWith("chat:write")))
+	})
 }

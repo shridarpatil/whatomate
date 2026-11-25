@@ -788,3 +788,101 @@ func TestApp_SendTemplateMessage(t *testing.T) {
 		assert.False(t, hasInteractive, "interactive_data should not be present for template without buttons")
 	})
 }
+
+func TestApp_SendTemplateMessage_Permissions(t *testing.T) {
+	t.Parallel()
+
+	templateBody := func(contactID uuid.UUID, tplName string) map[string]any {
+		return map[string]any{
+			"contact_id":      contactID.String(),
+			"template_name":   tplName,
+			"template_params": map[string]string{"name": "Alice", "order_id": "ORD-1"},
+		}
+	}
+
+	t.Run("no chat:write is forbidden", func(t *testing.T) {
+		t.Parallel()
+		mockServer := newMockWhatsAppServer()
+		defer mockServer.close()
+
+		app := newMsgTestApp(t, mockServer)
+		org := testutil.CreateTestOrganization(t, app.DB)
+		role := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "read only", []string{"chat:read", "contacts:read"})
+		user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
+		account := createTestAccount(t, app, org.ID)
+		contact := testutil.CreateTestContactWith(t, app.DB, org.ID, testutil.WithContactAccount(account.Name))
+		tpl := createTestTemplate(t, app, org.ID, account.Name)
+
+		req := testutil.NewJSONRequest(t, templateBody(contact.ID, tpl.Name))
+		testutil.SetAuthContext(req, org.ID, user.ID)
+		require.NoError(t, app.SendTemplateMessage(req))
+		assert.Equal(t, fasthttp.StatusForbidden, testutil.GetResponseStatusCode(req))
+		app.WaitForBackgroundTasks()
+		assert.Empty(t, mockServer.sentMessages)
+	})
+
+	t.Run("without contacts:read only assigned contacts", func(t *testing.T) {
+		t.Parallel()
+		mockServer := newMockWhatsAppServer()
+		defer mockServer.close()
+
+		app := newMsgTestApp(t, mockServer)
+		org := testutil.CreateTestOrganization(t, app.DB)
+		role := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "chat assigned", []string{"chat:read", "chat:write"})
+		user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
+		account := createTestAccount(t, app, org.ID)
+		tpl := createTestTemplate(t, app, org.ID, account.Name)
+		unassigned := testutil.CreateTestContactWith(t, app.DB, org.ID, testutil.WithContactAccount(account.Name))
+		assigned := testutil.CreateTestContactWith(t, app.DB, org.ID, testutil.WithContactAccount(account.Name))
+		require.NoError(t, app.DB.Model(assigned).Update("assigned_user_id", user.ID).Error)
+
+		req := testutil.NewJSONRequest(t, templateBody(unassigned.ID, tpl.Name))
+		testutil.SetAuthContext(req, org.ID, user.ID)
+		require.NoError(t, app.SendTemplateMessage(req))
+		assert.Equal(t, fasthttp.StatusNotFound, testutil.GetResponseStatusCode(req))
+
+		// Same contact addressed by phone number is also hidden.
+		req = testutil.NewJSONRequest(t, map[string]any{
+			"phone_number":    unassigned.PhoneNumber,
+			"template_name":   tpl.Name,
+			"template_params": map[string]string{"name": "Alice", "order_id": "ORD-1"},
+		})
+		testutil.SetAuthContext(req, org.ID, user.ID)
+		require.NoError(t, app.SendTemplateMessage(req))
+		assert.Equal(t, fasthttp.StatusNotFound, testutil.GetResponseStatusCode(req))
+
+		// A new number can't be used to create a contact.
+		newPhone := "1555" + uuid.New().String()[:7]
+		req = testutil.NewJSONRequest(t, map[string]any{
+			"phone_number":    newPhone,
+			"template_name":   tpl.Name,
+			"template_params": map[string]string{"name": "Alice", "order_id": "ORD-1"},
+		})
+		testutil.SetAuthContext(req, org.ID, user.ID)
+		require.NoError(t, app.SendTemplateMessage(req))
+		assert.Equal(t, fasthttp.StatusNotFound, testutil.GetResponseStatusCode(req))
+		var created int64
+		app.DB.Model(&models.Contact{}).Where("organization_id = ? AND phone_number = ?", org.ID, newPhone).Count(&created)
+		assert.Zero(t, created)
+
+		req = testutil.NewJSONRequest(t, templateBody(assigned.ID, tpl.Name))
+		testutil.SetAuthContext(req, org.ID, user.ID)
+		require.NoError(t, app.SendTemplateMessage(req))
+		assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+		app.WaitForBackgroundTasks()
+		assert.Len(t, mockServer.sentMessages, 1)
+	})
+}
+
+func TestApp_MarkMessageRead_RequiresChatRead(t *testing.T) {
+	t.Parallel()
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	user := testutil.CreateTestUser(t, app.DB, org.ID)
+
+	req := testutil.NewJSONRequest(t, nil)
+	testutil.SetAuthContext(req, org.ID, user.ID)
+	testutil.SetPathParam(req, "id", uuid.New().String())
+	require.NoError(t, app.MarkMessageRead(req))
+	assert.Equal(t, fasthttp.StatusForbidden, testutil.GetResponseStatusCode(req))
+}

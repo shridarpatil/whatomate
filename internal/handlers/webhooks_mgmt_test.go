@@ -41,7 +41,7 @@ func TestApp_ListWebhooks_Success(t *testing.T) {
 
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID)
+	user := createAdminUser(t, app, org.ID)
 
 	wh1 := createTestWebhook(t, app, org.ID, "Webhook A", "https://example.com/a", []string{"message.incoming"})
 	wh2 := createTestWebhook(t, app, org.ID, "Webhook B", "https://example.com/b", []string{"message.sent", "contact.created"})
@@ -76,7 +76,7 @@ func TestApp_ListWebhooks_Empty(t *testing.T) {
 
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID)
+	user := createAdminUser(t, app, org.ID)
 
 	req := testutil.NewGETRequest(t)
 	testutil.SetAuthContext(req, org.ID, user.ID)
@@ -101,8 +101,8 @@ func TestApp_ListWebhooks_OrgIsolation(t *testing.T) {
 	app := newTestApp(t)
 	org1 := testutil.CreateTestOrganization(t, app.DB)
 	org2 := testutil.CreateTestOrganization(t, app.DB)
-	user1 := testutil.CreateTestUser(t, app.DB, org1.ID)
-	user2 := testutil.CreateTestUser(t, app.DB, org2.ID)
+	user1 := createAdminUser(t, app, org1.ID)
+	user2 := createAdminUser(t, app, org2.ID)
 
 	createTestWebhook(t, app, org1.ID, "Org1 Hook", "https://example.com/org1", []string{"message.incoming"})
 	createTestWebhook(t, app, org1.ID, "Org1 Hook 2", "https://example.com/org1b", []string{"message.sent"})
@@ -159,7 +159,7 @@ func TestApp_GetWebhook_Success(t *testing.T) {
 
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID)
+	user := createAdminUser(t, app, org.ID)
 	wh := createTestWebhook(t, app, org.ID, "My Hook", "https://example.com/hook", []string{"message.incoming", "message.sent"})
 
 	req := testutil.NewGETRequest(t)
@@ -189,7 +189,7 @@ func TestApp_GetWebhook_NotFound(t *testing.T) {
 
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID)
+	user := createAdminUser(t, app, org.ID)
 
 	req := testutil.NewGETRequest(t)
 	testutil.SetAuthContext(req, org.ID, user.ID)
@@ -205,7 +205,7 @@ func TestApp_GetWebhook_InvalidID(t *testing.T) {
 
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID)
+	user := createAdminUser(t, app, org.ID)
 
 	req := testutil.NewGETRequest(t)
 	testutil.SetAuthContext(req, org.ID, user.ID)
@@ -222,7 +222,7 @@ func TestApp_GetWebhook_CrossOrgIsolation(t *testing.T) {
 	app := newTestApp(t)
 	org1 := testutil.CreateTestOrganization(t, app.DB)
 	org2 := testutil.CreateTestOrganization(t, app.DB)
-	user2 := testutil.CreateTestUser(t, app.DB, org2.ID)
+	user2 := createAdminUser(t, app, org2.ID)
 
 	wh := createTestWebhook(t, app, org1.ID, "Org1 Only", "https://example.com/private", []string{"message.incoming"})
 
@@ -243,7 +243,7 @@ func TestApp_CreateWebhook_Success(t *testing.T) {
 
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID)
+	user := createAdminUser(t, app, org.ID)
 
 	req := testutil.NewJSONRequest(t, map[string]any{
 		"name":      "Production Hook",
@@ -285,7 +285,7 @@ func TestApp_CreateWebhook_MissingName(t *testing.T) {
 
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID)
+	user := createAdminUser(t, app, org.ID)
 
 	req := testutil.NewJSONRequest(t, map[string]any{
 		"url":    "https://example.com/hook",
@@ -303,7 +303,7 @@ func TestApp_CreateWebhook_MissingURL(t *testing.T) {
 
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID)
+	user := createAdminUser(t, app, org.ID)
 
 	req := testutil.NewJSONRequest(t, map[string]any{
 		"name":   "My Hook",
@@ -321,7 +321,7 @@ func TestApp_CreateWebhook_MissingEvents(t *testing.T) {
 
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID)
+	user := createAdminUser(t, app, org.ID)
 
 	req := testutil.NewJSONRequest(t, map[string]any{
 		"name": "My Hook",
@@ -339,7 +339,7 @@ func TestApp_CreateWebhook_EmptyEvents(t *testing.T) {
 
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID)
+	user := createAdminUser(t, app, org.ID)
 
 	req := testutil.NewJSONRequest(t, map[string]any{
 		"name":   "My Hook",
@@ -377,7 +377,7 @@ func TestApp_UpdateWebhook_Success(t *testing.T) {
 
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID)
+	user := createAdminUser(t, app, org.ID)
 	wh := createTestWebhook(t, app, org.ID, "Old Name", "https://old.example.com", []string{"message.incoming"})
 
 	req := testutil.NewJSONRequest(t, map[string]any{
@@ -418,7 +418,7 @@ func TestApp_UpdateWebhook_PartialUpdate(t *testing.T) {
 
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID)
+	user := createAdminUser(t, app, org.ID)
 	wh := createTestWebhook(t, app, org.ID, "Original", "https://original.example.com", []string{"message.incoming"})
 
 	// Only update the name
@@ -449,7 +449,7 @@ func TestApp_UpdateWebhook_NotFound(t *testing.T) {
 
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID)
+	user := createAdminUser(t, app, org.ID)
 
 	req := testutil.NewJSONRequest(t, map[string]any{
 		"name":      "Updated",
@@ -468,7 +468,7 @@ func TestApp_UpdateWebhook_InvalidID(t *testing.T) {
 
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID)
+	user := createAdminUser(t, app, org.ID)
 
 	req := testutil.NewJSONRequest(t, map[string]any{
 		"name":      "Updated",
@@ -489,7 +489,7 @@ func TestApp_DeleteWebhook_Success(t *testing.T) {
 
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID)
+	user := createAdminUser(t, app, org.ID)
 	wh := createTestWebhook(t, app, org.ID, "To Delete", "https://example.com/delete", []string{"message.incoming"})
 
 	req := testutil.NewGETRequest(t)
@@ -520,7 +520,7 @@ func TestApp_DeleteWebhook_NotFound(t *testing.T) {
 
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID)
+	user := createAdminUser(t, app, org.ID)
 
 	req := testutil.NewGETRequest(t)
 	testutil.SetAuthContext(req, org.ID, user.ID)
@@ -536,7 +536,7 @@ func TestApp_DeleteWebhook_InvalidID(t *testing.T) {
 
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID)
+	user := createAdminUser(t, app, org.ID)
 
 	req := testutil.NewGETRequest(t)
 	testutil.SetAuthContext(req, org.ID, user.ID)
@@ -553,7 +553,7 @@ func TestApp_DeleteWebhook_CrossOrgIsolation(t *testing.T) {
 	app := newTestApp(t)
 	org1 := testutil.CreateTestOrganization(t, app.DB)
 	org2 := testutil.CreateTestOrganization(t, app.DB)
-	user2 := testutil.CreateTestUser(t, app.DB, org2.ID)
+	user2 := createAdminUser(t, app, org2.ID)
 
 	wh := createTestWebhook(t, app, org1.ID, "Org1 Hook", "https://example.com/org1", []string{"message.incoming"})
 
@@ -591,7 +591,7 @@ func TestApp_TestWebhook_Success(t *testing.T) {
 
 	app := newTestApp(t, withHTTPClient(&http.Client{Timeout: 5 * time.Second}))
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID)
+	user := createAdminUser(t, app, org.ID)
 	wh := createTestWebhook(t, app, org.ID, "Test Hook", server.URL, []string{"message.incoming"})
 
 	req := testutil.NewJSONRequest(t, nil)
@@ -640,7 +640,7 @@ func TestApp_TestWebhook_ServerError(t *testing.T) {
 
 	app := newTestApp(t, withHTTPClient(&http.Client{Timeout: 5 * time.Second}))
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID)
+	user := createAdminUser(t, app, org.ID)
 	wh := createTestWebhook(t, app, org.ID, "Failing Hook", server.URL, []string{"message.incoming"})
 
 	req := testutil.NewJSONRequest(t, nil)
@@ -657,7 +657,7 @@ func TestApp_TestWebhook_NotFound(t *testing.T) {
 
 	app := newTestApp(t, withHTTPClient(&http.Client{Timeout: 5 * time.Second}))
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID)
+	user := createAdminUser(t, app, org.ID)
 
 	req := testutil.NewJSONRequest(t, nil)
 	testutil.SetAuthContext(req, org.ID, user.ID)
@@ -688,7 +688,7 @@ func TestWebhookToResponse_HasSecretTrue(t *testing.T) {
 
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID)
+	user := createAdminUser(t, app, org.ID)
 
 	// Create a webhook with a secret
 	wh := createTestWebhook(t, app, org.ID, "Secret Hook", "https://example.com/secret", []string{"message.incoming"})
@@ -713,7 +713,7 @@ func TestWebhookToResponse_HasSecretFalse(t *testing.T) {
 
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID)
+	user := createAdminUser(t, app, org.ID)
 
 	// Create a webhook without a secret
 	wh := &models.Webhook{
@@ -741,4 +741,87 @@ func TestWebhookToResponse_HasSecretFalse(t *testing.T) {
 	err = json.Unmarshal(testutil.GetResponseBody(req), &resp)
 	require.NoError(t, err)
 	assert.False(t, resp.Data.HasSecret, "webhook without secret should have has_secret=false")
+}
+
+// --- Permission checks ---
+
+func TestApp_Webhooks_RequirePermissions(t *testing.T) {
+	t.Parallel()
+
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	wh := createTestWebhook(t, app, org.ID, "Guarded", "https://example.com/g", []string{"message.incoming"})
+
+	// Default agent permissions: nothing under webhooks.
+	agentRole := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "agent", []string{"chat:read", "accounts:read"})
+	agent := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&agentRole.ID))
+	readerRole := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "webhook-reader", []string{"webhooks:read"})
+	reader := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&readerRole.ID))
+
+	t.Run("list forbidden without webhooks:read", func(t *testing.T) {
+		req := testutil.NewGETRequest(t)
+		testutil.SetAuthContext(req, org.ID, agent.ID)
+		require.NoError(t, app.ListWebhooks(req))
+		assert.Equal(t, fasthttp.StatusForbidden, testutil.GetResponseStatusCode(req))
+	})
+
+	t.Run("get forbidden without webhooks:read", func(t *testing.T) {
+		req := testutil.NewGETRequest(t)
+		testutil.SetAuthContext(req, org.ID, agent.ID)
+		testutil.SetPathParam(req, "id", wh.ID.String())
+		require.NoError(t, app.GetWebhook(req))
+		assert.Equal(t, fasthttp.StatusForbidden, testutil.GetResponseStatusCode(req))
+	})
+
+	t.Run("list and get allowed with webhooks:read", func(t *testing.T) {
+		req := testutil.NewGETRequest(t)
+		testutil.SetAuthContext(req, org.ID, reader.ID)
+		require.NoError(t, app.ListWebhooks(req))
+		assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+		req = testutil.NewGETRequest(t)
+		testutil.SetAuthContext(req, org.ID, reader.ID)
+		testutil.SetPathParam(req, "id", wh.ID.String())
+		require.NoError(t, app.GetWebhook(req))
+		assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+	})
+
+	for name, user := range map[string]*models.User{"agent": agent, "reader": reader} {
+		t.Run("create forbidden for "+name, func(t *testing.T) {
+			req := testutil.NewJSONRequest(t, map[string]any{
+				"name": "New", "url": "https://example.com/new", "events": []string{"message.incoming"},
+			})
+			testutil.SetAuthContext(req, org.ID, user.ID)
+			require.NoError(t, app.CreateWebhook(req))
+			assert.Equal(t, fasthttp.StatusForbidden, testutil.GetResponseStatusCode(req))
+		})
+
+		t.Run("update forbidden for "+name, func(t *testing.T) {
+			req := testutil.NewJSONRequest(t, map[string]any{"name": "Renamed"})
+			testutil.SetAuthContext(req, org.ID, user.ID)
+			testutil.SetPathParam(req, "id", wh.ID.String())
+			require.NoError(t, app.UpdateWebhook(req))
+			assert.Equal(t, fasthttp.StatusForbidden, testutil.GetResponseStatusCode(req))
+		})
+
+		t.Run("test forbidden for "+name, func(t *testing.T) {
+			req := testutil.NewJSONRequest(t, nil)
+			testutil.SetAuthContext(req, org.ID, user.ID)
+			testutil.SetPathParam(req, "id", wh.ID.String())
+			require.NoError(t, app.TestWebhook(req))
+			assert.Equal(t, fasthttp.StatusForbidden, testutil.GetResponseStatusCode(req))
+		})
+
+		t.Run("delete forbidden for "+name, func(t *testing.T) {
+			req := testutil.NewGETRequest(t)
+			testutil.SetAuthContext(req, org.ID, user.ID)
+			testutil.SetPathParam(req, "id", wh.ID.String())
+			require.NoError(t, app.DeleteWebhook(req))
+			assert.Equal(t, fasthttp.StatusForbidden, testutil.GetResponseStatusCode(req))
+		})
+	}
+
+	var reloaded models.Webhook
+	require.NoError(t, app.DB.First(&reloaded, "id = ?", wh.ID).Error)
+	assert.Equal(t, "Guarded", reloaded.Name)
 }

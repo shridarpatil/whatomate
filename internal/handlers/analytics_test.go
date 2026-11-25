@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/valyala/fasthttp"
+	"github.com/zerodha/fastglue"
 )
 
 // --- Helper functions ---
@@ -132,7 +133,8 @@ func createTestTeamWithAgent(t *testing.T, app *handlers.App, orgID, userID uuid
 func TestApp_GetDashboardStats_Success(t *testing.T) {
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("dash-stats")), testutil.WithPassword("password"))
+	role := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "analytics reader", []string{"analytics:read"})
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("dash-stats")), testutil.WithPassword("password"), testutil.WithRoleID(&role.ID))
 
 	// Create test data within the current month
 	contact := testutil.CreateTestContact(t, app.DB, org.ID)
@@ -167,7 +169,8 @@ func TestApp_GetDashboardStats_Success(t *testing.T) {
 func TestApp_GetDashboardStats_WithDateFilters(t *testing.T) {
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("dash-date")), testutil.WithPassword("password"))
+	role := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "analytics reader", []string{"analytics:read"})
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("dash-date")), testutil.WithPassword("password"), testutil.WithRoleID(&role.ID))
 
 	contact := testutil.CreateTestContact(t, app.DB, org.ID)
 
@@ -205,7 +208,8 @@ func TestApp_GetDashboardStats_WithDateFilters(t *testing.T) {
 func TestApp_GetDashboardStats_InvalidFromDate(t *testing.T) {
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("dash-bad-from")), testutil.WithPassword("password"))
+	role := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "analytics reader", []string{"analytics:read"})
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("dash-bad-from")), testutil.WithPassword("password"), testutil.WithRoleID(&role.ID))
 
 	req := testutil.NewGETRequest(t)
 	testutil.SetAuthContext(req, org.ID, user.ID)
@@ -220,7 +224,8 @@ func TestApp_GetDashboardStats_InvalidFromDate(t *testing.T) {
 func TestApp_GetDashboardStats_InvalidToDate(t *testing.T) {
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("dash-bad-to")), testutil.WithPassword("password"))
+	role := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "analytics reader", []string{"analytics:read"})
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("dash-bad-to")), testutil.WithPassword("password"), testutil.WithRoleID(&role.ID))
 
 	req := testutil.NewGETRequest(t)
 	testutil.SetAuthContext(req, org.ID, user.ID)
@@ -246,7 +251,8 @@ func TestApp_GetDashboardStats_Unauthorized(t *testing.T) {
 func TestApp_GetDashboardStats_EmptyData(t *testing.T) {
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("dash-empty")), testutil.WithPassword("password"))
+	role := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "analytics reader", []string{"analytics:read"})
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("dash-empty")), testutil.WithPassword("password"), testutil.WithRoleID(&role.ID))
 
 	req := testutil.NewGETRequest(t)
 	testutil.SetAuthContext(req, org.ID, user.ID)
@@ -362,10 +368,12 @@ func TestApp_GetAgentAnalytics_AgentSeesOwnStats(t *testing.T) {
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
 
-	// Create a user without analytics permission (agent-level user)
+	// Agent-level user: analytics.agents:read but no analytics:read
+	role := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "agent analytics", []string{"analytics.agents:read"})
 	user := testutil.CreateTestUser(t, app.DB, org.ID,
 		testutil.WithEmail(testutil.UniqueEmail("agent-own")),
 		testutil.WithPassword("password"),
+		testutil.WithRoleID(&role.ID),
 	)
 
 	contact := testutil.CreateTestContact(t, app.DB, org.ID)
@@ -626,4 +634,49 @@ func TestApp_GetAgentComparison_EmptyAgents(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Empty(t, resp.Data.Agents)
+}
+
+// --- Permission checks ---
+
+func TestApp_GetDashboardStats_NoPermission(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	// agent-like role: chat + own agent analytics, but no analytics:read
+	role := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "no analytics", []string{"chat:read", "analytics.agents:read"})
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
+
+	req := testutil.NewGETRequest(t)
+	testutil.SetAuthContext(req, org.ID, user.ID)
+	require.NoError(t, app.GetDashboardStats(req))
+	assert.Equal(t, fasthttp.StatusForbidden, testutil.GetResponseStatusCode(req))
+}
+
+func TestApp_AnalyticsStubs_NoPermission(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	user := testutil.CreateTestUser(t, app.DB, org.ID)
+
+	for name, h := range map[string]func(*fastglue.Request) error{
+		"messages": app.GetMessageAnalytics,
+		"chatbot":  app.GetChatbotAnalytics,
+	} {
+		t.Run(name, func(t *testing.T) {
+			req := testutil.NewGETRequest(t)
+			testutil.SetAuthContext(req, org.ID, user.ID)
+			require.NoError(t, h(req))
+			assert.Equal(t, fasthttp.StatusForbidden, testutil.GetResponseStatusCode(req))
+		})
+	}
+}
+
+func TestApp_GetAgentAnalytics_NoPermission(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	role := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "chat only", []string{"chat:read", "chat:write"})
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
+
+	req := testutil.NewGETRequest(t)
+	testutil.SetAuthContext(req, org.ID, user.ID)
+	require.NoError(t, app.GetAgentAnalytics(req))
+	assert.Equal(t, fasthttp.StatusForbidden, testutil.GetResponseStatusCode(req))
 }

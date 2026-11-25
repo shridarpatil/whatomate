@@ -659,10 +659,13 @@ type SendTemplateMessageRequest struct {
 
 // SendTemplateMessage sends a template message to a contact or phone number.
 // Accepts either JSON body or multipart/form-data (when a header media file is included).
+// Requires chat:write. Users without contacts:read can only reach contacts
+// assigned to them (see scopeAssignedContact), and cannot create new contacts
+// by phone number.
 func (a *App) SendTemplateMessage(r *fastglue.Request) error {
-	orgID, userID, err := a.getOrgAndUserID(r)
+	orgID, userID, err := a.requireAuth(r, models.ResourceChat, models.ActionWrite)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+		return nil
 	}
 
 	var req SendTemplateMessageRequest
@@ -779,16 +782,25 @@ func (a *App) SendTemplateMessage(r *fastglue.Request) error {
 		if err != nil {
 			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid contact_id", nil, "")
 		}
-		c, err := findByIDAndOrg[models.Contact](a.DB, r, cID, orgID, "Contact")
-		if err != nil {
-			return nil
+		var c models.Contact
+		query := a.scopeAssignedContact(a.DB.Where("id = ? AND organization_id = ?", cID, orgID), userID, orgID)
+		if err := query.First(&c).Error; err != nil {
+			return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Contact not found", nil, "")
 		}
-		contact = c
+		contact = &c
 	} else {
 		// Find or create contact from phone number
 		phoneNumber := req.PhoneNumber
 		var c models.Contact
 		err := a.DB.Where("phone_number = ? AND organization_id = ?", phoneNumber, orgID).First(&c).Error
+		// Restricted users (no contacts:read) may only message existing
+		// contacts assigned to them, never create one from a new number.
+		if !a.HasPermission(userID, models.ResourceContacts, models.ActionRead, orgID) {
+			if err != nil || a.scopeAssignedContact(a.DB.Where("id = ?", c.ID), userID, orgID).
+				First(&models.Contact{}).Error != nil {
+				return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Contact not found", nil, "")
+			}
+		}
 		if err != nil {
 			// Contact not found, create new one
 			c = models.Contact{

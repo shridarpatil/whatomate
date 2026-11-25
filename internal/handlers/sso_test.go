@@ -159,7 +159,7 @@ func TestApp_GetSSOSettings_HidesSecretButReportsHasSecret(t *testing.T) {
 	}).Error)
 
 	req := testutil.NewGETRequest(t)
-	testutil.SetAuthContext(req, org.ID, uuid.New())
+	testutil.SetAuthContext(req, org.ID, createAdminUser(t, app, org.ID).ID)
 
 	require.NoError(t, app.GetSSOSettings(req))
 	require.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
@@ -187,7 +187,7 @@ func TestApp_UpdateSSOProvider_CreateCustomRequiresURLs(t *testing.T) {
 		"client_secret": "secret",
 		"is_enabled":    true,
 	})
-	testutil.SetAuthContext(req, org.ID, uuid.New())
+	testutil.SetAuthContext(req, org.ID, createAdminUser(t, app, org.ID).ID)
 	testutil.SetPathParam(req, "provider", "custom")
 
 	require.NoError(t, app.UpdateSSOProvider(req))
@@ -202,7 +202,7 @@ func TestApp_UpdateSSOProvider_InvalidProviderRejected(t *testing.T) {
 		"client_id":     "id",
 		"client_secret": "s",
 	})
-	testutil.SetAuthContext(req, org.ID, uuid.New())
+	testutil.SetAuthContext(req, org.ID, createAdminUser(t, app, org.ID).ID)
 	testutil.SetPathParam(req, "provider", "okta") // not in allowlist
 
 	require.NoError(t, app.UpdateSSOProvider(req))
@@ -219,7 +219,7 @@ func TestApp_UpdateSSOProvider_EncryptsClientSecret(t *testing.T) {
 		"client_secret": "PLAIN-SSO-SECRET",
 		"is_enabled":    true,
 	})
-	testutil.SetAuthContext(req, org.ID, uuid.New())
+	testutil.SetAuthContext(req, org.ID, createAdminUser(t, app, org.ID).ID)
 	testutil.SetPathParam(req, "provider", "google")
 
 	require.NoError(t, app.UpdateSSOProvider(req))
@@ -246,7 +246,7 @@ func TestApp_UpdateSSOProvider_OmittingSecretLeavesUnchanged(t *testing.T) {
 		"client_id":  "new-id",
 		"is_enabled": true,
 	})
-	testutil.SetAuthContext(req, org.ID, uuid.New())
+	testutil.SetAuthContext(req, org.ID, createAdminUser(t, app, org.ID).ID)
 	testutil.SetPathParam(req, "provider", "google")
 
 	require.NoError(t, app.UpdateSSOProvider(req))
@@ -269,7 +269,7 @@ func TestApp_DeleteSSOProvider_Success(t *testing.T) {
 	}).Error)
 
 	req := testutil.NewRequest(t)
-	testutil.SetAuthContext(req, org.ID, uuid.New())
+	testutil.SetAuthContext(req, org.ID, createAdminUser(t, app, org.ID).ID)
 	testutil.SetPathParam(req, "provider", "google")
 
 	require.NoError(t, app.DeleteSSOProvider(req))
@@ -285,7 +285,7 @@ func TestApp_DeleteSSOProvider_NotFound(t *testing.T) {
 	org := testutil.CreateTestOrganization(t, app.DB)
 
 	req := testutil.NewRequest(t)
-	testutil.SetAuthContext(req, org.ID, uuid.New())
+	testutil.SetAuthContext(req, org.ID, createAdminUser(t, app, org.ID).ID)
 	testutil.SetPathParam(req, "provider", "google")
 
 	require.NoError(t, app.DeleteSSOProvider(req))
@@ -303,7 +303,7 @@ func TestApp_DeleteSSOProvider_CrossOrgIsolation(t *testing.T) {
 	require.NoError(t, app.DB.Create(rec).Error)
 
 	req := testutil.NewRequest(t)
-	testutil.SetAuthContext(req, orgB.ID, uuid.New())
+	testutil.SetAuthContext(req, orgB.ID, createAdminUser(t, app, orgB.ID).ID)
 	testutil.SetPathParam(req, "provider", "google")
 
 	require.NoError(t, app.DeleteSSOProvider(req))
@@ -641,4 +641,57 @@ func TestApp_CallbackSSO_DisabledExistingUserRejected(t *testing.T) {
 	assert.Contains(t, loc, "Account+is+disabled")
 	// No cookies set when account is disabled.
 	assert.Empty(t, testutil.GetResponseCookie(req, "whm_access"))
+}
+
+// --- SSO settings permission checks ---
+
+func TestApp_SSOSettings_RequirePermissions(t *testing.T) {
+	app := newSSOApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	require.NoError(t, app.DB.Create(&models.SSOProvider{
+		BaseModel: models.BaseModel{ID: uuid.New()}, OrganizationID: org.ID, Provider: "google",
+		ClientID: "id", ClientSecret: "s", IsEnabled: true,
+	}).Error)
+
+	// Default agent permissions: nothing under settings.sso.
+	agentRole := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "agent", []string{"chat:read", "accounts:read"})
+	agent := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&agentRole.ID))
+	readerRole := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "sso-reader", []string{"settings.sso:read"})
+	reader := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&readerRole.ID))
+
+	t.Run("get forbidden without settings.sso:read", func(t *testing.T) {
+		req := testutil.NewGETRequest(t)
+		testutil.SetAuthContext(req, org.ID, agent.ID)
+		require.NoError(t, app.GetSSOSettings(req))
+		assert.Equal(t, fasthttp.StatusForbidden, testutil.GetResponseStatusCode(req))
+	})
+
+	t.Run("get allowed with settings.sso:read", func(t *testing.T) {
+		req := testutil.NewGETRequest(t)
+		testutil.SetAuthContext(req, org.ID, reader.ID)
+		require.NoError(t, app.GetSSOSettings(req))
+		assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+	})
+
+	for name, user := range map[string]*models.User{"agent": agent, "reader": reader} {
+		t.Run("update forbidden for "+name, func(t *testing.T) {
+			req := testutil.NewJSONRequest(t, map[string]any{"client_id": "x", "client_secret": "y", "is_enabled": true})
+			testutil.SetAuthContext(req, org.ID, user.ID)
+			testutil.SetPathParam(req, "provider", "github")
+			require.NoError(t, app.UpdateSSOProvider(req))
+			assert.Equal(t, fasthttp.StatusForbidden, testutil.GetResponseStatusCode(req))
+		})
+
+		t.Run("delete forbidden for "+name, func(t *testing.T) {
+			req := testutil.NewRequest(t)
+			testutil.SetAuthContext(req, org.ID, user.ID)
+			testutil.SetPathParam(req, "provider", "google")
+			require.NoError(t, app.DeleteSSOProvider(req))
+			assert.Equal(t, fasthttp.StatusForbidden, testutil.GetResponseStatusCode(req))
+		})
+	}
+
+	var count int64
+	app.DB.Model(&models.SSOProvider{}).Where("organization_id = ?", org.ID).Count(&count)
+	assert.Equal(t, int64(1), count, "forbidden calls must not change SSO providers")
 }

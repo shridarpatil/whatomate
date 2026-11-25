@@ -32,9 +32,9 @@ type RecentMessageResponse struct {
 
 // GetDashboardStats returns dashboard statistics for the organization
 func (a *App) GetDashboardStats(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
+	orgID, _, err := a.requireAuth(r, models.ResourceAnalytics, models.ActionRead)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+		return nil
 	}
 
 	now := time.Now()

@@ -111,10 +111,11 @@ type OrganizationSettings struct {
 }
 
 // GetOrganizationSettings returns the organization settings
+// Only the general settings page reads it, so it needs settings.general:read.
 func (a *App) GetOrganizationSettings(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
+	orgID, _, err := a.requireAuth(r, models.ResourceSettingsGeneral, models.ActionRead)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+		return nil
 	}
 
 	var org models.Organization
@@ -178,10 +179,15 @@ func (a *App) GetOrganizationSettings(r *fastglue.Request) error {
 }
 
 // UpdateOrganizationSettings updates the organization settings
+// Needs settings.general:write or accounts:write up front; which fields may be
+// changed is then checked per field below.
 func (a *App) UpdateOrganizationSettings(r *fastglue.Request) error {
-	orgID, userID, err := a.getOrgAndUserID(r)
+	orgID, userID, err := a.requireAnyAuth(r,
+		Perm{models.ResourceSettingsGeneral, models.ActionWrite},
+		Perm{models.ResourceAccounts, models.ActionWrite},
+	)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+		return nil
 	}
 
 	var req struct {

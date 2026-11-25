@@ -88,7 +88,7 @@ type WidgetDataResponse struct {
 	ChartData     []ChartPoint       `json:"chart_data"`     // For chart display type
 	PrevValue     float64            `json:"prev_value"`     // Previous period value
 	DataPoints    []DataPoint        `json:"data_points"`    // Breakdown data
-	GroupedSeries *GroupedSeriesData `json:"grouped_series"` // For grouped time-series (line charts with group_by)
+	GroupedSeries *GroupedSeriesData `json:"grouped_series"` // For grouped time-series (line/bar charts with group_by)
 	TableRows     []TableRow         `json:"table_rows"`     // For table display type
 }
 
@@ -396,11 +396,26 @@ func (a *App) UpdateWidget(r *fastglue.Request) error {
 	if req.Description != "" {
 		widget.Description = req.Description
 	}
-	if req.DataSource != "" {
-		if _, ok := widgetDataSources[req.DataSource]; !ok {
-			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid data source", nil, "")
+	// Static widgets (e.g. shortcuts) have no real data source: CreateWidget stores the
+	// display type there, so an edit that sends it back must not be rejected.
+	displayType := widget.DisplayType
+	if req.DisplayType != "" {
+		displayType = req.DisplayType
+	}
+	if staticDisplayTypes[displayType] {
+		widget.DataSource = displayType
+		req.Metric = "count"
+	} else {
+		if req.DataSource != "" {
+			if _, ok := widgetDataSources[req.DataSource]; !ok {
+				return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid data source", nil, "")
+			}
+			widget.DataSource = req.DataSource
 		}
-		widget.DataSource = req.DataSource
+		// Switching a static widget to a data widget needs a real source.
+		if _, ok := widgetDataSources[widget.DataSource]; !ok {
+			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Data source is required", nil, "")
+		}
 	}
 	if req.Metric != "" {
 		if !contains(widgetMetrics, req.Metric) {
@@ -517,9 +532,9 @@ func (a *App) DeleteWidget(r *fastglue.Request) error {
 
 // SaveWidgetLayout bulk saves grid positions for all widgets
 func (a *App) SaveWidgetLayout(r *fastglue.Request) error {
-	orgID, userID, err := a.getOrgAndUserID(r)
+	orgID, userID, err := a.requireAuth(r, models.ResourceAnalytics, models.ActionWrite)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+		return nil
 	}
 
 	var req struct {
@@ -568,6 +583,10 @@ func (a *App) SaveWidgetLayout(r *fastglue.Request) error {
 
 // GetWidgetDataSources returns available data sources and their filterable fields
 func (a *App) GetWidgetDataSources(r *fastglue.Request) error {
+	if _, _, err := a.requireAuth(r, models.ResourceAnalytics, models.ActionRead); err != nil {
+		return nil
+	}
+
 	sources := make([]map[string]any, 0)
 	for source, fields := range widgetDataSources {
 		sources = append(sources, map[string]any{
@@ -669,9 +688,9 @@ func formatLabel(s string) string {
 
 // GetWidgetData executes the widget query and returns the data
 func (a *App) GetWidgetData(r *fastglue.Request) error {
-	orgID, userID, err := a.getOrgAndUserID(r)
+	orgID, userID, err := a.requireAuth(r, models.ResourceAnalytics, models.ActionRead)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+		return nil
 	}
 
 	id, err := parsePathUUID(r, "id", "widget")
@@ -705,9 +724,9 @@ func (a *App) GetWidgetData(r *fastglue.Request) error {
 
 // GetAllWidgetsData returns data for all user's widgets in a single request
 func (a *App) GetAllWidgetsData(r *fastglue.Request) error {
-	orgID, userID, err := a.getOrgAndUserID(r)
+	orgID, userID, err := a.requireAuth(r, models.ResourceAnalytics, models.ActionRead)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+		return nil
 	}
 
 	// Parse date range from query params
@@ -829,13 +848,13 @@ func (a *App) executeWidgetQuery(orgID uuid.UUID, widget models.Widget, fromStr,
 	// Get chart data if display type is chart
 	if widget.DisplayType == "chart" {
 		if widget.GroupByField != "" {
-			if widget.ChartType == "line" {
-				// Line chart with group by → grouped time-series
+			if widget.ChartType == "pie" {
+				// Pie chart with group by → data points (group → count for the period)
+				response.DataPoints = a.getGroupedData(orgID, widget, filters, periodStart, periodEnd)
+			} else {
+				// Line/bar chart with group by → grouped time-series (one series per group)
 				groupedSeries := a.getGroupedTimeSeriesData(orgID, widget, filters, periodStart, periodEnd)
 				response.GroupedSeries = &groupedSeries
-			} else {
-				// Bar/Pie chart with group by → data points (group → count)
-				response.DataPoints = a.getGroupedData(orgID, widget, filters, periodStart, periodEnd)
 			}
 		} else {
 			response.ChartData = a.getChartData(orgID, widget, filters, periodStart, periodEnd)
