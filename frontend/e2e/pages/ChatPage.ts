@@ -176,9 +176,9 @@ export class ChatPage extends BasePage {
   }
 
   // Assign dialog helpers
-  /** Toggling an agent's switch on assigns immediately and closes the dialog. */
+  /** Clicking an agent's row assigns immediately and closes the dialog. */
   async selectAgentInAssignDialog(agentName: string) {
-    await this.assignDialog.getByRole('switch', { name: agentName }).click()
+    await this.assignDialog.getByRole('button', { name: agentName }).click()
   }
 
   async confirmAssignment() {

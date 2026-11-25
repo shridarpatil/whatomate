@@ -76,7 +76,13 @@ defineEmits<{
         variant="dots"
       />
       <Controls :position="controlsPosition as any" />
-      <MiniMap />
+      <!-- Minimap in theme colours (fill/mask take CSS variables). -->
+      <MiniMap
+        node-color="var(--muted)"
+        node-stroke-color="var(--input)"
+        :node-border-radius="4"
+        mask-color="color-mix(in oklab, var(--foreground) 6%, transparent)"
+      />
       <slot />
     </VueFlow>
   </div>

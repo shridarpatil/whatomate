@@ -184,6 +184,10 @@ const agentOptions = computed<ComboOption[]>(() => [
 
 const isAllAgents = computed(() => isAdminOrManager.value && selectedAgentId.value === 'all')
 
+// An average of 0 means nothing was measured yet: show a dash, not "0m".
+const avgTile = (mins: number, hint: string) =>
+  mins > 0 ? { value: formatMinutes(mins), hint } : { value: '—', hint: t('agentAnalytics.noDataYet') }
+
 const statTiles = computed(() => {
   const a = analytics.value
   if (!a) return []
@@ -208,16 +212,14 @@ const statTiles = computed(() => {
       key: 'resolution',
       icon: Clock,
       label: t('agentAnalytics.avgResolutionTime'),
-      value: formatMinutes(all ? (a.summary?.avg_resolution_mins ?? 0) : (a.my_stats?.avg_resolution_mins ?? 0)),
-      hint: t('agentAnalytics.timeToResolve')
+      ...avgTile(all ? (a.summary?.avg_resolution_mins ?? 0) : (a.my_stats?.avg_resolution_mins ?? 0), t('agentAnalytics.timeToResolve'))
     },
     isAllAgents.value
       ? {
           key: 'queue',
           icon: Clock,
           label: t('agentAnalytics.avgQueueTime'),
-          value: formatMinutes(a.summary?.avg_queue_time_mins || 0),
-          hint: t('agentAnalytics.waitBeforeAssignment')
+          ...avgTile(a.summary?.avg_queue_time_mins || 0, t('agentAnalytics.waitBeforeAssignment'))
         }
       : {
           key: 'messages',
@@ -291,34 +293,30 @@ void _displayStats.value // Suppress unused warning
         />
 
         <!-- Stats Cards -->
-        <div v-if="!error" class="row" data-testid="agent-stats">
+        <div v-if="!error" class="stat-grid" data-testid="agent-stats">
           <template v-if="isLoading">
-            <div v-for="i in 5" :key="i" class="col-4">
-              <article class="card" aria-busy="true">
-                <div role="status" class="skeleton line"></div>
-                <div role="status" class="skeleton box"></div>
-              </article>
-            </div>
+            <article v-for="i in 5" :key="i" class="card vstack" data-widget="number" aria-busy="true">
+              <div role="status" class="skeleton line" data-size="label"></div>
+              <div role="status" class="skeleton line" data-size="value"></div>
+            </article>
           </template>
           <template v-else>
-            <div v-for="tile in statTiles" :key="tile.key" class="col-4">
-              <article class="card">
-                <div class="hstack items-center gap-2 text-light">
-                  <component :is="tile.icon" :size="16" />
-                  <small>{{ tile.label }}</small>
-                </div>
-                <h3>{{ tile.value }}</h3>
-                <small class="text-light">{{ tile.hint }}</small>
-              </article>
-            </div>
+            <article v-for="tile in statTiles" :key="tile.key" class="card vstack" data-widget="number">
+              <header><h4>{{ tile.label }}</h4></header>
+              <p data-widget-value>{{ tile.value }}</p>
+              <p data-widget-change>{{ tile.hint }}</p>
+            </article>
           </template>
         </div>
 
         <!-- Charts Row -->
         <div v-if="!error" class="row">
-          <div class="col-6">
-            <article class="card">
-              <h4>{{ $t('agentAnalytics.transferTrends') }}</h4>
+          <div class="col-7">
+            <article class="card vstack h-full" data-widget="chart">
+              <header>
+                <h4>{{ $t('agentAnalytics.transferTrends') }}</h4>
+                <small>{{ $t('agentAnalytics.transfersOverTime') }}</small>
+              </header>
               <div v-if="isLoading" role="status" class="skeleton box" aria-busy="true"></div>
               <LineChart
                 v-else-if="trendLabels.length > 0"
@@ -326,13 +324,19 @@ void _displayStats.value // Suppress unused warning
                 :series="trendSeries"
                 :caption="$t('agentAnalytics.transferTrends')"
               />
-              <p v-else class="text-light">{{ $t('agentAnalytics.noDataAvailable') }}</p>
+              <div v-else data-empty>
+                <strong>{{ $t('agentAnalytics.noTransfersTitle') }}</strong>
+                <span>{{ $t('agentAnalytics.noTransfersHint') }}</span>
+              </div>
             </article>
           </div>
 
-          <div class="col-6">
-            <article class="card">
-              <h4>{{ $t('agentAnalytics.conversationSources') }}</h4>
+          <div class="col-5">
+            <article class="card vstack h-full" data-widget="chart">
+              <header>
+                <h4>{{ $t('agentAnalytics.conversationSources') }}</h4>
+                <small>{{ $t('agentAnalytics.howConversationsInitiated') }}</small>
+              </header>
               <div v-if="isLoading" role="status" class="skeleton box" aria-busy="true"></div>
               <PieChart
                 v-else-if="sourceLabels.length > 0"
@@ -341,14 +345,20 @@ void _displayStats.value // Suppress unused warning
                 :values="sourceValues"
                 :caption="$t('agentAnalytics.conversationSources')"
               />
-              <p v-else class="text-light">{{ $t('agentAnalytics.noDataAvailable') }}</p>
+              <div v-else data-empty>
+                <strong>{{ $t('agentAnalytics.noTransfersTitle') }}</strong>
+                <span>{{ $t('agentAnalytics.noSourcesHint') }}</span>
+              </div>
             </article>
           </div>
         </div>
 
         <!-- Agent Comparison (Admin/Manager only, when viewing all agents) -->
-        <article v-if="!error && isAllAgents" class="card">
-          <h4>{{ $t('agentAnalytics.agentComparison') }}</h4>
+        <article v-if="!error && isAllAgents" class="card vstack" data-widget="chart">
+          <header>
+            <h4>{{ $t('agentAnalytics.agentComparison') }}</h4>
+            <small>{{ $t('agentAnalytics.performanceComparison') }}</small>
+          </header>
           <div v-if="isLoading" role="status" class="skeleton box" aria-busy="true"></div>
           <BarChart
             v-else-if="comparisonLabels.length > 0"
@@ -356,7 +366,7 @@ void _displayStats.value // Suppress unused warning
             :series="comparisonSeries"
             :caption="$t('agentAnalytics.agentComparison')"
           />
-          <p v-else class="text-light">{{ $t('agentAnalytics.noAgentsFound') }}</p>
+          <div v-else data-empty><strong>{{ $t('agentAnalytics.noAgentsFound') }}</strong></div>
         </article>
       </div>
     </div>

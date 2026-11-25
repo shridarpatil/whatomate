@@ -49,6 +49,7 @@ import {
   ArrowLeft,
   Info
 } from '@/lib/icons'
+import { humanize } from '@/lib/status'
 import { getInitials } from '@/lib/utils'
 import { useInfiniteScroll } from '@/composables/useInfiniteScroll'
 import CannedResponsePicker from '@/components/chat/CannedResponsePicker.vue'
@@ -89,6 +90,8 @@ function onNarrowChange(e: MediaQueryListEvent) {
 }
 
 const canWriteContacts = authStore.hasPermission('contacts', 'write')
+// Agents without contacts:read only ever see their own conversations, so the tabs would be noise.
+const canSeeAllContacts = authStore.hasPermission('contacts', 'read')
 
 const messageInput = ref('')
 const messagesEndRef = ref<HTMLElement | null>(null)
@@ -1713,6 +1716,18 @@ async function sendMediaMessage() {
             </div>
           </ot-dropdown>
         </div>
+        <div v-if="canSeeAllContacts" role="tablist" :aria-label="$t('chat.conversationFilter')">
+          <button
+            v-for="tab in (['all', 'me', 'none'] as const)"
+            :key="tab"
+            type="button"
+            role="tab"
+            :aria-selected="contactsStore.assignedFilter === tab"
+            @click="contactsStore.assignedFilter = tab"
+          >
+            {{ $t(`chat.filter_${tab}`) }}
+          </button>
+        </div>
         <!-- Active tag filters -->
         <div v-if="contactsStore.selectedTags.length > 0" class="hstack gap-1">
           <span v-for="tagName in contactsStore.selectedTags" :key="tagName" class="badge" data-variant="secondary">
@@ -1752,7 +1767,8 @@ async function sendMediaMessage() {
                   <small class="text-light shrink-0">{{ formatContactTime(contact.last_message_at) }}</small>
                 </span>
                 <span class="flex items-center justify-between gap-2">
-                  <small class="text-light truncate">{{ contact.phone_number }}</small>
+                  <!-- The latest message tells an agent more than the (often masked) number. -->
+                  <small class="text-light truncate">{{ contact.last_message_preview || contact.phone_number }}</small>
                   <span v-if="contact.unread_count > 0" class="badge" data-variant="success">{{ contact.unread_count }}</span>
                 </span>
               </span>
@@ -2580,43 +2596,35 @@ async function sendMediaMessage() {
           :placeholder="$t('chat.searchUsers') + '...'"
           :aria-label="$t('chat.searchUsers')"
         />
+        <!-- Unassign sits apart from the list so it can't be hit by accident. -->
+        <div v-if="contactsStore.currentContact?.assigned_user_id" class="hstack justify-end">
+          <button type="button" class="outline small" @click="assignContactToUser(null); isAssignDialogOpen = false">
+            {{ $t('chat.unassignContact') }}
+          </button>
+        </div>
         <div class="scroll-y picker-list">
-          <div class="table">
-            <table>
-              <thead>
-                <tr>
-                  <th>{{ $t('teams.agent') }}</th>
-                  <th>{{ $t('users.role') }}</th>
-                  <th :aria-label="$t('common.actions')"></th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="user in filteredAssignableUsers" :key="user.id">
-                  <td>
-                    <div class="hstack gap-2 items-center min-w-0">
-                      <figure data-variant="avatar" class="small" :aria-label="user.full_name">
-                        <abbr :title="user.full_name">{{ getInitials(user.full_name) }}</abbr>
-                      </figure>
-                      <div class="flex flex-col min-w-0">
-                        <strong class="truncate">{{ user.full_name }}</strong>
-                        <small class="text-light truncate">{{ user.email }}</small>
-                      </div>
-                    </div>
-                  </td>
-                  <td><span class="badge outline">{{ user.role?.name }}</span></td>
-                  <td class="align-right">
-                    <input
-                      type="checkbox"
-                      role="switch"
-                      :checked="contactsStore.currentContact?.assigned_user_id === user.id"
-                      :aria-label="user.full_name"
-                      @change="assignContactToUser(($event.target as HTMLInputElement).checked ? user.id : null); isAssignDialogOpen = false"
-                    />
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+          <!-- One full-width row per person: click to assign (no switch hidden off to the side). -->
+          <ul class="unstyled vstack gap-1">
+            <li v-for="user in filteredAssignableUsers" :key="user.id">
+              <button
+                type="button"
+                class="ghost w-100 hstack gap-3 flex-nowrap"
+                data-assign-row
+                :aria-current="contactsStore.currentContact?.assigned_user_id === user.id ? 'true' : undefined"
+                :aria-label="user.full_name"
+                @click="contactsStore.currentContact?.assigned_user_id !== user.id && assignContactToUser(user.id); isAssignDialogOpen = false"
+              >
+                <figure data-variant="avatar" class="small" aria-hidden="true">
+                  <abbr>{{ getInitials(user.full_name) }}</abbr>
+                </figure>
+                <span class="flex flex-col flex-1 min-w-0 align-left">
+                  <strong class="truncate">{{ user.full_name }}</strong>
+                  <small class="text-light truncate">{{ user.email }}<template v-if="user.role?.name"> · {{ humanize(user.role.name) }}</template></small>
+                </span>
+                <span v-if="contactsStore.currentContact?.assigned_user_id === user.id" class="badge" data-status="success">{{ $t('chat.assigned') }}</span>
+              </button>
+            </li>
+          </ul>
           <p v-if="filteredAssignableUsers.length === 0" class="align-center text-light p-4">
             <small>{{ $t('chat.noUsersFound') }}</small>
           </p>

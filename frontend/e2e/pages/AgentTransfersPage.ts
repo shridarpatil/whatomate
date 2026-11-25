@@ -18,7 +18,7 @@ export class AgentTransfersPage extends BasePage {
 
   constructor(page: Page) {
     super(page)
-    this.heading = page.locator('h1').filter({ hasText: 'Transfers' })
+    this.heading = page.locator('h1').filter({ hasText: /Handover to agents/i })
     this.pickNextButton = page.getByRole('button', { name: /Pick Next/i })
     this.myTransfersTab = page.getByRole('tab', { name: /My Transfers/i })
     this.queueTab = page.getByRole('tab', { name: /Queue/i })
@@ -65,14 +65,27 @@ export class AgentTransfersPage extends BasePage {
     return this.page.locator('tr').filter({ hasText: contactName })
   }
 
+  /** Rows' "More actions" menu; its items are hidden until it is opened. */
+  async openRowMenu(row: Locator) {
+    await row.getByRole('button', { name: 'More actions' }).click()
+  }
+
+  /** "Chat" is the main row action (My transfers, All active); in Queue it is the "View chat" menu item. */
   async viewChat(contactName: string) {
     const row = this.getTransferRow(contactName)
-    await row.locator('button').filter({ has: this.page.locator('[data-icon="message-square"]') }).click()
+    const chatButton = row.getByRole('button', { name: 'Chat', exact: true })
+    if (await chatButton.count() > 0) {
+      await chatButton.click()
+    } else {
+      await this.openRowMenu(row)
+      await row.getByRole('menuitem', { name: 'View chat' }).click()
+    }
   }
 
   async resumeTransfer(contactName: string) {
     const row = this.getTransferRow(contactName)
-    await row.locator('button').filter({ has: this.page.locator('[data-icon="play"]') }).click()
+    await this.openRowMenu(row)
+    await row.getByRole('menuitem', { name: 'Resume chatbot' }).click()
     // Handle the ConfirmDialog that appears after clicking resume
     const alertDialog = this.page.getByRole('alertdialog')
     await alertDialog.waitFor({ state: 'visible' })
@@ -80,9 +93,16 @@ export class AgentTransfersPage extends BasePage {
     await alertDialog.waitFor({ state: 'hidden' })
   }
 
+  /** "Assign" is the main row action in Queue and a menu item in All active. */
   async openAssignDialog(contactName: string) {
     const row = this.getTransferRow(contactName)
-    await row.locator('button').filter({ has: this.page.locator('[data-icon="user-plus"]') }).click()
+    const assignButton = row.getByRole('button', { name: 'Assign', exact: true })
+    if (await assignButton.count() > 0) {
+      await assignButton.click()
+    } else {
+      await this.openRowMenu(row)
+      await row.getByRole('menuitem', { name: 'Assign', exact: true }).click()
+    }
     await this.assignDialog.waitFor({ state: 'visible' })
   }
 
@@ -121,19 +141,19 @@ export class AgentTransfersPage extends BasePage {
   }
 
   async expectMyTransfersTabVisible() {
-    await expect(this.page.getByRole('heading', { name: 'My Transfers' })).toBeVisible()
+    await expect(this.page.getByRole('tab', { name: /My transfers/i, selected: true })).toBeVisible()
   }
 
   async expectQueueTabVisible() {
-    await expect(this.page.getByRole('heading', { name: 'Transfer Queue' })).toBeVisible()
+    await expect(this.page.getByRole('tab', { name: /Queue/i, selected: true })).toBeVisible()
   }
 
   async expectAllActiveTabVisible() {
-    await expect(this.page.getByRole('heading', { name: 'All Active Transfers' })).toBeVisible()
+    await expect(this.page.getByRole('tab', { name: /All active/i, selected: true })).toBeVisible()
   }
 
   async expectHistoryTabVisible() {
-    await expect(this.page.getByRole('heading', { name: 'Transfer History' })).toBeVisible()
+    await expect(this.page.getByRole('tab', { name: /History/i, selected: true })).toBeVisible()
   }
 
   async expectEmptyMyTransfers() {

@@ -9,6 +9,8 @@
   .flex-1 { flex: 1 1 0%; }
   .shrink-0 { flex-shrink: 0; }
   .flex-wrap { flex-wrap: wrap; }
+  .flex-nowrap { flex-wrap: nowrap; }
+  .gap-3 { gap: var(--space-3); }
   .sticky-top { position: sticky; top: 0; z-index: 1; }
   .relative { position: relative; }
   .fixed-bottom-end { position: fixed; inset-block-end: var(--space-6); inset-inline-end: var(--space-6); z-index: 40; }
@@ -19,6 +21,11 @@
   .pre-wrap { white-space: pre-wrap; }
   .chart-tooltip { position: absolute; pointer-events: none; white-space: nowrap; z-index: 1; }
   .chart-pie { max-width: 15rem; }
+  /* Pie/donut beside its legend; the legend drops below on narrow cards. */
+  .chart-pie-layout { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: var(--space-4) var(--space-6); }
+  .chart-pie-layout > .chart-pie { flex: 0 1 15rem; max-width: 100%; }
+  .chart-pie-legend { display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: var(--space-2) var(--space-3); min-width: 12rem; }
+  .chart-pie-legend > li { display: contents; }
   .meter-row { display: grid; grid-template-columns: 7rem 1fr 3rem; align-items: center; gap: var(--space-2); }
   /* Oat pads every <main> for document pages; app pages set their own spacing. */
   [data-sidebar-layout] > main { padding-block-start: 0; }
@@ -28,6 +35,7 @@
   .auth-panel :is(h1, h2, h3, p) { margin: 0; }
   /* Oat makes form controls full width; opt out for inline toolbar controls. */
   .w-auto { width: auto; }
+  .block { display: block; }
   .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   /* Chat: side columns are 20rem (old w-80); on phones the one visible column fills the screen. */
@@ -85,4 +93,69 @@
   @media (max-width: 48rem) {
     .toast-container[data-placement^="top"] { top: 7.5rem; }
   }
+
+  /* List toolbar: filters on the left, search on the right. */
+  [data-toolbar] { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); }
+  [data-toolbar] > div { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+  /* Search field with its icon inside the input. */
+  .search-field { position: relative; width: 16rem; max-width: 100%; }
+  .search-field > svg { position: absolute; inset-inline-start: var(--space-3); top: 50%; translate: 0 -50%; pointer-events: none; }
+  .search-field > input { margin: 0; padding-inline-start: 2.25rem; }
+  .search-field > button { position: absolute; inset-inline-end: var(--space-1); top: 50%; translate: 0 -50%; }
+  @media (max-width: 48rem) { [data-toolbar] .search-field { width: 100%; } }
+  /* Number cards: as many per row as fit, at least 11rem each. */
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: var(--space-4); }
+  /* Campaign delivery bar. */
+  [data-delivery] { display: flex; height: 0.375rem; overflow: hidden; }
+  [data-delivery] > i { display: block; }
+  [data-key] { display: inline-block; width: 0.5rem; height: 0.5rem; }
+  [data-delivery-legend] { display: flex; flex-wrap: wrap; gap: 0 var(--space-3); margin-block-start: var(--space-1); }
+  [data-delivery-legend] > span { display: inline-flex; align-items: center; gap: var(--space-1); }
+  [data-empty] { padding: var(--space-8) var(--space-4); text-align: center; display: flex; flex-direction: column; align-items: center; gap: var(--space-1); }
+  [data-row-menu] { min-width: 11rem; }
+  /* Settings: section menu beside the page. */
+  .settings-layout { display: grid; grid-template-columns: 14rem minmax(0, 1fr); gap: var(--space-6); align-items: start; }
+  @media (max-width: 48rem) { .settings-layout { grid-template-columns: 1fr; } }
+  /* Settings pages: section menu column + the page. */
+  .settings-shell { display: grid; grid-template-columns: 14rem minmax(0, 1fr); height: 100%; min-height: 0; }
+  .settings-shell > nav[data-subnav] { overflow-y: auto; padding: var(--space-4) var(--space-2); }
+  @media (max-width: 48rem) {
+    .settings-shell { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }
+    .settings-shell > nav[data-subnav] { flex-direction: row; overflow-x: auto; padding: var(--space-2); }
+    .settings-shell > nav[data-subnav] small { display: none; }
+    .settings-shell > nav[data-subnav] a { white-space: nowrap; }
+  }
+  nav[data-subnav] { display: flex; flex-direction: column; }
+  nav[data-subnav] small { display: block; padding: var(--space-3) var(--space-3) var(--space-1); }
+  nav[data-subnav] a { display: flex; align-items: center; gap: var(--space-2); padding: 0.375rem var(--space-3); }
+  /* Label / value list (chatbot overview). */
+  dl[data-facts] { display: grid; grid-template-columns: minmax(8rem, 12rem) minmax(0, 1fr); gap: var(--space-3) var(--space-4); margin: 0; }
+  dl[data-facts] dd { margin: 0; }
+  @media (max-width: 40rem) { dl[data-facts] { grid-template-columns: 1fr; gap: var(--space-1); } dl[data-facts] dd { margin-block-end: var(--space-2); } }
+  /* Numbered set-up checklist. */
+  ol[data-steps] { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-4); counter-reset: step; }
+  ol[data-steps] > li { display: grid; grid-template-columns: 1.5rem minmax(0, 1fr); column-gap: var(--space-3); counter-increment: step; }
+  ol[data-steps] > li::before { content: counter(step); grid-row: span 3; width: 1.5rem; height: 1.5rem; display: grid; place-items: center; }
+  ol[data-steps] > li[data-done]::before { content: "✓"; }
+  ol[data-steps] > li > * { grid-column: 2; }
+  /* Section tabs as links (chatbot pages). */
+  nav[data-section-tabs] { display: flex; flex-wrap: wrap; gap: var(--space-1); padding-inline: var(--space-4); }
+  nav[data-section-tabs] a { padding: var(--space-2) var(--space-3); white-space: nowrap; }
+  /* DataTable on phones: rows become stacked cards; the first cell is the title,
+     the last (actions) sits at the end, the rest are "label  value" lines. */
+  @media (max-width: 48rem) {
+    table[data-stack] thead { display: none; }
+    table[data-stack] tbody tr { display: block; padding-block: var(--space-3); }
+    table[data-stack] tbody td { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); padding: var(--space-1) 0; text-align: end; }
+    table[data-stack] tbody td::before { content: attr(data-label); flex-shrink: 0; text-align: start; }
+    table[data-stack] tbody td:first-child { display: block; text-align: start; }
+    table[data-stack] tbody td:first-child::before,
+    table[data-stack] tbody td:last-child::before,
+    table[data-stack] tbody td[colspan]::before { content: none; }
+    table[data-stack] tbody td:last-child { justify-content: flex-end; padding-block-start: var(--space-2); }
+    table[data-stack] tbody td[colspan] { display: table-cell; text-align: center; }
+  }
+  /* Row of label / big number pairs (campaign statistics). */
+  dl.stat-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr)); gap: var(--space-4); margin: 0; }
+  dl.stat-row dd { margin: 0; }
 }

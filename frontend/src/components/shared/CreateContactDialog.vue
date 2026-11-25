@@ -140,7 +140,7 @@ function closeDialog() {
           id="create-contact-tags-input"
           :model-value="null"
           :options="tagOptions"
-          :placeholder="formData.tags.length === 0 ? $t('contacts.selectTags') : `${formData.tags.length} ${$t('contacts.tagsSelected')}`"
+          :placeholder="formData.tags.length === 0 ? $t('contacts.selectTags') : $t('contacts.tagsSelectedCount', formData.tags.length)"
           :search-placeholder="$t('contacts.searchTags')"
           :empty-text="$t('contacts.noTagsFound')"
           @update:model-value="addTag"

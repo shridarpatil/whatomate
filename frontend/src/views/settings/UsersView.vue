@@ -1,14 +1,15 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { PageHeader, SearchInput, DataTable, CrudFormDialog, DeleteConfirmDialog, IconButton, ErrorState, type Column } from '@/components/shared'
+import { PageHeader, SearchInput, DataTable, CrudFormDialog, DeleteConfirmDialog, RowMenu, ErrorState, type Column } from '@/components/shared'
+import { humanize } from '@/lib/status'
 import Modal from '@/components/oat/Modal.vue'
 import { useUsersStore, type User } from '@/stores/users'
 import { useAuthStore } from '@/stores/auth'
 import { useRolesStore } from '@/stores/roles'
 import { useOrganizationsStore } from '@/stores/organizations'
 import { toast } from '@/lib/toast'
-import { Plus, Pencil, Trash2, UserMinus, User as UserIcon, Shield, ShieldCheck, UserCog, Users, Link, UserPlus } from '@/lib/icons'
+import { Plus, Trash2, UserMinus, User as UserIcon, Users, Link, UserPlus } from '@/lib/icons'
 import { useCrudState } from '@/composables/useCrudState'
 import { getErrorMessage } from '@/lib/api-utils'
 import { formatDate } from '@/lib/utils'
@@ -58,7 +59,6 @@ watch([roleFilter, onlineOnly], () => {
 
 const columns = computed<Column<User>[]>(() => [
   { key: 'user', label: t('users.user'), sortable: true, sortKey: 'full_name' },
-  { key: 'email', label: t('common.email'), sortable: true, sortKey: 'email' },
   { key: 'role', label: t('users.role'), sortable: true, sortKey: 'role.name' },
   { key: 'status', label: t('users.status'), sortable: true, sortKey: 'is_active' },
   { key: 'created', label: t('users.created'), sortable: true, sortKey: 'created_at' },
@@ -137,8 +137,8 @@ async function confirmDelete() {
   }
 }
 
-function getRoleIcon(name: string) { return { admin: ShieldCheck, manager: Shield }[name.toLowerCase()] || UserCog }
-function getRoleName(user: User) { return user.role?.name || t('users.noRole') }
+function getRoleName(user: User) { return user.role?.name ? humanize(user.role.name) : t('users.noRole') }
+const initials = (name: string) => name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
 
 // Add existing user dialog
 const isAddExistingOpen = ref(false)
@@ -188,11 +188,11 @@ async function copyInviteLink() {
 
 <template>
   <div class="flex flex-col h-full">
-    <PageHeader :title="$t('users.title')" :icon="Users" back-link="/settings" :breadcrumbs="breadcrumbs">
+    <PageHeader :title="$t('users.title')" :description="$t('users.subtitle')" :icon="Users" :breadcrumbs="breadcrumbs">
       <template #actions>
         <button type="button" class="outline small" @click="copyInviteLink"><Link :size="16" />{{ $t('users.copyInviteLink') }}</button>
         <button v-if="organizationsStore.isMultiOrg && authStore.hasPermission('organizations', 'assign')" type="button" class="outline small" @click="openAddExistingDialog"><UserPlus :size="16" />{{ $t('users.addExistingUser') }}</button>
-        <button type="button" class="outline small" @click="openCreateDialog"><Plus :size="16" />{{ $t('users.addUser') }}</button>
+        <button type="button" class="small" @click="openCreateDialog"><Plus :size="16" />{{ $t('users.addUser') }}</button>
       </template>
     </PageHeader>
 
@@ -207,65 +207,64 @@ async function copyInviteLink() {
     />
 
     <div v-else class="flex-1 scroll-y p-4">
-      <article class="card">
-        <header class="hstack justify-between flex-wrap gap-4">
+      <article class="card vstack gap-4">
+        <p class="text-light">
+          {{ $t('users.onlineSummary', { count: onlineCount }) }}
+          <RouterLink to="/settings/roles">{{ $t('users.manageRoles') }}</RouterLink>
+        </p>
+        <div data-toolbar>
           <div>
-            <div class="hstack gap-2">
-              <h3>{{ $t('users.yourUsers') }}</h3>
-              <span class="badge" data-variant="success">{{ onlineCount }} {{ $t('users.online', 'online') }}</span>
-            </div>
-            <p><RouterLink to="/settings/roles">{{ $t('users.manageRoles') }}</RouterLink></p>
-          </div>
-          <div class="hstack gap-2 flex-wrap">
             <select class="w-auto" v-model="roleFilter" :aria-label="$t('users.allRoles', 'All roles')">
               <option value="">{{ $t('users.allRoles', 'All roles') }}</option>
-              <option v-for="role in rolesStore.roles" :key="role.id" :value="role.id">{{ role.name }}</option>
+              <option v-for="role in rolesStore.roles" :key="role.id" :value="role.id">{{ humanize(role.name) }}</option>
             </select>
             <label class="hstack gap-2">
               <input v-model="onlineOnly" type="checkbox" role="switch" />
               <span>{{ $t('users.onlineOnly', 'Online only') }}</span>
             </label>
-            <SearchInput v-model="searchQuery" :placeholder="$t('users.searchUsers') + '...'" />
           </div>
-        </header>
+          <SearchInput v-model="searchQuery" :placeholder="$t('users.searchUsers')" />
+        </div>
         <DataTable :items="users" :columns="columns" :is-loading="isLoading" :empty-icon="UserIcon" :empty-title="searchQuery ? $t('users.noMatchingUsers') : $t('users.noUsersFound')" :empty-description="searchQuery ? $t('users.noMatchingUsersDesc') : $t('users.noUsersFoundDesc')" v-model:sort-key="sortKey" v-model:sort-direction="sortDirection" server-pagination :current-page="currentPage" :total-items="totalItems" :page-size="pageSize" item-name="users" @page-change="handlePageChange">
           <template #cell-user="{ item: user }">
-            <RouterLink :to="`/settings/users/${user.id}`" class="hstack gap-2">
-              <component :is="getRoleIcon(getRoleName(user))" :size="20" />
-              <div class="hstack gap-2 min-w-0">
-                <strong class="truncate">{{ user.full_name }}</strong>
-                <span v-if="user.id === currentUserId" class="badge outline">{{ $t('users.you') }}</span>
-                <span v-if="user.is_super_admin" class="badge">{{ $t('users.superAdmin') }}</span>
-                <span v-if="user.is_member" class="badge" data-variant="secondary">{{ $t('users.member') }}</span>
+            <div class="hstack gap-3 flex-nowrap min-w-0">
+              <figure data-variant="avatar" class="small" aria-hidden="true"><abbr>{{ initials(user.full_name) }}</abbr></figure>
+              <div class="min-w-0">
+                <div class="hstack gap-2">
+                  <RouterLink :to="`/settings/users/${user.id}`"><strong class="truncate">{{ user.full_name }}</strong></RouterLink>
+                  <span v-if="user.id === currentUserId" class="badge" data-label>{{ $t('users.you') }}</span>
+                  <span v-if="user.is_member" class="badge" data-label>{{ $t('users.member') }}</span>
+                </div>
+                <small class="text-light block truncate">{{ user.email }}</small>
               </div>
-            </RouterLink>
-          </template>
-          <template #cell-email="{ item: user }">
-            <span class="truncate text-light">{{ user.email }}</span>
+            </div>
           </template>
           <template #cell-role="{ item: user }">
-            <span class="badge" data-variant="secondary">{{ getRoleName(user) }}</span>
+            {{ user.is_super_admin ? $t('users.superAdmin') : getRoleName(user) }}
           </template>
           <template #cell-status="{ item: user }">
-            <span class="badge" :data-variant="user.is_active ? 'success' : 'secondary'">{{ user.is_active ? $t('common.active') : $t('common.inactive') }}</span>
+            <span class="badge" :data-status="user.is_active ? 'success' : 'neutral'">{{ user.is_active ? $t('common.active') : $t('common.inactive') }}</span>
           </template>
           <template #cell-created="{ item: user }">
             <span class="text-light">{{ formatDate(user.created_at) }}</span>
           </template>
           <template #cell-actions="{ item: user }">
-            <div class="hstack gap-1 justify-end">
-              <RouterLink :to="`/settings/users/${user.id}`" class="button ghost icon" :title="$t('users.editUserTooltip')" :aria-label="$t('users.editUserTooltip')">
-                <Pencil :size="16" />
-              </RouterLink>
-              <IconButton
-                :label="user.is_member
-                  ? $t('users.removeMemberTooltip')
-                  : (user.id === currentUserId ? $t('users.cantDeleteYourself') : $t('users.deleteUserTooltip'))"
-                :disabled="user.id === currentUserId"
-                @click="openDeleteDialog(user)"
-              >
-                <component :is="user.is_member ? UserMinus : Trash2" :size="16" />
-              </IconButton>
+            <div class="hstack gap-1 justify-end flex-nowrap">
+              <RouterLink :to="`/settings/users/${user.id}`" class="button outline small">{{ $t('common.edit') }}</RouterLink>
+              <RowMenu>
+                <button
+                  type="button"
+                  role="menuitem"
+                  class="ghost"
+                  data-variant="danger"
+                  :disabled="user.id === currentUserId"
+                  :title="user.id === currentUserId ? $t('users.cantDeleteYourself') : undefined"
+                  @click="openDeleteDialog(user)"
+                >
+                  <component :is="user.is_member ? UserMinus : Trash2" :size="14" />
+                  {{ user.is_member ? $t('users.removeMemberTooltip') : $t('common.delete') }}
+                </button>
+              </RowMenu>
             </div>
           </template>
           <template #empty-action>

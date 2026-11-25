@@ -3,9 +3,10 @@ import { ref, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { apiKeysService } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
-import { PageHeader, DataTable, SearchInput, DeleteConfirmDialog, IconButton, ErrorState, type Column } from '@/components/shared'
+import { PageHeader, DataTable, SearchInput, DeleteConfirmDialog, RowMenu, ErrorState, type Column } from '@/components/shared'
 import { toast } from '@/lib/toast'
-import { Plus, Trash2, Pencil, Key } from '@/lib/icons'
+import { Plus, Trash2, Key, Power } from '@/lib/icons'
+import type { StatusTone } from '@/lib/status'
 import { getErrorMessage } from '@/lib/api-utils'
 import { formatDate } from '@/lib/utils'
 import { useSearchPagination } from '@/composables/useSearchPagination'
@@ -40,10 +41,9 @@ const { searchQuery, currentPage, totalItems, pageSize, handlePageChange } = use
 
 const columns = computed<Column<APIKey>[]>(() => [
   { key: 'name', label: t('apiKeys.name'), sortable: true },
-  { key: 'key', label: t('apiKeys.key') },
+  { key: 'status', label: t('apiKeys.status'), sortable: true, sortKey: 'is_active' },
   { key: 'last_used', label: t('apiKeys.lastUsed'), sortable: true, sortKey: 'last_used_at' },
   { key: 'expires', label: t('apiKeys.expires'), sortable: true, sortKey: 'expires_at' },
-  { key: 'status', label: t('apiKeys.status'), sortable: true, sortKey: 'is_active' },
   { key: 'actions', label: t('common.actions'), align: 'right' },
 ])
 
@@ -96,15 +96,19 @@ async function toggleActive(key: APIKey) {
 
 function formatDateTime(dateStr: string | null) { return dateStr ? formatDate(dateStr, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : t('apiKeys.never') }
 function isExpired(expiresAt: string | null) { return expiresAt ? new Date(expiresAt) < new Date() : false }
+function keyStatus(key: APIKey): { tone: StatusTone, label: string } {
+  if (isExpired(key.expires_at)) return { tone: 'danger', label: t('apiKeys.expired') }
+  return key.is_active ? { tone: 'success', label: t('common.active') } : { tone: 'neutral', label: t('common.inactive') }
+}
 
 onMounted(() => fetchItems())
 </script>
 
 <template>
   <div class="flex flex-col h-full">
-    <PageHeader :title="$t('apiKeys.title')" :description="$t('apiKeys.subtitle')" :icon="Key" back-link="/settings">
+    <PageHeader :title="$t('apiKeys.title')" :description="$t('apiKeys.subtitle')" :icon="Key">
       <template #actions>
-        <RouterLink v-if="canWrite" to="/settings/api-keys/new" class="button outline small"><Plus :size="16" />{{ $t('apiKeys.createApiKey') }}</RouterLink>
+        <RouterLink v-if="canWrite" to="/settings/api-keys/new" class="button small"><Plus :size="16" />{{ $t('apiKeys.createApiKey') }}</RouterLink>
       </template>
     </PageHeader>
 
@@ -116,37 +120,42 @@ onMounted(() => fetchItems())
         :retry-label="$t('common.retry')"
         @retry="fetchItems"
       />
-      <article v-else class="card">
-        <header class="hstack justify-between flex-wrap gap-4">
-          <h3>{{ $t('apiKeys.yourApiKeys') }}</h3>
-          <SearchInput v-model="searchQuery" :placeholder="$t('apiKeys.searchApiKeys') + '...'" />
-        </header>
+      <article v-else class="card vstack gap-4">
+        <div data-toolbar>
+          <div></div>
+          <SearchInput v-model="searchQuery" :placeholder="$t('apiKeys.searchApiKeys')" />
+        </div>
         <DataTable :items="apiKeys" :columns="columns" :is-loading="isLoading" :empty-icon="Key" :empty-title="searchQuery ? $t('apiKeys.noMatchingApiKeys') : $t('apiKeys.noApiKeysYet')" :empty-description="searchQuery ? $t('apiKeys.noMatchingApiKeysDesc') : $t('apiKeys.noApiKeysYetDesc')" v-model:sort-key="sortKey" v-model:sort-direction="sortDirection" server-pagination :current-page="currentPage" :total-items="totalItems" :page-size="pageSize" item-name="API keys" @page-change="handlePageChange">
           <template #cell-name="{ item: key }">
             <RouterLink :to="`/settings/api-keys/${key.id}`"><strong>{{ key.name }}</strong></RouterLink>
+            <small class="text-light block"><code>whm_{{ key.key_prefix }}...</code></small>
           </template>
-          <template #cell-key="{ item: key }"><code>whm_{{ key.key_prefix }}...</code></template>
-          <template #cell-last_used="{ item: key }">{{ formatDateTime(key.last_used_at) }}</template>
-          <template #cell-expires="{ item: key }">{{ formatDateTime(key.expires_at) }}</template>
           <template #cell-status="{ item: key }">
-            <label class="hstack gap-2">
-              <input
-                type="checkbox"
-                role="switch"
-                :checked="key.is_active && !isExpired(key.expires_at)"
-                :disabled="isExpired(key.expires_at)"
-                :aria-label="`${key.name}: ${isExpired(key.expires_at) ? $t('apiKeys.expired') : key.is_active ? $t('common.active') : $t('common.inactive')}`"
-                @click.prevent="toggleActive(key)"
-              />
-              <small class="text-light">
-                {{ isExpired(key.expires_at) ? $t('apiKeys.expired') : key.is_active ? $t('common.active') : $t('common.inactive') }}
-              </small>
-            </label>
+            <span class="badge" :data-status="keyStatus(key).tone">{{ keyStatus(key).label }}</span>
           </template>
+          <template #cell-last_used="{ item: key }"><span class="text-light">{{ formatDateTime(key.last_used_at) }}</span></template>
+          <template #cell-expires="{ item: key }"><span class="text-light">{{ formatDateTime(key.expires_at) }}</span></template>
           <template #cell-actions="{ item: key }">
-            <div class="hstack gap-1 justify-end">
-              <RouterLink :to="`/settings/api-keys/${key.id}`" class="button ghost icon" :title="$t('common.edit')" :aria-label="$t('common.edit')"><Pencil :size="16" /></RouterLink>
-              <IconButton v-if="canDelete" :icon="Trash2" :label="$t('apiKeys.deleteApiKeyLabel')" @click="keyToDelete = key; isDeleteDialogOpen = true" />
+            <div class="hstack items-center justify-end gap-1 flex-nowrap">
+              <RouterLink :to="`/settings/api-keys/${key.id}`" class="button outline small">{{ $t('common.edit') }}</RouterLink>
+              <RowMenu v-if="canWrite || canDelete">
+                <button
+                  v-if="canWrite"
+                  type="button"
+                  role="menuitem"
+                  class="ghost"
+                  :disabled="isExpired(key.expires_at)"
+                  :title="isExpired(key.expires_at) ? $t('apiKeys.expiredCantEnable') : undefined"
+                  @click="toggleActive(key)"
+                >
+                  <Power :size="14" />
+                  {{ key.is_active && !isExpired(key.expires_at) ? $t('common.disable') : $t('common.enable') }}
+                </button>
+                <button v-if="canDelete" type="button" role="menuitem" class="ghost" data-variant="danger" @click="keyToDelete = key; isDeleteDialogOpen = true">
+                  <Trash2 :size="14" />
+                  {{ $t('common.delete') }}
+                </button>
+              </RowMenu>
             </div>
           </template>
           <template #empty-action>

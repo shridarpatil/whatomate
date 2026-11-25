@@ -22,7 +22,7 @@ test.describe('Tags Management', () => {
   test('should open create tag dialog', async () => {
     await tagsPage.openCreateDialog()
     await tagsPage.expectDialogVisible()
-    await expect(tagsPage.dialog).toContainText('Create Tag')
+    await expect(tagsPage.dialog).toContainText('Create tag')
   })
 
   test('should show validation error for empty name', async () => {

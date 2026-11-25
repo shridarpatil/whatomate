@@ -25,7 +25,7 @@ test.describe('Contacts Management', () => {
   test('should open create contact dialog', async () => {
     await contactsPage.openCreateDialog()
     await contactsPage.expectDialogVisible()
-    await expect(contactsPage.dialog).toContainText('Create Contact')
+    await expect(contactsPage.dialog).toContainText('Create contact')
   })
 
   test('should show validation error for empty phone', async () => {
@@ -88,7 +88,7 @@ test.describe('Contacts Management', () => {
     await page.waitForLoadState('networkidle')
 
     // Verify in list
-    await page.goto('/settings/contacts')
+    await page.goto('/contacts')
     await page.waitForLoadState('networkidle')
     await contactsPage.expectContactExists(newName)
   })
@@ -220,7 +220,7 @@ test.describe('Contacts Import/Export', () => {
 
     // Should show required columns info
     await expect(contactsPage.importExportDialog).toContainText('Required columns')
-    await expect(contactsPage.importExportDialog).toContainText('Phone Number')
+    await expect(contactsPage.importExportDialog).toContainText('Phone number')
   })
 
   test('should import contacts from CSV', async ({ page }) => {

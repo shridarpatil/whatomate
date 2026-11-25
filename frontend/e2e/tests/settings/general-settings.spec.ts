@@ -50,7 +50,7 @@ test.describe('General Tab', () => {
   })
 
   test('should have mask phone numbers toggle', async ({ page }) => {
-    await expect(page.getByText('Mask Phone Numbers', { exact: true })).toBeVisible()
+    await expect(page.getByText('Mask phone numbers', { exact: true })).toBeVisible()
   })
 
   test('should have save button', async () => {
@@ -92,21 +92,21 @@ test.describe('Notifications Tab', () => {
   })
 
   test('should show notifications settings', async ({ page }) => {
-    await expect(page.getByText('Email Notifications', { exact: true })).toBeVisible()
+    await expect(page.getByText('Email notifications', { exact: true })).toBeVisible()
   })
 
   test('should have email notifications toggle', async ({ page }) => {
-    await expect(page.getByText('Email Notifications', { exact: true })).toBeVisible()
+    await expect(page.getByText('Email notifications', { exact: true })).toBeVisible()
     const toggle = page.getByRole('switch').first()
     await expect(toggle).toBeVisible()
   })
 
   test('should have new message alerts toggle', async ({ page }) => {
-    await expect(page.getByText('New Message Alerts', { exact: true })).toBeVisible()
+    await expect(page.getByText('New message alerts', { exact: true })).toBeVisible()
   })
 
   test('should have campaign updates toggle', async ({ page }) => {
-    await expect(page.getByText('Campaign Updates', { exact: true })).toBeVisible()
+    await expect(page.getByText('Campaign updates', { exact: true })).toBeVisible()
   })
 
   test('should toggle email notifications', async ({ page }) => {
@@ -151,7 +151,7 @@ test.describe('Settings Tab Navigation', () => {
 
   test('should switch to Notifications tab', async ({ page }) => {
     await settingsPage.switchToNotificationsTab()
-    await expect(page.getByText('Email Notifications', { exact: true })).toBeVisible()
+    await expect(page.getByText('Email notifications', { exact: true })).toBeVisible()
   })
 
   test('should switch back to General tab', async ({ page }) => {

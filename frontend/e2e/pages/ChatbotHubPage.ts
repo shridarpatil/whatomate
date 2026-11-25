@@ -16,13 +16,14 @@ export class ChatbotHubPage extends BasePage {
   constructor(page: Page) {
     super(page)
     this.heading = page.locator('h1').filter({ hasText: 'Chatbot' })
-    // The toggle is a Button with Enable/Disable text, not a switch
-    this.toggleButton = page.locator('main').getByRole('button', { name: /Enable|Disable/i })
-    this.statusBadge = page.locator('main header .badge').filter({ hasText: /^\s*(Active|Inactive)\s*$/ }).first()
-    // Target cards specifically by their full card title (not sidebar links)
-    this.keywordsCard = page.getByRole('link', { name: /Keyword Rules.*rules/i })
-    this.flowsCard = page.getByRole('link', { name: /Conversation Flows.*flows/i })
-    this.aiContextsCard = page.getByRole('link', { name: /AI Contexts.*contexts/i })
+    // Off: a "Turn on chatbot" button in the warning banner. On: an "Active" badge and "Disable" in the header.
+    this.toggleButton = page.locator('main').getByRole('button', { name: /Turn on chatbot|Disable/i })
+    this.statusBadge = page.locator('main header .badge').filter({ hasText: /^\s*Active\s*$/ }).first()
+    // The "Get started" checklist: one step per area (title, count summary, "Open ..." link)
+    const step = (link: RegExp) => page.locator('main [data-steps] li').filter({ has: page.getByRole('link', { name: link }) })
+    this.keywordsCard = step(/^Open keyword rules$/i)
+    this.flowsCard = step(/^Open bot flows$/i)
+    this.aiContextsCard = step(/^Open AI contexts$/i)
     this.statsCards = page.locator('main article.card')
   }
 
@@ -36,24 +37,24 @@ export class ChatbotHubPage extends BasePage {
     // A ConfirmDialog (AlertDialog) appears before the toggle takes effect.
     const dialog = this.page.getByRole('alertdialog')
     await expect(dialog).toBeVisible()
-    // The confirm button label matches the toggle action ("Enable" or "Disable").
+    // The confirm dialog's button is labelled "Enable" or "Disable".
     await dialog.getByRole('button', { name: /Enable|Disable/i }).click()
     // Wait for the dialog to close after the action completes.
     await expect(dialog).toBeHidden()
   }
 
   async navigateToKeywords() {
-    await this.keywordsCard.click()
+    await this.keywordsCard.getByRole('link').click()
     await this.page.waitForLoadState('networkidle')
   }
 
   async navigateToFlows() {
-    await this.flowsCard.click()
+    await this.flowsCard.getByRole('link').click()
     await this.page.waitForLoadState('networkidle')
   }
 
   async navigateToAIContexts() {
-    await this.aiContextsCard.click()
+    await this.aiContextsCard.getByRole('link').click()
     await this.page.waitForLoadState('networkidle')
   }
 
@@ -75,8 +76,8 @@ export class ChatbotHubPage extends BasePage {
   }
 
   async expectChatbotDisabled() {
-    await expect(this.statusBadge).toContainText('Inactive')
-    await expect(this.toggleButton).toContainText('Enable')
+    await expect(this.page.locator('main [role="alert"]')).toContainText('The chatbot is off')
+    await expect(this.toggleButton).toContainText('Turn on chatbot')
   }
 
   async expectNavigationCardsVisible() {

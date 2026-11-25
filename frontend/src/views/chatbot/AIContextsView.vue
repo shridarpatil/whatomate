@@ -1,11 +1,12 @@
 <script setup lang="ts">
+import ChatbotTabs from '@/components/layout/ChatbotTabs.vue'
 import { ref, onMounted, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { chatbotService } from '@/services/api'
 import { toast } from '@/lib/toast'
-import { PageHeader, DataTable, DeleteConfirmDialog, SearchInput, IconButton, ErrorState, type Column } from '@/components/shared'
+import { PageHeader, DataTable, DeleteConfirmDialog, SearchInput, RowMenu, ErrorState, type Column } from '@/components/shared'
 import { getErrorMessage } from '@/lib/api-utils'
-import { Plus, Pencil, Trash2, Sparkles } from '@/lib/icons'
+import { Plus, Trash2, Sparkles } from '@/lib/icons'
 import { debounce } from '@/lib/utils'
 
 const { t } = useI18n()
@@ -57,7 +58,7 @@ const columns = computed<Column<AIContext>[]>(() => [
   { key: 'trigger_keywords', label: t('aiContexts.keywords') },
   { key: 'priority', label: t('aiContexts.priority'), sortable: true },
   { key: 'status', label: t('aiContexts.status'), sortable: true, sortKey: 'enabled' },
-  { key: 'actions', label: t('aiContexts.actions'), align: 'right' },
+  { key: 'actions', label: t('common.actions'), align: 'right' },
 ])
 
 const sortKey = ref('priority')
@@ -139,23 +140,23 @@ async function toggleContext(context: AIContext, event?: Event) {
     <PageHeader
       :title="$t('aiContexts.title')"
       :icon="Sparkles"
-      back-link="/chatbot"
       :breadcrumbs="[{ label: $t('aiContexts.backToChatbot'), href: '/chatbot' }, { label: $t('nav.aiContexts') }]"
     >
       <template #actions>
-        <RouterLink to="/chatbot/ai/new" class="button outline small">
+        <RouterLink to="/chatbot/ai/new" class="button small">
           <Plus :size="16" />
           {{ $t('aiContexts.addContext') }}
         </RouterLink>
       </template>
     </PageHeader>
+    <ChatbotTabs />
 
     <div class="flex-1 scroll-y p-4">
-      <article class="card">
-        <header class="hstack justify-between flex-wrap gap-4">
-          <h3>{{ $t('aiContexts.yourContexts') }}</h3>
-          <SearchInput v-model="searchQuery" :placeholder="$t('aiContexts.searchContexts') + '...'" />
-        </header>
+      <article class="card vstack gap-4">
+        <div data-toolbar>
+          <div></div>
+          <SearchInput v-model="searchQuery" :placeholder="$t('aiContexts.searchContexts')" />
+        </div>
         <ErrorState
           v-if="error"
           :title="$t('common.loadErrorTitle')"
@@ -184,14 +185,14 @@ async function toggleContext(context: AIContext, event?: Event) {
             <RouterLink :to="`/chatbot/ai/${context.id}`"><strong>{{ context.name }}</strong></RouterLink>
           </template>
           <template #cell-context_type="{ item: context }">
-            <span class="badge" data-variant="secondary">
+            <span class="badge" data-label>
               {{ context.context_type === 'api' ? $t('aiContexts.apiFetch') : $t('aiContexts.static') }}
             </span>
           </template>
           <template #cell-trigger_keywords="{ item: context }">
             <div class="hstack gap-1 flex-wrap">
-              <span v-for="kw in context.trigger_keywords?.slice(0, 2)" :key="kw" class="badge" data-variant="secondary">{{ kw }}</span>
-              <span v-if="context.trigger_keywords?.length > 2" class="badge outline">+{{ context.trigger_keywords.length - 2 }}</span>
+              <span v-for="kw in context.trigger_keywords?.slice(0, 2)" :key="kw" class="badge" data-label>{{ kw }}</span>
+              <span v-if="context.trigger_keywords?.length > 2" class="badge" data-label>+{{ context.trigger_keywords.length - 2 }}</span>
               <small v-if="!context.trigger_keywords?.length" class="text-light">{{ $t('aiContexts.always') }}</small>
             </div>
           </template>
@@ -205,9 +206,14 @@ async function toggleContext(context: AIContext, event?: Event) {
             </label>
           </template>
           <template #cell-actions="{ item: context }">
-            <div class="hstack gap-1 justify-end">
-              <RouterLink :to="`/chatbot/ai/${context.id}`" class="button ghost icon" :title="$t('aiContexts.editContextLabel')" :aria-label="$t('aiContexts.editContextLabel')"><Pencil :size="16" /></RouterLink>
-              <IconButton :icon="Trash2" :label="$t('aiContexts.deleteContextLabel')" @click="openDeleteDialog(context)" />
+            <div class="hstack items-center justify-end gap-1 flex-nowrap">
+              <RouterLink :to="`/chatbot/ai/${context.id}`" class="button outline small">{{ $t('common.edit') }}</RouterLink>
+              <RowMenu>
+                <button type="button" role="menuitem" class="ghost" data-variant="danger" @click="openDeleteDialog(context)">
+                  <Trash2 :size="14" />
+                  {{ $t('common.delete') }}
+                </button>
+              </RowMenu>
             </div>
           </template>
           <template #empty-action>

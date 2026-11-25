@@ -33,40 +33,62 @@ export class FlowsPage extends BasePage {
     await this.createDialog.waitFor({ state: 'visible' })
   }
 
-  // Flow card actions
+  // Flow row actions: "Edit" is the visible main action; the rest live in the
+  // row's "More actions" menu. Menu items are hidden until the menu opens, so the
+  // getters use includeHidden (presence checks); open the menu before clicking.
   getFlowCard(index = 0): Locator {
-    return this.page.locator('main article.card').nth(index)
+    return this.page.locator('main tbody tr').nth(index)
   }
 
   getEditButton(card?: Locator): Locator {
-    const container = card || this.page
-    // Icons carry a data-icon attribute (see src/lib/icons.ts)
-    return container.locator('button').filter({ has: this.page.locator('[data-icon="pencil"]') }).first()
+    const container = card || this.page.locator('main tbody')
+    return container.getByRole('button', { name: 'Edit', exact: true }).first()
+  }
+
+  getMenuButton(card?: Locator): Locator {
+    const container = card || this.page.locator('main tbody')
+    return container.getByRole('button', { name: 'More actions' }).first()
   }
 
   getDeleteButton(card?: Locator): Locator {
-    const container = card || this.page
-    return container.locator('button').filter({ has: this.page.locator('[data-icon="trash-2"]') }).first()
+    const container = card || this.page.locator('main tbody')
+    return container.getByRole('menuitem', { name: 'Delete', exact: true, includeHidden: true }).first()
   }
 
   getDuplicateButton(card?: Locator): Locator {
-    const container = card || this.page
-    return container.locator('button').filter({ has: this.page.locator('[data-icon="copy"]') }).first()
+    const container = card || this.page.locator('main tbody')
+    return container.getByRole('menuitem', { name: 'Duplicate', includeHidden: true }).first()
   }
 
   getPreviewButton(card?: Locator): Locator {
-    const container = card || this.page
-    return container.getByRole('button', { name: /Preview/i }).first()
+    const container = card || this.page.locator('main tbody')
+    return container.getByRole('menuitem', { name: 'Preview', includeHidden: true }).first()
   }
 
   getSaveToMetaButton(card?: Locator): Locator {
-    const container = card || this.page
-    return container.getByRole('button', { name: /Save to Meta|Update on Meta/i }).first()
+    const container = card || this.page.locator('main tbody')
+    return container.getByRole('menuitem', { name: /Save to Meta|Update on Meta/i, includeHidden: true }).first()
   }
 
   getPublishButton(card?: Locator): Locator {
-    const container = card || this.page
-    return container.getByRole('button', { name: /Publish/i }).first()
+    const container = card || this.page.locator('main tbody')
+    return container.getByRole('menuitem', { name: 'Publish', exact: true, includeHidden: true }).first()
+  }
+
+  /** Open the "More actions" menu of the first row whose item `name` is enabled. */
+  async openRowMenuWith(name: string | RegExp): Promise<Locator | null> {
+    const rows = this.page.locator('main tbody tr')
+    const n = await rows.count()
+    for (let i = 0; i < n; i++) {
+      const row = rows.nth(i)
+      const trigger = this.getMenuButton(row)
+      if (!(await trigger.isVisible())) continue
+      const item = row.getByRole('menuitem', { name, exact: typeof name === 'string', includeHidden: true }).first()
+      if (await item.count() === 0 || !(await item.isEnabled())) continue
+      await trigger.click()
+      return item
+    }
+    return null
   }
 
   // Dialog interactions
@@ -80,23 +102,20 @@ export class FlowsPage extends BasePage {
     return false
   }
 
+  /** Delete is disabled for published flows, so use the first row that allows it. */
   async clickDeleteButton() {
-    const btn = this.getDeleteButton()
-    if (await btn.isVisible()) {
-      await btn.click()
-      await this.alertDialog.waitFor({ state: 'visible' })
-      return true
-    }
-    return false
+    const item = await this.openRowMenuWith('Delete')
+    if (!item) return false
+    await item.click()
+    await this.alertDialog.waitFor({ state: 'visible' })
+    return true
   }
 
   async clickDuplicateButton() {
-    const btn = this.getDuplicateButton()
-    if (await btn.isVisible()) {
-      await btn.click()
-      return true
-    }
-    return false
+    const item = await this.openRowMenuWith('Duplicate')
+    if (!item) return false
+    await item.click()
+    return true
   }
 
   // Alert dialog actions
@@ -169,19 +188,19 @@ export class FlowsPage extends BasePage {
   }
 
   async hasDeleteButton(): Promise<boolean> {
-    return this.getDeleteButton().isVisible()
+    return (await this.getDeleteButton().count()) > 0
   }
 
   async hasDuplicateButton(): Promise<boolean> {
-    return this.getDuplicateButton().isVisible()
+    return (await this.getDuplicateButton().count()) > 0
   }
 
   async hasPublishButton(): Promise<boolean> {
-    return this.getPublishButton().isVisible()
+    return (await this.getPublishButton().count()) > 0
   }
 
   async hasSaveToMetaButton(): Promise<boolean> {
-    return this.getSaveToMetaButton().isVisible()
+    return (await this.getSaveToMetaButton().count()) > 0
   }
 }
 
@@ -214,27 +233,28 @@ export class ChatbotFlowsPage extends BasePage {
     await expect(this.page).toHaveURL(/\/chatbot\/flows\/new/)
   }
 
-  // Flow card actions
+  // Flow row actions: "Edit" is the visible main action, Delete lives in the
+  // row's "More actions" menu and the status column holds an enable switch.
   getFlowCard(index = 0): Locator {
-    return this.page.locator('.rounded-lg.border').nth(index)
+    return this.page.locator('main tbody tr').nth(index)
   }
 
   getEditButton(card?: Locator): Locator {
-    const container = card || this.page
-    return container.locator('button').filter({ has: this.page.locator('[data-icon="pencil"]') }).first()
+    const container = card || this.page.locator('main tbody')
+    return container.getByRole('button', { name: 'Edit', exact: true }).first()
   }
 
   getDeleteButton(card?: Locator): Locator {
-    const container = card || this.page
-    return container.locator('button').filter({ has: this.page.locator('[data-icon="trash-2"]') }).first()
+    const container = card || this.page.locator('main tbody')
+    return container.getByRole('menuitem', { name: 'Delete', exact: true, includeHidden: true }).first()
   }
 
   getToggleButton(card?: Locator): Locator {
-    const container = card || this.page
-    return container.getByRole('button', { name: /Enable|Disable/i }).first()
+    const container = card || this.page.locator('main tbody')
+    return container.getByRole('switch').first()
   }
 
-  // Card interactions
+  // Row interactions
   async clickEditButton() {
     const btn = this.getEditButton()
     if (await btn.isVisible()) {
@@ -245,13 +265,13 @@ export class ChatbotFlowsPage extends BasePage {
   }
 
   async clickDeleteButton() {
-    const btn = this.getDeleteButton()
-    if (await btn.isVisible()) {
-      await btn.click()
-      await this.alertDialog.waitFor({ state: 'visible' })
-      return true
-    }
-    return false
+    const row = this.getFlowCard(0)
+    const trigger = row.getByRole('button', { name: 'More actions' })
+    if (!(await trigger.isVisible())) return false
+    await trigger.click()
+    await this.getDeleteButton(row).click()
+    await this.alertDialog.waitFor({ state: 'visible' })
+    return true
   }
 
   async clickToggleButton() {
@@ -302,7 +322,7 @@ export class ChatbotFlowsPage extends BasePage {
   }
 
   async hasDeleteButton(): Promise<boolean> {
-    return this.getDeleteButton().isVisible()
+    return (await this.getDeleteButton().count()) > 0
   }
 
   async hasToggleButton(): Promise<boolean> {
@@ -325,7 +345,7 @@ export class ChatbotFlowBuilderPage extends BasePage {
 
   constructor(page: Page) {
     super(page)
-    // The palette row is a toolbar labelled by its "Add node:" caption.
+    // The palette row is a toolbar labelled by its "Add node" caption.
     this.paletteToolbar = page.getByRole('toolbar', { name: /Add node/ })
   }
 
@@ -335,7 +355,7 @@ export class ChatbotFlowBuilderPage extends BasePage {
   }
 
   /** Click a palette button to add a new node (and auto-select it). */
-  async addNode(type: 'Text' | 'Buttons' | 'API' | 'WA Flow' | 'Transfer' | 'Condition' | 'Timing' | 'Go to Flow' | 'End') {
+  async addNode(type: 'Message' | 'Buttons' | 'API call' | 'WhatsApp Flow' | 'Transfer' | 'Condition' | 'Business hours' | 'Go to flow' | 'End') {
     await this.paletteToolbar.getByRole('button', { name: type, exact: true }).click()
   }
 

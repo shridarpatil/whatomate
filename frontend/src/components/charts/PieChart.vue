@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { pieArcs } from '@/lib/chart-math'
-import ChartLegend from './ChartLegend.vue'
+import ChartSwatch from './ChartSwatch.vue'
 import ChartTooltip from './ChartTooltip.vue'
 import ChartDataTable from './ChartDataTable.vue'
 import { foldSlices, seriesColor } from './chart-utils'
@@ -53,39 +53,53 @@ const tooltip = computed(() => {
   }
 })
 
+const legend = computed(() => slices.value.map((s, i) => ({ ...items.value[i], value: fmt(s.value), pct: pct(s.value) })))
+
 const tableCells = computed(() => slices.value.map(s => [fmt(s.value), pct(s.value)]))
 const tableColumns = computed(() => [t('common.value'), '%'])
 </script>
 
 <template>
-  <figure role="group" :aria-label="caption || undefined">
+  <figure role="group" :aria-label="caption || undefined" data-chart>
     <figcaption v-if="caption || $slots.caption"><slot name="caption">{{ caption }}</slot></figcaption>
     <p v-if="empty" class="text-light">{{ t('common.noData') }}</p>
     <template v-else>
-      <div class="relative chart-pie">
-        <svg :viewBox="`${-R} ${-R} ${R * 2} ${R * 2}`" width="100%" @mouseleave="active = null">
-          <template v-for="(a, i) in arcs" :key="i">
-            <path
-              v-if="a.path"
-              :d="a.path"
-              :fill="items[i].color"
-              fill-rule="evenodd"
-              stroke="var(--background)"
-              stroke-width="2"
-              stroke-linejoin="round"
-              :opacity="active === null || active === i ? 1 : 0.6"
-              tabindex="0"
-              role="graphics-symbol"
-              :aria-label="describe(i)"
-              @mouseenter="active = i"
-              @focus="active = i"
-              @blur="active = null"
-            />
-          </template>
-        </svg>
-        <ChartTooltip v-if="tooltip" visible :left="tooltip.left" :top="tooltip.top" :flip="tooltip.flip" :title="tooltip.title" :rows="tooltip.rows" />
+      <div class="chart-pie-layout">
+        <div class="relative chart-pie">
+          <svg :viewBox="`${-R} ${-R} ${R * 2} ${R * 2}`" width="100%" @mouseleave="active = null">
+            <template v-for="(a, i) in arcs" :key="i">
+              <path
+                v-if="a.path"
+                :d="a.path"
+                :fill="items[i].color"
+                fill-rule="evenodd"
+                stroke="var(--card)"
+                stroke-width="2"
+                stroke-linejoin="round"
+                :opacity="active === null || active === i ? 1 : 0.6"
+                tabindex="0"
+                role="graphics-symbol"
+                :aria-label="describe(i)"
+                @mouseenter="active = i"
+                @focus="active = i"
+                @blur="active = null"
+              />
+            </template>
+            <!-- Donut: the total in the hole. -->
+            <text v-if="donut" x="0" y="0" text-anchor="middle" dominant-baseline="central" font-size="34" font-weight="600" fill="var(--foreground)" aria-hidden="true">{{ fmt(total) }}</text>
+          </svg>
+          <ChartTooltip v-if="tooltip" visible :left="tooltip.left" :top="tooltip.top" :flip="tooltip.flip" :title="tooltip.title" :rows="tooltip.rows" />
+        </div>
+        <!-- Legend with each slice's value and share. -->
+        <ul class="unstyled chart-pie-legend">
+          <li v-for="(item, i) in legend" :key="i">
+            <ChartSwatch :color="item.color" kind="box" />
+            <small>{{ item.label }}</small>
+            <strong>{{ item.value }}</strong>
+            <small class="text-light">{{ item.pct }}</small>
+          </li>
+        </ul>
       </div>
-      <ChartLegend :items="items" />
       <ChartDataTable :row-labels="slices.map(s => s.label)" :columns="tableColumns" :cells="tableCells" />
     </template>
   </figure>

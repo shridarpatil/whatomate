@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { PageHeader, SearchInput, DataTable, DeleteConfirmDialog, CreateContactDialog, ImportExportDialog, IconButton, ErrorState, type Column } from '@/components/shared'
+import { PageHeader, SearchInput, DataTable, DeleteConfirmDialog, CreateContactDialog, ImportExportDialog, RowMenu, ErrorState, type Column } from '@/components/shared'
 import { contactsService, accountsService, type ImportResult } from '@/services/api'
 import { toast } from '@/lib/toast'
-import { Plus, Users, Pencil, Trash2, MessageSquare, Download } from '@/lib/icons'
+import { Plus, Users, Pencil, Trash2, Download } from '@/lib/icons'
 import { getErrorMessage } from '@/lib/api-utils'
 import { formatDate } from '@/lib/utils'
 import { useSearchPagination } from '@/composables/useSearchPagination'
@@ -15,6 +15,7 @@ const { t } = useI18n()
 const router = useRouter()
 const authStore = useAuthStore()
 const canWriteContacts = authStore.hasPermission('contacts', 'write')
+const canDeleteContacts = authStore.hasPermission('contacts', 'delete')
 const canImportContacts = authStore.hasPermission('contacts', 'import')
 const canExportContacts = authStore.hasPermission('contacts', 'export')
 
@@ -150,12 +151,12 @@ function getDisplayName(contact: Contact): string {
 
 <template>
   <div class="flex flex-col h-full">
-    <PageHeader :title="$t('contacts.title')" :description="$t('contacts.subtitle')" :icon="Users" back-link="/settings">
+    <PageHeader :title="$t('contacts.title')" :description="$t('contacts.subtitle')" :icon="Users">
       <template v-if="canWriteContacts || canImportContacts || canExportContacts" #actions>
         <button v-if="canImportContacts || canExportContacts" type="button" class="outline small" @click="isImportExportOpen = true">
           <Download :size="16" />{{ $t('common.import') }}/{{ $t('common.export') }}
         </button>
-        <button v-if="canWriteContacts" type="button" class="outline small" @click="openCreateDialog"><Plus :size="16" />{{ $t('contacts.addContact') }}</button>
+        <button v-if="canWriteContacts" type="button" class="small" @click="openCreateDialog"><Plus :size="16" />{{ $t('contacts.addContact') }}</button>
       </template>
     </PageHeader>
 
@@ -170,11 +171,11 @@ function getDisplayName(contact: Contact): string {
     />
 
     <div v-else class="flex-1 scroll-y p-4">
-      <article class="card">
-        <header class="hstack justify-between flex-wrap gap-4">
-          <h3>{{ $t('contacts.allContacts') }}</h3>
-          <SearchInput v-model="searchQuery" :placeholder="$t('contacts.searchContacts') + '...'" />
-        </header>
+      <article class="card vstack gap-4">
+        <div data-toolbar>
+          <div></div>
+          <SearchInput v-model="searchQuery" :placeholder="$t('contacts.searchContacts')" />
+        </div>
         <DataTable
           :items="contacts"
           :columns="columns"
@@ -193,17 +194,18 @@ function getDisplayName(contact: Contact): string {
         >
           <template #cell-profile_name="{ item: contact }">
             <div class="vstack">
-              <RouterLink :to="`/settings/contacts/${contact.id}`"><strong>{{ getDisplayName(contact) }}</strong></RouterLink>
+              <RouterLink :to="`/contacts/${contact.id}`"><strong>{{ getDisplayName(contact) }}</strong></RouterLink>
               <small v-if="contact.last_message_preview" class="text-light truncate">{{ contact.last_message_preview }}</small>
             </div>
           </template>
           <template #cell-phone_number="{ item: contact }">
-            <code>{{ contact.phone_number }}</code>
+            <span class="text-light">{{ contact.phone_number }}</span>
           </template>
           <template #cell-tags="{ item: contact }">
             <div class="hstack gap-1 flex-wrap">
-              <span v-for="tag in (contact.tags || []).slice(0, 3)" :key="tag" class="badge" data-variant="secondary">{{ tag }}</span>
-              <span v-if="(contact.tags || []).length > 3" class="badge outline">+{{ contact.tags.length - 3 }}</span>
+              <span v-for="tag in (contact.tags || []).slice(0, 3)" :key="tag" class="badge" data-label>{{ tag }}</span>
+              <span v-if="(contact.tags || []).length > 3" class="badge" data-label>+{{ contact.tags.length - 3 }}</span>
+              <span v-if="!(contact.tags || []).length" class="text-lighter">—</span>
             </div>
           </template>
           <template #cell-last_message_at="{ item: contact }">
@@ -213,10 +215,13 @@ function getDisplayName(contact: Contact): string {
             <span class="text-light">{{ formatDate(contact.created_at) }}</span>
           </template>
           <template #cell-actions="{ item: contact }">
-            <div class="hstack gap-1 justify-end">
-              <IconButton :icon="MessageSquare" :label="$t('contacts.openChat')" @click="openChat(contact)" />
-              <RouterLink :to="`/settings/contacts/${contact.id}`" class="button ghost icon" :title="$t('common.edit')" :aria-label="$t('common.edit')"><Pencil :size="16" /></RouterLink>
-              <IconButton :icon="Trash2" :label="$t('common.delete')" @click="openDeleteDialog(contact)" />
+            <div class="hstack gap-1 justify-end flex-nowrap">
+              <button type="button" class="outline small" @click="openChat(contact)">{{ $t('contacts.message') }}</button>
+              <!-- Only the actions this user's role allows (the backend checks too). -->
+              <RowMenu v-if="canWriteContacts || canDeleteContacts">
+                <RouterLink v-if="canWriteContacts" :to="`/contacts/${contact.id}`" role="menuitem" class="button ghost"><Pencil :size="14" />{{ $t('common.edit') }}</RouterLink>
+                <button v-if="canDeleteContacts" type="button" role="menuitem" class="ghost" data-variant="danger" @click="openDeleteDialog(contact)"><Trash2 :size="14" />{{ $t('common.delete') }}</button>
+              </RowMenu>
             </div>
           </template>
           <template v-if="canWriteContacts" #empty-action>

@@ -60,10 +60,10 @@ test.describe('Roles Management', () => {
   test('should search roles', async ({ page }) => {
     await tablePage.search('admin')
     await page.waitForTimeout(500)
-    // The system "admin" role must be present; match the name span exactly so we
-    // don't collide with custom roles whose names contain "admin".
+    // The system "admin" role must be present (shown humanized as "Admin"); match the
+    // name exactly so we don't collide with custom roles whose names contain "admin".
     await expect(
-      page.locator('tbody tr strong').getByText('admin', { exact: true }).first()
+      page.locator('tbody tr strong').getByText('Admin', { exact: true }).first()
     ).toBeVisible()
   })
 
@@ -197,8 +197,9 @@ test.describe('Roles Management', () => {
     await tablePage.expectRowExists(roleName)
 
     // Click delete and verify confirmation dialog appears
-    const deleteButton = page.locator('tr').filter({ hasText: roleName }).getByRole('button', { name: /delete role/i })
-    await deleteButton.click()
+    const roleRow = page.locator('tr').filter({ hasText: roleName })
+    await roleRow.getByRole('button', { name: 'More actions' }).click()
+    await roleRow.getByRole('menuitem', { name: 'Delete' }).click()
 
     // Should show confirmation dialog
     const alertDialog = page.getByRole('alertdialog')

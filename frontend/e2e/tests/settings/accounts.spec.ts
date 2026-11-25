@@ -33,11 +33,13 @@ test.describe('WhatsApp Accounts - List View', () => {
       test.skip(true, 'No accounts in list')
       return
     }
-    const deleteBtn = firstRow.getByRole('button', { name: 'Delete' })
-    if (!(await deleteBtn.isVisible({ timeout: 3000 }).catch(() => false))) {
-      test.skip(true, 'No delete button found')
+    const menuBtn = firstRow.getByRole('button', { name: 'More actions' })
+    if (!(await menuBtn.isVisible({ timeout: 3000 }).catch(() => false))) {
+      test.skip(true, 'No row actions menu found')
       return
     }
+    await menuBtn.click()
+    const deleteBtn = firstRow.getByRole('menuitem', { name: 'Delete' })
     await deleteBtn.click()
     await expect(accountsPage.alertDialog).toBeVisible({ timeout: 5000 })
     await accountsPage.cancelDelete()

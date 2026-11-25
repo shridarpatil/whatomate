@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { PageHeader, SearchInput, DataTable, DeleteConfirmDialog, IconButton, ErrorState, type Column } from '@/components/shared'
+import { PageHeader, SearchInput, DataTable, DeleteConfirmDialog, RowMenu, ErrorState, type Column } from '@/components/shared'
+import { humanize } from '@/lib/status'
 import { useRolesStore } from '@/stores/roles'
 import { useOrganizationsStore } from '@/stores/organizations'
 import { useAuthStore } from '@/stores/auth'
 import type { Role } from '@/services/api'
 import { toast } from '@/lib/toast'
-import { Plus, Pencil, Trash2, Shield, Users, Lock, Star } from '@/lib/icons'
+import { Plus, Trash2, Shield } from '@/lib/icons'
 import { getErrorMessage } from '@/lib/api-utils'
 import { formatDate } from '@/lib/utils'
 import { useSearchPagination } from '@/composables/useSearchPagination'
@@ -36,9 +37,8 @@ const canDelete = computed(() => authStore.hasPermission('roles', 'delete'))
 
 const columns = computed<Column<Role>[]>(() => [
   { key: 'role', label: t('roles.role'), sortable: true, sortKey: 'name' },
-  { key: 'description', label: t('roles.description'), sortable: true },
-  { key: 'permissions', label: t('roles.permissions'), align: 'center' },
-  { key: 'users', label: t('roles.users'), align: 'center', sortable: true, sortKey: 'user_count' },
+  { key: 'permissions', label: t('roles.permissions') },
+  { key: 'users', label: t('roles.users'), sortable: true, sortKey: 'user_count' },
   { key: 'created', label: t('roles.created'), sortable: true, sortKey: 'created_at' },
   { key: 'actions', label: t('common.actions'), align: 'right' },
 ])
@@ -89,19 +89,21 @@ async function confirmDelete() {
   }
 }
 
-function editTooltip(role: Role): string {
-  if (role.is_system) {
-    return isSuperAdmin.value ? t('roles.editPermissions') : t('roles.viewPermissions')
-  }
-  return t('roles.editRole')
+/** Non-super-admins can only view a system role's permissions. */
+const isViewOnly = (role: Role) => role.is_system && !isSuperAdmin.value
+
+function deleteBlockedReason(role: Role): string | undefined {
+  if (role.is_system) return t('roles.cannotDeleteSystem')
+  if (role.user_count > 0) return t('roles.cannotDeleteUsers')
+  return undefined
 }
 </script>
 
 <template>
   <div class="flex flex-col h-full">
-    <PageHeader :title="$t('roles.title')" :description="$t('roles.subtitle')" :icon="Shield" back-link="/settings">
+    <PageHeader :title="$t('roles.title')" :description="$t('roles.subtitle')" :icon="Shield">
       <template #actions>
-        <RouterLink v-if="canWrite" to="/settings/roles/new" class="button outline small"><Plus :size="16" />{{ $t('roles.addRole') }}</RouterLink>
+        <RouterLink v-if="canWrite" to="/settings/roles/new" class="button small"><Plus :size="16" />{{ $t('roles.addRole') }}</RouterLink>
       </template>
     </PageHeader>
 
@@ -115,43 +117,48 @@ function editTooltip(role: Role): string {
     />
 
     <div v-else class="flex-1 scroll-y p-4">
-      <article class="card">
-        <header class="hstack justify-between flex-wrap gap-4">
-          <h3>{{ $t('roles.yourRoles') }}</h3>
-          <SearchInput v-model="searchQuery" :placeholder="$t('roles.searchRoles') + '...'" />
-        </header>
+      <article class="card vstack gap-4">
+        <div data-toolbar>
+          <div></div>
+          <SearchInput v-model="searchQuery" :placeholder="$t('roles.searchRoles')" />
+        </div>
         <DataTable :items="roles" :columns="columns" :is-loading="isLoading" :empty-icon="Shield" :empty-title="searchQuery ? $t('roles.noMatchingRoles') : $t('roles.noRolesYet')" :empty-description="searchQuery ? $t('roles.noMatchingRolesDesc') : $t('roles.noRolesYetDesc')" v-model:sort-key="sortKey" v-model:sort-direction="sortDirection" server-pagination :current-page="currentPage" :total-items="totalItems" :page-size="pageSize" item-name="roles" @page-change="handlePageChange">
           <template #cell-role="{ item: role }">
-            <RouterLink :to="`/settings/roles/${role.id}`" class="hstack gap-2">
-              <strong>{{ role.name }}</strong>
-              <span v-if="role.is_system" class="badge" data-variant="secondary"><Lock :size="12" />{{ $t('roles.system') }}</span>
-              <span v-if="role.is_default" class="badge outline"><Star :size="12" />{{ $t('roles.default') }}</span>
-            </RouterLink>
-          </template>
-          <template #cell-description="{ item: role }">
-            <span class="text-light truncate">{{ role.description || '-' }}</span>
+            <div class="hstack gap-2">
+              <RouterLink :to="`/settings/roles/${role.id}`"><strong>{{ humanize(role.name) }}</strong></RouterLink>
+              <span v-if="role.is_system" class="badge" data-label>{{ $t('roles.system') }}</span>
+              <span v-if="role.is_default" class="badge" data-label>{{ $t('roles.default') }}</span>
+            </div>
+            <small v-if="role.description" class="text-light block truncate">{{ role.description }}</small>
           </template>
           <template #cell-permissions="{ item: role }">
-            <span class="badge outline">{{ role.permissions.length }}</span>
+            {{ role.permissions.length }}
           </template>
           <template #cell-users="{ item: role }">
-            <div class="hstack gap-1 justify-center"><Users :size="16" /><span>{{ role.user_count }}</span></div>
+            {{ role.user_count }}
           </template>
           <template #cell-created="{ item: role }">
             <span class="text-light">{{ formatDate(role.created_at) }}</span>
           </template>
           <template #cell-actions="{ item: role }">
-            <div class="hstack gap-1 justify-end">
-              <RouterLink :to="`/settings/roles/${role.id}`" class="button ghost icon" :title="editTooltip(role)" :aria-label="editTooltip(role)">
-                <Pencil :size="16" />
+            <div class="hstack items-center justify-end gap-1 flex-nowrap">
+              <RouterLink :to="`/settings/roles/${role.id}`" class="button outline small">
+                {{ isViewOnly(role) ? $t('roles.view') : $t('common.edit') }}
               </RouterLink>
-              <IconButton
-                v-if="canDelete && !role.is_system"
-                :icon="Trash2"
-                :label="role.user_count > 0 ? $t('roles.cannotDeleteUsers') : $t('roles.deleteRole')"
-                :disabled="role.user_count > 0"
-                @click="openDeleteDialog(role)"
-              />
+              <RowMenu v-if="canDelete">
+                <button
+                  type="button"
+                  role="menuitem"
+                  class="ghost"
+                  data-variant="danger"
+                  :disabled="!!deleteBlockedReason(role)"
+                  :title="deleteBlockedReason(role)"
+                  @click="openDeleteDialog(role)"
+                >
+                  <Trash2 :size="14" />
+                  {{ $t('common.delete') }}
+                </button>
+              </RowMenu>
             </div>
           </template>
           <template #empty-action>

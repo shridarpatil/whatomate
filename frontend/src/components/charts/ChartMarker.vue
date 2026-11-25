@@ -27,5 +27,5 @@ const d = computed(() => {
     stroke-width="2.5"
     stroke-linecap="round"
   />
-  <path v-else :d="d" :fill="color" stroke="var(--background)" stroke-width="1" />
+  <path v-else :d="d" :fill="color" stroke="var(--card)" stroke-width="1" />
 </template>

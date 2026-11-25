@@ -4,7 +4,8 @@ import { useI18n } from 'vue-i18n'
 import { useCallingStore } from '@/stores/calling'
 import { callTransfersService, type CallTransfer } from '@/services/api'
 import PageHeader from '@/components/shared/PageHeader.vue'
-import { Phone, PhoneOff, PhoneForwarded, RefreshCw, Clock } from '@/lib/icons'
+import { Phone, PhoneForwarded, RefreshCw, Clock } from '@/lib/icons'
+import { humanize, type StatusTone } from '@/lib/status'
 import { toast } from '@/lib/toast'
 import DataTable from '@/components/shared/DataTable.vue'
 import type { Column } from '@/components/shared/types'
@@ -25,7 +26,7 @@ const waitingColumns = computed<Column<CallTransfer>[]>(() => [
   { key: 'caller_phone', label: t('callTransfers.callerPhone') },
   { key: 'status', label: t('common.status') },
   { key: 'transferred_at', label: t('callTransfers.transferredAt') },
-  { key: 'actions', label: t('common.actions') },
+  { key: 'actions', label: t('common.actions'), align: 'right' },
 ])
 
 const historyColumns = computed<Column<CallTransfer>[]>(() => [
@@ -80,14 +81,15 @@ function formatDate(dateStr?: string): string {
   return new Date(dateStr).toLocaleString()
 }
 
-function statusVariant(status: string): 'success' | 'warning' | 'danger' | 'secondary' {
-  switch (status) {
-    case 'waiting': return 'warning'
-    case 'connected': return 'success'
-    case 'abandoned': return 'danger'
-    default: return 'secondary'
-  }
+const TRANSFER_TONE: Record<string, StatusTone> = {
+  waiting: 'warning',
+  connected: 'info',
+  completed: 'success',
+  no_answer: 'warning',
+  abandoned: 'danger',
 }
+const statusTone = (status: string): StatusTone => TRANSFER_TONE[status] ?? 'neutral'
+const statusLabel = (status: string) => t(`callTransfers.${status}`, humanize(status))
 
 onMounted(() => {
   store.fetchWaitingTransfers()
@@ -117,7 +119,7 @@ onMounted(() => {
           @click="activeTab = 'waiting'"
         >
           {{ t('callTransfers.waiting') }}
-          <span v-if="store.waitingTransfers.length > 0" class="badge" data-variant="danger">
+          <span v-if="store.waitingTransfers.length > 0" class="badge" data-status="warning">
             {{ store.waitingTransfers.length }}
           </span>
         </button>
@@ -143,22 +145,22 @@ onMounted(() => {
             :empty-title="t('callTransfers.noWaiting')"
           >
             <template #cell-caller_phone="{ item: transfer }">
-              <div class="hstack gap-2">
-                <Phone :size="16" />
-                <span>{{ transfer.contact?.profile_name || transfer.caller_phone }}</span>
-              </div>
+              <strong>{{ transfer.contact?.profile_name || transfer.caller_phone }}</strong>
+              <small v-if="transfer.contact?.profile_name" class="text-light block">{{ transfer.caller_phone }}</small>
             </template>
             <template #cell-status>
-              <span class="badge" data-variant="warning">{{ t('callTransfers.waiting') }}</span>
+              <span class="badge" :data-status="statusTone('waiting')">{{ statusLabel('waiting') }}</span>
             </template>
             <template #cell-transferred_at="{ item: transfer }">
-              {{ formatDate(transfer.transferred_at) }}
+              <span class="text-light">{{ formatDate(transfer.transferred_at) }}</span>
             </template>
             <template #cell-actions="{ item: transfer }">
-              <button type="button" class="small" @click="handleAccept(transfer.id)">
-                <Phone :size="14" />
-                {{ t('callTransfers.accept') }}
-              </button>
+              <div class="hstack items-center justify-end gap-1 flex-nowrap">
+                <button type="button" class="outline small" @click="handleAccept(transfer.id)">
+                  <Phone :size="14" />
+                  {{ t('callTransfers.accept') }}
+                </button>
+              </div>
             </template>
           </DataTable>
         </article>
@@ -187,15 +189,11 @@ onMounted(() => {
               @page-change="handleHistoryPageChange"
             >
               <template #cell-caller_phone="{ item: transfer }">
-                <div class="hstack gap-2">
-                  <component :is="transfer.status === 'completed' ? Phone : PhoneOff" :size="16" />
-                  <span>{{ transfer.contact?.profile_name || transfer.caller_phone }}</span>
-                </div>
+                <strong>{{ transfer.contact?.profile_name || transfer.caller_phone }}</strong>
+                <small v-if="transfer.contact?.profile_name" class="text-light block">{{ transfer.caller_phone }}</small>
               </template>
               <template #cell-status="{ item: transfer }">
-                <span class="badge" :data-variant="statusVariant(transfer.status)">
-                  {{ transfer.status }}
-                </span>
+                <span class="badge" :data-status="statusTone(transfer.status)">{{ statusLabel(transfer.status) }}</span>
               </template>
               <template #cell-hold_duration="{ item: transfer }">
                 {{ formatDuration(transfer.hold_duration) }}
@@ -204,7 +202,7 @@ onMounted(() => {
                 {{ formatDuration(transfer.talk_duration) }}
               </template>
               <template #cell-transferred_at="{ item: transfer }">
-                {{ formatDate(transfer.transferred_at) }}
+                <span class="text-light">{{ formatDate(transfer.transferred_at) }}</span>
               </template>
             </DataTable>
           </article>

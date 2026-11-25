@@ -18,7 +18,7 @@ test.describe('Chatbot Flow Builder - Palette', () => {
 
   test('palette shows the action-node tiles', async () => {
     await expect(builder.paletteToolbar).toBeVisible()
-    for (const label of ['Text', 'Buttons', 'API', 'Transfer', 'Condition', 'Timing', 'End']) {
+    for (const label of ['Message', 'Buttons', 'API call', 'Transfer', 'Condition', 'Business hours', 'End']) {
       await expect(builder.paletteToolbar.getByRole('button', { name: label, exact: true })).toBeVisible()
     }
   })
@@ -38,7 +38,7 @@ test.describe('Chatbot Flow Builder - Text node', () => {
     await loginAsAdmin(page)
     builder = new ChatbotFlowBuilderPage(page)
     await builder.gotoNew()
-    await builder.addNode('Text')
+    await builder.addNode('Message')
   })
 
   test('shows the message textarea in the right panel', async () => {
@@ -148,7 +148,7 @@ test.describe('Chatbot Flow Builder - Other node types', () => {
   // These labels are static text in the template ("\n  Method\n  <select>"), which Vue condenses
   // to a leading space, so getByLabel(/^Method/) never matches. Match the control's accessible name.
   test('API node exposes method + URL fields', async () => {
-    await builder.addNode('API')
+    await builder.addNode('API call')
     await expect(builder.page.getByRole('combobox', { name: 'Method', exact: true })).toBeVisible()
     await expect(builder.page.getByRole('textbox', { name: 'URL', exact: true })).toBeVisible()
   })

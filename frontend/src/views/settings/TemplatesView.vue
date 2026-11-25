@@ -2,14 +2,15 @@
 import { ref, onMounted, watch, computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { PageHeader, SearchInput, DataTable, IconButton, DeleteConfirmDialog, ErrorState, type Column } from '@/components/shared'
+import { PageHeader, SearchInput, DataTable, RowMenu, DeleteConfirmDialog, ErrorState, type Column } from '@/components/shared'
+import { templateTone, humanize } from '@/lib/status'
 import { api, templatesService } from '@/services/api'
 import { useOrganizationsStore } from '@/stores/organizations'
 import { toast } from '@/lib/toast'
-import { Plus, RefreshCw, FileText, Pencil, Trash2, MessageSquare, Image, FileIcon, Video } from '@/lib/icons'
+import { Plus, RefreshCw, FileText, Trash2 } from '@/lib/icons'
 import { getErrorMessage } from '@/lib/api-utils'
 import { useSearchPagination } from '@/composables/useSearchPagination'
-import { getQualityBadgeVariant, getQualityRatingLabel } from '@/lib/utils'
+import { getQualityRatingLabel, formatDate } from '@/lib/utils'
 
 const { t } = useI18n()
 
@@ -61,10 +62,9 @@ const columns = computed<Column<Template>[]>(() => [
   { key: 'name', label: t('templates.name'), sortable: true },
   { key: 'category', label: t('templates.category'), sortable: true },
   { key: 'status', label: t('templates.status'), sortable: true },
-  { key: 'quality_rating', label: t('templates.qualityRating'), sortable: true },
   { key: 'language', label: t('templates.language'), sortable: true },
-  { key: 'header_type', label: t('templates.header') },
-  { key: 'actions', label: '', align: 'right' },
+  { key: 'updated_at', label: t('templates.updated') },
+  { key: 'actions', label: t('common.actions'), align: 'right' },
 ])
 
 const sortKey = ref('name')
@@ -244,46 +244,21 @@ async function confirmDeleteTemplate() {
   }
 }
 
-function getStatusBadgeVariant(status: string): string | undefined {
-  switch (status) {
-    case 'APPROVED':
-      return 'success'
-    case 'PENDING':
-      return 'warning'
-    case 'REJECTED':
-      return 'danger'
-    default:
-      return 'secondary'
-  }
-}
-
-function getCategoryBadgeVariant(category: string): string | undefined {
-  return category === 'UTILITY' ? 'secondary' : undefined
-}
-
-function getHeaderIcon(type: string) {
-  switch (type) {
-    case 'IMAGE':
-      return Image
-    case 'VIDEO':
-      return Video
-    case 'DOCUMENT':
-      return FileIcon
-    default:
-      return MessageSquare
-  }
-}
+/** Quality is only worth showing once Meta has rated the template. */
+const hasQuality = (rating?: string) => !!rating && rating.toUpperCase() !== 'UNKNOWN'
+const syncDisabledReason = computed(() =>
+  !selectedAccount.value || selectedAccount.value === 'all' ? t('templates.chooseAccountToSync') : undefined)
 </script>
 
 <template>
   <div class="flex flex-col h-full">
     <PageHeader :title="$t('templates.title')" :description="$t('templates.subtitle')" :icon="FileText">
       <template #actions>
-        <button type="button" class="outline small" :aria-busy="isSyncing ? 'true' : undefined" :disabled="isSyncing || !selectedAccount || selectedAccount === 'all'" @click="syncTemplates">
+        <button type="button" class="outline small" :aria-busy="isSyncing ? 'true' : undefined" :disabled="isSyncing || !!syncDisabledReason" :title="syncDisabledReason" @click="syncTemplates">
           <RefreshCw v-if="!isSyncing" :size="16" />
           {{ $t('templates.syncFromMeta') }}
         </button>
-        <RouterLink to="/templates/new" class="button outline small">
+        <RouterLink to="/templates/new" class="button small">
           <Plus :size="16" />
           {{ $t('templates.createTemplate') }}
         </RouterLink>
@@ -298,20 +273,16 @@ function getHeaderIcon(type: string) {
         :retry-label="$t('common.retry')"
         @retry="fetchTemplates"
       />
-      <article v-else class="card">
-        <header class="hstack justify-between items-center flex-wrap gap-4">
-          <h3>{{ $t('templates.yourTemplates') }}</h3>
-          <div class="hstack items-center gap-4 flex-wrap">
-            <label class="hstack items-center gap-2">
-              <small class="text-light">{{ $t('templates.account') }}:</small>
-              <select class="w-auto" v-model="selectedAccount" @change="onAccountChange">
-                <option value="all">{{ $t('templates.allAccounts') }}</option>
-                <option v-for="account in accounts" :key="account.id" :value="account.name">{{ account.name }}</option>
-              </select>
-            </label>
-            <SearchInput v-model="searchQuery" :placeholder="$t('templates.searchTemplates') + '...'" />
+      <article v-else class="card vstack gap-4">
+        <div data-toolbar>
+          <div>
+            <select class="w-auto" v-model="selectedAccount" :aria-label="$t('templates.account')" @change="onAccountChange">
+              <option value="all">{{ $t('templates.allAccounts') }}</option>
+              <option v-for="account in accounts" :key="account.id" :value="account.name">{{ account.name }}</option>
+            </select>
           </div>
-        </header>
+          <SearchInput v-model="searchQuery" :placeholder="$t('templates.searchTemplates')" />
+        </div>
         <DataTable
           :items="templates"
           :columns="columns"
@@ -329,46 +300,42 @@ function getHeaderIcon(type: string) {
           v-model:sort-direction="sortDirection"
         >
           <template #cell-name="{ item: template }">
-            <RouterLink :to="`/templates/${template.id}`">
-              <strong>{{ template.display_name || template.name }}</strong>
-              <br />
-              <small class="text-light"><code>{{ template.name }}</code></small>
-            </RouterLink>
+            <RouterLink :to="`/templates/${template.id}`"><strong>{{ template.display_name || template.name }}</strong></RouterLink>
+            <small class="text-light block"><code>{{ template.name }}</code></small>
           </template>
           <template #cell-category="{ item: template }">
-            <span class="badge" :data-variant="getCategoryBadgeVariant(template.category)">{{ template.category }}</span>
+            <span class="badge" data-label>{{ humanize(template.category) }}</span>
           </template>
           <template #cell-status="{ item: template }">
-            <span class="badge" :data-variant="getStatusBadgeVariant(template.status)">{{ template.status }}</span>
-          </template>
-          <template #cell-quality_rating="{ item: template }">
-            <span v-if="template.quality_rating" class="badge" :data-variant="getQualityBadgeVariant(template.quality_rating)">
-              {{ getQualityRatingLabel(template.quality_rating, t) }}
-            </span>
-            <small v-else class="text-light">—</small>
+            <span class="badge" :data-status="templateTone(template.status)">{{ humanize(template.status) }}</span>
+            <small v-if="template.status === 'REJECTED'" class="text-light block">{{ $t('templates.rejectedHint') }}</small>
+            <small v-else-if="template.status === 'PENDING'" class="text-light block">{{ $t('templates.pendingHint') }}</small>
+            <small v-else-if="hasQuality(template.quality_rating)" class="text-light block">
+              {{ $t('templates.qualityRating') }}: {{ getQualityRatingLabel(template.quality_rating, t) }}
+            </small>
           </template>
           <template #cell-language="{ item: template }">
             <span class="text-light">{{ getLanguageName(template.language) }}</span>
           </template>
-          <template #cell-header_type="{ item: template }">
-            <div class="hstack items-center gap-1">
-              <component :is="getHeaderIcon(template.header_type)" :size="16" />
-              <small class="text-light">{{ template.header_type || 'NONE' }}</small>
-            </div>
+          <template #cell-updated_at="{ item: template }">
+            <span class="text-light">{{ formatDate(template.updated_at) }}</span>
           </template>
           <template #cell-actions="{ item: template }">
-            <div class="hstack items-center justify-end gap-1">
-              <RouterLink :to="`/templates/${template.id}`" class="button ghost icon" :title="$t('common.edit')" :aria-label="$t('common.edit')"><Pencil :size="16" /></RouterLink>
-              <IconButton
-                :icon="Trash2"
-                :label="$t('common.delete')"
-                @click="openDeleteDialog(template)"
-              />
+            <div class="hstack items-center justify-end gap-1 flex-nowrap">
+              <RouterLink :to="`/templates/${template.id}`" class="button outline small">
+                {{ template.status === 'REJECTED' ? $t('templates.fixAndResubmit') : $t('common.edit') }}
+              </RouterLink>
+              <RowMenu>
+                <button type="button" role="menuitem" class="ghost" data-variant="danger" @click="openDeleteDialog(template)">
+                  <Trash2 :size="14" />
+                  {{ $t('common.delete') }}
+                </button>
+              </RowMenu>
             </div>
           </template>
           <template #empty-action>
             <div class="hstack items-center justify-center gap-2">
-              <button type="button" class="outline small" :disabled="!selectedAccount || selectedAccount === 'all'" @click="syncTemplates">
+              <button type="button" class="outline small" :disabled="!!syncDisabledReason" :title="syncDisabledReason" @click="syncTemplates">
                 <RefreshCw :size="16" />
                 {{ $t('templates.syncFromMeta') }}
               </button>

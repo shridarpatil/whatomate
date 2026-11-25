@@ -47,8 +47,9 @@ test.describe('Teams - List View', () => {
   test('should delete team from list', async ({ page }) => {
     const row = page.locator('tbody tr').first()
     if (await row.isVisible({ timeout: 3000 }).catch(() => false)) {
-      // Click delete button
-      await row.getByRole('button', { name: /delete team/i }).click()
+      // Delete is in the row's "More actions" menu
+      await row.getByRole('button', { name: 'More actions' }).click()
+      await row.getByRole('menuitem', { name: 'Delete' }).click()
       const dialog = page.getByRole('alertdialog')
       await expect(dialog).toBeVisible({ timeout: 3000 })
       // Cancel to not actually delete

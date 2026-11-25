@@ -30,7 +30,7 @@ const active = ref<number | null>(null)
 const folded = computed(() => foldSeries(props.series, t('common.other')))
 const n = computed(() => props.labels.length)
 const empty = computed(() => n.value === 0 || folded.value.length === 0)
-// Single series: minimal look (no y tick labels).
+// Single series without per-point colours: earlier bars lighter, the latest at full colour.
 const single = computed(() => folded.value.length === 1)
 
 const items = computed(() => folded.value.map((s, i) => ({
@@ -65,7 +65,7 @@ const margin = computed(() => ({
   top: 12,
   right: 16,
   bottom: 28,
-  left: single.value ? 8 : Math.max(40, Math.max(...tickLabels.value.map(textWidth)) + 14),
+  left: Math.max(32, Math.max(...tickLabels.value.map(textWidth)) + 14),
 }))
 const plot = computed(() => ({
   x0: margin.value.left,
@@ -78,7 +78,7 @@ const baseline = computed(() => y.value(0))
 const groupW = computed(() => (plot.value.x1 - plot.value.x0) / Math.max(n.value, 1))
 
 const RADIUS = 3
-interface Bar { x: number; y: number; width: number; height: number; color: string; round: 'top' | 'bottom' | 'none' }
+interface Bar { x: number; y: number; width: number; height: number; color: string; round: 'top' | 'bottom' | 'none'; value: number }
 
 // Rounded data end, square baseline end.
 function barPath(b: Bar) {
@@ -103,7 +103,7 @@ const groups = computed(() => props.labels.map((_, i) => {
       const top = y.value(cum + v)
       const bottom = y.value(cum) - (cum > 0 ? BAR_GAP : 0)
       cum += v
-      bars.push({ x, y: top, width: bw, height: Math.max(bottom - top, 0), color: items.value[si].color, round: 'none' })
+      bars.push({ x, y: top, width: bw, height: Math.max(bottom - top, 0), color: items.value[si].color, round: 'none', value: v })
     })
   } else {
     const usable = groupW.value * 0.8
@@ -117,7 +117,9 @@ const groups = computed(() => props.labels.map((_, i) => {
         y: Math.min(yv, baseline.value),
         width: bw,
         height: Math.abs(baseline.value - yv),
-        color: (k === 1 && props.pointColors?.[i]) || items.value[si].color,
+        color: (k === 1 && props.pointColors?.[i])
+          || (single.value && i < n.value - 1 ? `color-mix(in oklab, ${items.value[si].color} 70%, var(--card))` : items.value[si].color),
+        value: v,
         round: v < 0 ? 'bottom' : 'top',
       })
     })
@@ -126,6 +128,9 @@ const groups = computed(() => props.labels.map((_, i) => {
   const topY = bars.length ? Math.min(...bars.map(b => b.y)) : baseline.value
   return { gx, bars, topY, cx: gx + groupW.value / 2 }
 }))
+
+// Values above grouped bars when each bar is wide enough to label.
+const showValues = computed(() => !props.stacked && !single.value && groups.value.every(g => g.bars.every(b => b.width >= 20)))
 
 const labelStep = computed(() => Math.max(1, Math.ceil(n.value / Math.max(1, Math.floor((plot.value.x1 - plot.value.x0) / 60)))))
 
@@ -150,7 +155,7 @@ const tableCells = computed(() => props.labels.map((_, i) => folded.value.map(s 
 </script>
 
 <template>
-  <figure role="group" :aria-label="caption || undefined">
+  <figure role="group" :aria-label="caption || undefined" data-chart>
     <figcaption v-if="caption || $slots.caption"><slot name="caption">{{ caption }}</slot></figcaption>
     <p v-if="empty" class="text-light">{{ t('common.noData') }}</p>
     <template v-else>
@@ -160,7 +165,7 @@ const tableCells = computed(() => props.labels.map((_, i) => folded.value.map(s 
           <g>
             <template v-for="(tk, i) in ticks" :key="i">
               <line :x1="plot.x0" :x2="plot.x1" :y1="y(tk)" :y2="y(tk)" stroke="var(--border)" stroke-width="1" />
-              <text v-if="!single" :x="plot.x0 - 6" :y="y(tk)" text-anchor="end" dominant-baseline="middle" fill="var(--muted-foreground)">{{ tickLabels[i] }}</text>
+              <text :x="plot.x0 - 6" :y="y(tk)" text-anchor="end" dominant-baseline="middle" fill="var(--muted-foreground)">{{ tickLabels[i] }}</text>
             </template>
           </g>
           <g>
@@ -177,6 +182,18 @@ const tableCells = computed(() => props.labels.map((_, i) => folded.value.map(s 
               :opacity="active === null || active === i ? 1 : 0.6"
               data-bar
             />
+            <template v-if="showValues">
+              <template v-for="(b, bi) in g.bars" :key="`v${bi}`">
+              <text
+                v-if="b.value !== 0"
+                :x="b.x + b.width / 2"
+                :y="b.value < 0 ? b.y + b.height + 13 : b.y - 5"
+                text-anchor="middle"
+                fill="var(--muted-foreground)"
+                data-bar-value
+              >{{ fmt(b.value) }}</text>
+              </template>
+            </template>
           </g>
           <g>
             <rect

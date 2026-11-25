@@ -4,9 +4,9 @@ import { useI18n } from 'vue-i18n'
 import { webhooksService, type Webhook, type WebhookEvent } from '@/services/api'
 import { useOrganizationsStore } from '@/stores/organizations'
 import { useAuthStore } from '@/stores/auth'
-import { PageHeader, DataTable, SearchInput, DeleteConfirmDialog, ConfirmDialog, IconButton, ErrorState, type Column } from '@/components/shared'
+import { PageHeader, DataTable, SearchInput, DeleteConfirmDialog, ConfirmDialog, RowMenu, ErrorState, type Column } from '@/components/shared'
 import { toast } from '@/lib/toast'
-import { Plus, Trash2, Pencil, Webhook as WebhookIcon, Play } from '@/lib/icons'
+import { Plus, Trash2, Webhook as WebhookIcon, Play, Power } from '@/lib/icons'
 import { getErrorMessage } from '@/lib/api-utils'
 import { debounce, formatDate } from '@/lib/utils'
 
@@ -38,9 +38,8 @@ const pageSize = 20
 
 const columns = computed<Column<Webhook>[]>(() => [
   { key: 'name', label: t('webhooks.name'), sortable: true },
-  { key: 'url', label: t('webhooks.url'), sortable: true },
-  { key: 'events', label: t('webhooks.events') },
   { key: 'status', label: t('webhooks.status'), sortable: true, sortKey: 'is_active' },
+  { key: 'events', label: t('webhooks.events') },
   { key: 'created', label: t('webhooks.created'), sortable: true, sortKey: 'created_at' },
   { key: 'actions', label: t('common.actions'), align: 'right' },
 ])
@@ -127,9 +126,9 @@ onMounted(() => fetchWebhooks())
 
 <template>
   <div class="flex flex-col h-full">
-    <PageHeader :title="$t('webhooks.title')" :description="$t('webhooks.subtitle')" :icon="WebhookIcon" back-link="/settings">
+    <PageHeader :title="$t('webhooks.title')" :description="$t('webhooks.subtitle')" :icon="WebhookIcon">
       <template #actions>
-        <RouterLink v-if="canWrite" to="/settings/webhooks/new" class="button outline small"><Plus :size="16" />{{ $t('webhooks.addWebhook') }}</RouterLink>
+        <RouterLink v-if="canWrite" to="/settings/webhooks/new" class="button small"><Plus :size="16" />{{ $t('webhooks.addWebhook') }}</RouterLink>
       </template>
     </PageHeader>
 
@@ -143,34 +142,43 @@ onMounted(() => fetchWebhooks())
     />
 
     <div v-else class="flex-1 scroll-y p-4">
-      <article class="card">
-        <header class="hstack justify-between flex-wrap gap-4">
-          <h3>{{ $t('webhooks.yourWebhooks') }}</h3>
-          <SearchInput v-model="searchQuery" :placeholder="$t('webhooks.searchWebhooks') + '...'" />
-        </header>
+      <article class="card vstack gap-4">
+        <div data-toolbar>
+          <div></div>
+          <SearchInput v-model="searchQuery" :placeholder="$t('webhooks.searchWebhooks')" />
+        </div>
         <DataTable :items="webhooks" :columns="columns" :is-loading="isLoading" :empty-icon="WebhookIcon" :empty-title="searchQuery ? $t('webhooks.noMatchingWebhooks') : $t('webhooks.noWebhooksYet')" :empty-description="searchQuery ? $t('webhooks.noMatchingWebhooksDesc') : $t('webhooks.noWebhooksYetDesc')" v-model:sort-key="sortKey" v-model:sort-direction="sortDirection" server-pagination :current-page="currentPage" :total-items="totalItems" :page-size="pageSize" item-name="webhooks" @page-change="handlePageChange">
           <template #cell-name="{ item: webhook }">
             <RouterLink :to="`/settings/webhooks/${webhook.id}`"><strong>{{ webhook.name }}</strong></RouterLink>
-          </template>
-          <template #cell-url="{ item: webhook }"><span class="text-light truncate">{{ webhook.url }}</span></template>
-          <template #cell-events="{ item: webhook }">
-            <div class="hstack gap-1 flex-wrap">
-              <span v-for="event in webhook.events.slice(0, 2)" :key="event" class="badge" data-variant="secondary">{{ getEventLabel(event) }}</span>
-              <span v-if="webhook.events.length > 2" class="badge outline">+{{ webhook.events.length - 2 }}</span>
-            </div>
+            <small class="text-light block truncate">{{ webhook.url }}</small>
           </template>
           <template #cell-status="{ item: webhook }">
-            <label class="hstack gap-2">
-              <input type="checkbox" role="switch" :checked="webhook.is_active" :aria-label="`${webhook.name}: ${webhook.is_active ? $t('common.active') : $t('common.inactive')}`" @click.prevent="handleToggleWebhook(webhook)" />
-              <small class="text-light">{{ webhook.is_active ? $t('common.active') : $t('common.inactive') }}</small>
-            </label>
+            <span class="badge" :data-status="webhook.is_active ? 'success' : 'neutral'">{{ webhook.is_active ? $t('common.active') : $t('common.inactive') }}</span>
+          </template>
+          <template #cell-events="{ item: webhook }">
+            <div class="hstack gap-1 flex-wrap">
+              <span v-for="event in webhook.events.slice(0, 2)" :key="event" class="badge" data-label>{{ getEventLabel(event) }}</span>
+              <span v-if="webhook.events.length > 2" class="badge" data-label :title="webhook.events.slice(2).map(getEventLabel).join(', ')">+{{ webhook.events.length - 2 }}</span>
+            </div>
           </template>
           <template #cell-created="{ item: webhook }"><span class="text-light">{{ formatDate(webhook.created_at) }}</span></template>
           <template #cell-actions="{ item: webhook }">
-            <div class="hstack gap-1 justify-end">
-              <IconButton :icon="Play" :label="$t('webhooks.testWebhook')" :disabled="isTesting === webhook.id" :loading="isTesting === webhook.id" @click="testWebhook(webhook)" />
-              <RouterLink :to="`/settings/webhooks/${webhook.id}`" class="button ghost icon" :title="$t('common.edit')" :aria-label="$t('common.edit')"><Pencil :size="16" /></RouterLink>
-              <IconButton v-if="canDelete" :icon="Trash2" :label="$t('common.delete')" @click="webhookToDelete = webhook; isDeleteDialogOpen = true" />
+            <div class="hstack items-center justify-end gap-1 flex-nowrap">
+              <RouterLink :to="`/settings/webhooks/${webhook.id}`" class="button outline small">{{ $t('common.edit') }}</RouterLink>
+              <RowMenu>
+                <button type="button" role="menuitem" class="ghost" :disabled="isTesting === webhook.id" @click="testWebhook(webhook)">
+                  <Play :size="14" />
+                  {{ $t('webhooks.testWebhook') }}
+                </button>
+                <button v-if="canWrite" type="button" role="menuitem" class="ghost" @click="handleToggleWebhook(webhook)">
+                  <Power :size="14" />
+                  {{ webhook.is_active ? $t('common.disable') : $t('common.enable') }}
+                </button>
+                <button v-if="canDelete" type="button" role="menuitem" class="ghost" data-variant="danger" @click="webhookToDelete = webhook; isDeleteDialogOpen = true">
+                  <Trash2 :size="14" />
+                  {{ $t('common.delete') }}
+                </button>
+              </RowMenu>
             </div>
           </template>
           <template #empty-action>

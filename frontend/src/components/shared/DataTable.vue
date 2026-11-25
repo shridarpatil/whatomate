@@ -156,7 +156,8 @@ function getRowKey(item: T, index: number): string {
     :class="{ 'scroll-y': maxHeight }"
     :style="maxHeight ? { maxHeight } : undefined"
   >
-    <table>
+    <!-- data-stack: on phones each row becomes a card of "label: value" lines (layout.css). -->
+    <table data-stack>
       <thead>
         <tr>
           <th
@@ -211,7 +212,7 @@ function getRowKey(item: T, index: number): string {
 
         <!-- Data Rows -->
         <tr v-else v-for="(item, index) in displayItems" :key="getRowKey(item, index)">
-          <td v-for="col in columns" :key="col.key" :class="alignClass(col)">
+          <td v-for="col in columns" :key="col.key" :class="alignClass(col)" :data-label="col.label">
             <slot :name="`cell-${col.key}`" :item="item" :index="index">
               {{ (item as any)[col.key] }}
             </slot>

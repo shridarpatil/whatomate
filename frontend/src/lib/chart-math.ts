@@ -35,6 +35,43 @@ export function linePath(points: Array<[x: number, y: number]>): string {
     .join('')
 }
 
+/**
+ * Smooth path through the points (monotone cubic, Fritsch–Carlson). The curve
+ * never overshoots between two points, so it can't dip below zero or rise above
+ * a real value; flat runs stay flat. Falls back to straight lines for < 3 points.
+ */
+export function smoothPath(points: Array<[x: number, y: number]>): string {
+  const p = points.filter(([x, y]) => Number.isFinite(x) && Number.isFinite(y))
+  if (p.length < 3) return linePath(p)
+  const n = p.length
+  const dx = p.slice(1).map((q, i) => q[0] - p[i][0])
+  const slope = p.slice(1).map((q, i) => (dx[i] === 0 ? 0 : (q[1] - p[i][1]) / dx[i]))
+  // Tangents: average of neighbouring slopes, zero at peaks/valleys.
+  const m = p.map((_, i) => {
+    if (i === 0) return slope[0]
+    if (i === n - 1) return slope[n - 2]
+    return slope[i - 1] * slope[i] <= 0 ? 0 : (slope[i - 1] + slope[i]) / 2
+  })
+  // Limit tangents so each segment stays monotone.
+  for (let i = 0; i < n - 1; i++) {
+    if (slope[i] === 0) { m[i] = 0; m[i + 1] = 0; continue }
+    const a = m[i] / slope[i]
+    const b = m[i + 1] / slope[i]
+    const h = a * a + b * b
+    if (h > 9) {
+      const tau = 3 / Math.sqrt(h)
+      m[i] = tau * a * slope[i]
+      m[i + 1] = tau * b * slope[i]
+    }
+  }
+  let d = `M${num(p[0][0])} ${num(p[0][1])}`
+  for (let i = 0; i < n - 1; i++) {
+    const h = dx[i] / 3
+    d += `C${num(p[i][0] + h)} ${num(p[i][1] + m[i] * h)} ${num(p[i + 1][0] - h)} ${num(p[i + 1][1] - m[i + 1] * h)} ${num(p[i + 1][0])} ${num(p[i + 1][1])}`
+  }
+  return d
+}
+
 const pt = (r: number, a: number) => `${num(r * Math.sin(a))} ${num(-r * Math.cos(a))}`
 
 /** Arcs centred on the origin, starting at 12 o'clock, clockwise. Angles in radians. One entry per input value (zero values get an empty path). */

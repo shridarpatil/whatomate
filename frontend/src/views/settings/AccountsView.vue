@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { PageHeader, DataTable, DeleteConfirmDialog, ErrorState, type Column } from '@/components/shared'
+import { PageHeader, DataTable, DeleteConfirmDialog, RowMenu, ErrorState, type Column } from '@/components/shared'
+import { humanize, type StatusTone } from '@/lib/status'
 import Modal from '@/components/oat/Modal.vue'
 import { api } from '@/services/api'
 import { useOrganizationsStore } from '@/stores/organizations'
@@ -11,10 +12,8 @@ import { getErrorMessage } from '@/lib/api-utils'
 import { formatDate } from '@/lib/utils'
 import {
   Plus,
-  Pencil,
   Trash2,
   Phone,
-  Check,
   Facebook,
   Smartphone,
   Network
@@ -58,6 +57,7 @@ const isFBSDKLoaded = ref(false)
 const isConnectingFB = ref(false)
 const showOnboardingDialog = ref(false)
 
+const hasEmbeddedSignup = computed(() => !!(whatsappConfig.value?.app_id && whatsappConfig.value?.config_id))
 const canWrite = computed(() => authStore.hasPermission('accounts', 'write'))
 const canDelete = computed(() => authStore.hasPermission('accounts', 'delete'))
 const breadcrumbs = computed(() => [{ label: t('nav.settings'), href: '/settings' }, { label: t('settings.accounts') }])
@@ -67,14 +67,18 @@ const sortDirection = ref<'asc' | 'desc'>('asc')
 
 const columns = computed<Column<WhatsAppAccount>[]>(() => [
   { key: 'account', label: t('accounts.account'), sortable: true, sortKey: 'name' },
-  { key: 'app_id', label: t('accounts.appId') },
   { key: 'phone_id', label: t('accounts.phoneNumberId'), sortable: true },
-  { key: 'api_version', label: t('accounts.apiVersion') },
   { key: 'defaults', label: t('accounts.defaults') },
   { key: 'status', label: t('accounts.status'), sortable: true, sortKey: 'status' },
   { key: 'created', label: t('common.created'), sortable: true, sortKey: 'created_at' },
   { key: 'actions', label: t('common.actions'), align: 'right' },
 ])
+
+function statusTone(status: string): StatusTone {
+  if (status === 'active') return 'success'
+  if (status === 'pending_registration') return 'warning'
+  return 'neutral'
+}
 
 watch(() => organizationsStore.selectedOrgId, () => {
   fetchAccounts()
@@ -249,8 +253,8 @@ async function confirmDelete() {
   <div class="flex flex-col h-full">
     <PageHeader
       :title="$t('accounts.title')"
+      :description="$t('accounts.subtitle')"
       :icon="Phone"
-      back-link="/settings"
       :breadcrumbs="breadcrumbs"
     >
       <template #actions>
@@ -266,7 +270,8 @@ async function confirmDelete() {
             <Facebook v-if="!isConnectingFB" :size="16" />
             {{ $t('accounts.connectFacebook') }}
           </button>
-          <RouterLink to="/settings/accounts/new" class="button outline small">
+          <!-- Facebook signup is the main action when configured; otherwise manual add is. -->
+          <RouterLink to="/settings/accounts/new" class="button small" :class="{ outline: hasEmbeddedSignup }">
             <Plus :size="16" />
             {{ $t('accounts.addAccount') }}
           </RouterLink>
@@ -284,10 +289,7 @@ async function confirmDelete() {
     </ErrorState>
 
     <div v-else class="flex-1 scroll-y p-4">
-      <article class="card">
-        <header>
-          <h3>{{ $t('accounts.yourAccounts') }}</h3>
-        </header>
+      <article class="card vstack gap-4">
         <DataTable
           :items="accounts"
           :columns="columns"
@@ -318,59 +320,36 @@ async function confirmDelete() {
             </div>
           </template>
           <template #cell-account="{ item: account }">
-            <RouterLink :to="`/settings/accounts/${account.id}`" class="hstack gap-2 unstyled">
-              <Phone :size="16" />
-              <strong class="truncate">{{ account.name }}</strong>
-            </RouterLink>
-          </template>
-          <template #cell-app_id="{ item: account }">
-            <code v-if="account.app_id">{{ account.app_id }}</code>
-            <span v-else class="text-light">—</span>
+            <RouterLink :to="`/settings/accounts/${account.id}`"><strong class="truncate">{{ account.name }}</strong></RouterLink>
+            <small class="text-light block">
+              <span v-if="account.app_id">{{ $t('accounts.appId') }} <code>{{ account.app_id }}</code> · </span>{{ $t('accounts.apiVersion') }} {{ account.api_version }}
+            </small>
           </template>
           <template #cell-phone_id="{ item: account }">
             <code>{{ account.phone_id }}</code>
           </template>
-          <template #cell-api_version="{ item: account }">
-            <span>{{ account.api_version }}</span>
-          </template>
           <template #cell-defaults="{ item: account }">
-            <div class="hstack gap-1 flex-wrap">
-              <span v-if="account.is_default_incoming" class="badge outline">
-                <Check :size="12" /> {{ $t('accounts.incoming') }}
-              </span>
-              <span v-if="account.is_default_outgoing" class="badge outline">
-                <Check :size="12" /> {{ $t('accounts.outgoing') }}
-              </span>
+            <div v-if="account.is_default_incoming || account.is_default_outgoing" class="hstack gap-1 flex-wrap">
+              <span v-if="account.is_default_incoming" class="badge" data-label>{{ $t('accounts.incoming') }}</span>
+              <span v-if="account.is_default_outgoing" class="badge" data-label>{{ $t('accounts.outgoing') }}</span>
             </div>
+            <span v-else class="text-light">—</span>
           </template>
           <template #cell-status="{ item: account }">
-            <span class="badge" :data-variant="account.status === 'active' ? 'success' : 'secondary'">
-              {{ account.status }}
-            </span>
+            <span class="badge" :data-status="statusTone(account.status)">{{ humanize(account.status) }}</span>
           </template>
           <template #cell-created="{ item: account }">
             <span class="text-light">{{ formatDate(account.created_at) }}</span>
           </template>
           <template #cell-actions="{ item: account }">
-            <div class="hstack gap-1 justify-end">
-              <RouterLink
-                :to="`/settings/accounts/${account.id}`"
-                class="button ghost icon small"
-                :title="$t('common.edit')"
-                :aria-label="$t('common.edit')"
-              >
-                <Pencil :size="16" />
-              </RouterLink>
-              <button
-                v-if="canDelete"
-                type="button"
-                class="ghost icon small"
-                :title="$t('common.delete')"
-                :aria-label="$t('common.delete')"
-                @click="openDeleteDialog(account)"
-              >
-                <Trash2 :size="16" />
-              </button>
+            <div class="hstack items-center justify-end gap-1 flex-nowrap">
+              <RouterLink :to="`/settings/accounts/${account.id}`" class="button outline small">{{ $t('common.edit') }}</RouterLink>
+              <RowMenu v-if="canDelete">
+                <button type="button" role="menuitem" class="ghost" data-variant="danger" @click="openDeleteDialog(account)">
+                  <Trash2 :size="14" />
+                  {{ $t('common.delete') }}
+                </button>
+              </RowMenu>
             </div>
           </template>
         </DataTable>

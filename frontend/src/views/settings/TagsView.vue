@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { PageHeader, SearchInput, DataTable, CrudFormDialog, DeleteConfirmDialog, IconButton, ErrorState, type Column } from '@/components/shared'
+import { PageHeader, SearchInput, DataTable, CrudFormDialog, DeleteConfirmDialog, RowMenu, ErrorState, type Column } from '@/components/shared'
 import type { Tag } from '@/services/api'
 import { useTagsStore } from '@/stores/tags'
 import { useCrudState } from '@/composables/useCrudState'
 import { toast } from '@/lib/toast'
-import { Plus, Tags, Pencil, Trash2 } from '@/lib/icons'
+import { Plus, Tags, Trash2 } from '@/lib/icons'
 import { getErrorMessage } from '@/lib/api-utils'
 import { TAG_COLORS } from '@/lib/constants'
 import { formatDate } from '@/lib/utils'
@@ -118,9 +118,9 @@ function getColorLabel(color: string): string {
 
 <template>
   <div class="flex flex-col h-full">
-    <PageHeader :title="$t('tags.title')" :description="$t('tags.subtitle')" :icon="Tags" back-link="/settings">
+    <PageHeader :title="$t('tags.title')" :description="$t('tags.subtitle')" :icon="Tags">
       <template #actions>
-        <button type="button" class="outline small" @click="openCreateDialog"><Plus :size="16" />{{ $t('tags.addTag') }}</button>
+        <button type="button" class="small" @click="openCreateDialog"><Plus :size="16" />{{ $t('tags.addTag') }}</button>
       </template>
     </PageHeader>
 
@@ -135,11 +135,11 @@ function getColorLabel(color: string): string {
     />
 
     <div v-else class="flex-1 scroll-y p-4">
-      <article class="card">
-        <header class="hstack justify-between flex-wrap gap-4">
-          <h3>{{ $t('tags.organizationTags') }}</h3>
-          <SearchInput v-model="searchQuery" :placeholder="$t('tags.searchTags') + '...'" />
-        </header>
+      <article class="card vstack gap-4">
+        <div data-toolbar>
+          <div></div>
+          <SearchInput v-model="searchQuery" :placeholder="$t('tags.searchTags')" />
+        </div>
         <DataTable
           :items="tags"
           :columns="columns"
@@ -157,7 +157,7 @@ function getColorLabel(color: string): string {
           @page-change="handlePageChange"
         >
           <template #cell-name="{ item: tag }">
-            <span class="badge" data-variant="secondary">{{ tag.name }}</span>
+            <span class="badge" data-label>{{ tag.name }}</span>
           </template>
           <template #cell-color="{ item: tag }">
             <span class="text-light">{{ getColorLabel(tag.color) }}</span>
@@ -166,9 +166,14 @@ function getColorLabel(color: string): string {
             <span class="text-light">{{ formatDate(tag.created_at) }}</span>
           </template>
           <template #cell-actions="{ item: tag }">
-            <div class="hstack gap-1 justify-end">
-              <IconButton :icon="Pencil" :label="$t('tags.editTag')" @click="openEditDialog(tag)" />
-              <IconButton :icon="Trash2" :label="$t('tags.deleteTag')" @click="openDeleteDialog(tag)" />
+            <div class="hstack items-center justify-end gap-1 flex-nowrap">
+              <button type="button" class="outline small" @click="openEditDialog(tag)">{{ $t('common.edit') }}</button>
+              <RowMenu>
+                <button type="button" role="menuitem" class="ghost" data-variant="danger" @click="openDeleteDialog(tag)">
+                  <Trash2 :size="14" />
+                  {{ $t('common.delete') }}
+                </button>
+              </RowMenu>
             </div>
           </template>
           <template #empty-action>
@@ -207,7 +212,7 @@ function getColorLabel(color: string): string {
         <div class="vstack gap-2">
           <small class="text-light">{{ $t('tags.preview') }}</small>
           <div>
-            <span class="badge" data-variant="secondary">{{ formData.name || $t('tags.tagPreview') }}</span>
+            <span class="badge" data-label>{{ formData.name || $t('tags.tagPreview') }}</span>
           </div>
         </div>
       </div>

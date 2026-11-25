@@ -111,16 +111,17 @@ const nodeTypes: any = {
 
 // Palette: 'prompt' and 'webhook' are internal-only — a Text node
 // becomes a prompt when the author sets an expected response.
-const palette: { type: ChatNodeType; label: string; icon: any }[] = [
-  { type: 'message', label: 'Text', icon: MessageSquare },
-  { type: 'buttons', label: 'Buttons', icon: MousePointerClick },
-  { type: 'api_call', label: 'API', icon: Globe },
-  { type: 'whatsapp_flow', label: 'WA Flow', icon: MessageCircle },
-  { type: 'transfer', label: 'Transfer', icon: Users },
-  { type: 'condition', label: 'Condition', icon: GitBranch },
-  { type: 'timing', label: 'Timing', icon: Clock },
-  { type: 'goto_flow', label: 'Go to Flow', icon: ExternalLink },
-  { type: 'end', label: 'End', icon: StopCircle },
+// Labels come from flowBuilder.palette.<type> (shared wording with the IVR editor).
+const palette: { type: ChatNodeType; icon: any }[] = [
+  { type: 'message', icon: MessageSquare },
+  { type: 'buttons', icon: MousePointerClick },
+  { type: 'api_call', icon: Globe },
+  { type: 'whatsapp_flow', icon: MessageCircle },
+  { type: 'transfer', icon: Users },
+  { type: 'condition', icon: GitBranch },
+  { type: 'timing', icon: Clock },
+  { type: 'goto_flow', icon: ExternalLink },
+  { type: 'end', icon: StopCircle },
 ]
 
 const {
@@ -722,7 +723,7 @@ onMounted(async () => {
 
     <!-- Node palette -->
     <div class="hstack gap-2 scroll-x" role="toolbar" aria-labelledby="chat-flow-palette-label">
-      <small id="chat-flow-palette-label" class="text-light shrink-0">Add node:</small>
+      <small id="chat-flow-palette-label" class="text-light shrink-0">{{ $t('flowBuilder.addNode') }}</small>
       <button
         v-for="p in palette"
         :key="p.type"
@@ -731,7 +732,7 @@ onMounted(async () => {
         @click="addNodeFromPalette(p.type)"
       >
         <component :is="p.icon" />
-        {{ p.label }}
+        {{ $t(`flowBuilder.palette.${p.type}`) }}
       </button>
     </div>
     </div>

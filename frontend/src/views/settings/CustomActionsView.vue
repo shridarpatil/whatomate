@@ -3,9 +3,10 @@ import { ref, onMounted, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { customActionsService, type CustomAction } from '@/services/api'
 import Modal from '@/components/oat/Modal.vue'
-import { PageHeader, DataTable, SearchInput, DeleteConfirmDialog, ConfirmDialog, IconButton, ErrorState, type Column } from '@/components/shared'
+import { PageHeader, DataTable, SearchInput, DeleteConfirmDialog, ConfirmDialog, RowMenu, ErrorState, type Column } from '@/components/shared'
 import { toast } from '@/lib/toast'
-import { Plus, Trash2, Pencil, Zap, Globe, Webhook, Code, Ticket, User, BarChart, Link, Phone, Mail, FileText, ExternalLink } from '@/lib/icons'
+import { Plus, Trash2, Power, Zap, Globe, Webhook, Code, Ticket, User, BarChart, Link, Phone, Mail, FileText, ExternalLink } from '@/lib/icons'
+import { humanize } from '@/lib/status'
 import { getErrorMessage } from '@/lib/api-utils'
 import { debounce, formatDate } from '@/lib/utils'
 
@@ -48,10 +49,8 @@ const totalItems = ref(0)
 const pageSize = 20
 
 const columns = computed<Column<CustomAction>[]>(() => [
-  { key: 'icon', label: '' },
   { key: 'name', label: t('customActions.name'), sortable: true },
   { key: 'type', label: t('customActions.type'), sortable: true, sortKey: 'action_type' },
-  { key: 'target', label: t('customActions.target') },
   { key: 'status', label: t('customActions.status'), sortable: true, sortKey: 'is_active' },
   { key: 'created', label: t('customActions.created'), sortable: true, sortKey: 'created_at' },
   { key: 'actions', label: t('common.actions'), align: 'right' },
@@ -169,7 +168,7 @@ async function deleteAction() {
 
 function addHeader() { if (newHeaderKey.value.trim() && newHeaderValue.value.trim()) { formData.value.config.headers[newHeaderKey.value.trim()] = newHeaderValue.value.trim(); newHeaderKey.value = ''; newHeaderValue.value = '' } }
 function removeHeader(key: string) { delete formData.value.config.headers[key] }
-function getActionTypeBadge(type: string) { return { webhook: { label: 'Webhook', variant: undefined, outline: false }, url: { label: 'URL', variant: 'secondary', outline: false }, javascript: { label: 'JavaScript', variant: 'secondary', outline: true } }[type] || { label: type, variant: undefined, outline: true } }
+function getActionTypeLabel(type: string) { return ({ webhook: 'Webhook', url: 'URL', javascript: 'JavaScript' } as Record<string, string>)[type] || humanize(type) }
 
 const defaultBodyTemplate = `{\n  "subject": "WhatsApp: {{contact.name}}",\n  "phone": "{{contact.phone_number}}",\n  "description": "Contact from WhatsApp",\n  "user": "{{user.name}}"\n}`
 
@@ -180,7 +179,7 @@ onMounted(() => fetchActions())
   <div class="flex flex-col h-full">
     <PageHeader :title="$t('customActions.title')" :description="$t('customActions.subtitle')" :icon="Zap">
       <template #actions>
-        <button type="button" class="outline small" @click="openCreateDialog"><Plus :size="16" />{{ $t('customActions.addAction') }}</button>
+        <button type="button" class="small" @click="openCreateDialog"><Plus :size="16" />{{ $t('customActions.addAction') }}</button>
       </template>
     </PageHeader>
 
@@ -194,27 +193,39 @@ onMounted(() => fetchActions())
     />
 
     <div v-else class="flex-1 scroll-y p-4">
-      <article class="card">
-        <header class="hstack justify-between flex-wrap gap-4">
-          <h3>{{ $t('customActions.yourActions') }}</h3>
-          <SearchInput v-model="searchQuery" :placeholder="$t('customActions.searchActions') + '...'" />
-        </header>
+      <article class="card vstack gap-4">
+        <div data-toolbar>
+          <div></div>
+          <SearchInput v-model="searchQuery" :placeholder="$t('customActions.searchActions')" />
+        </div>
         <DataTable :items="actions" :columns="columns" :is-loading="isLoading" :empty-icon="Zap" :empty-title="searchQuery ? $t('customActions.noMatchingActions') : $t('customActions.noActionsYet')" :empty-description="searchQuery ? $t('customActions.noMatchingActionsDesc') : $t('customActions.noActionsYetDesc')" v-model:sort-key="sortKey" v-model:sort-direction="sortDirection" server-pagination :current-page="currentPage" :total-items="totalItems" :page-size="pageSize" item-name="actions" @page-change="handlePageChange">
-          <template #cell-icon="{ item: action }"><component :is="getIconComponent(action.icon)" :size="20" /></template>
-          <template #cell-name="{ item: action }"><strong>{{ action.name }}</strong></template>
-          <template #cell-type="{ item: action }"><span class="badge" :class="{ outline: getActionTypeBadge(action.action_type).outline }" :data-variant="getActionTypeBadge(action.action_type).variant">{{ getActionTypeBadge(action.action_type).label }}</span></template>
-          <template #cell-target="{ item: action }"><span class="truncate text-light">{{ action.action_type === 'javascript' ? $t('customActions.customScript') : action.config.url }}</span></template>
+          <template #cell-name="{ item: action }">
+            <div class="hstack gap-3 flex-nowrap min-w-0">
+              <component :is="getIconComponent(action.icon)" :size="20" aria-hidden="true" />
+              <div class="min-w-0">
+                <strong>{{ action.name }}</strong>
+                <small class="text-light block truncate">{{ action.action_type === 'javascript' ? $t('customActions.customScript') : action.config.url }}</small>
+              </div>
+            </div>
+          </template>
+          <template #cell-type="{ item: action }"><span class="badge" data-label>{{ getActionTypeLabel(action.action_type) }}</span></template>
           <template #cell-status="{ item: action }">
-            <label class="hstack gap-2">
-              <input type="checkbox" role="switch" :checked="action.is_active" :aria-label="`${action.name}: ${action.is_active ? $t('common.active') : $t('common.inactive')}`" @click.prevent="handleToggleAction(action)" />
-              <small class="text-light">{{ action.is_active ? $t('common.active') : $t('common.inactive') }}</small>
-            </label>
+            <span class="badge" :data-status="action.is_active ? 'success' : 'neutral'">{{ action.is_active ? $t('common.active') : $t('common.inactive') }}</span>
           </template>
           <template #cell-created="{ item: action }"><span class="text-light">{{ formatDate(action.created_at) }}</span></template>
           <template #cell-actions="{ item: action }">
-            <div class="hstack gap-1 justify-end">
-              <IconButton :icon="Pencil" :label="$t('common.edit')" @click="openEditDialog(action)" />
-              <IconButton :icon="Trash2" :label="$t('common.delete')" @click="actionToDelete = action; isDeleteDialogOpen = true" />
+            <div class="hstack items-center justify-end gap-1 flex-nowrap">
+              <button type="button" class="outline small" @click="openEditDialog(action)">{{ $t('common.edit') }}</button>
+              <RowMenu>
+                <button type="button" role="menuitem" class="ghost" @click="handleToggleAction(action)">
+                  <Power :size="14" />
+                  {{ action.is_active ? $t('common.disable') : $t('common.enable') }}
+                </button>
+                <button type="button" role="menuitem" class="ghost" data-variant="danger" @click="actionToDelete = action; isDeleteDialogOpen = true">
+                  <Trash2 :size="14" />
+                  {{ $t('common.delete') }}
+                </button>
+              </RowMenu>
             </div>
           </template>
           <template #empty-action>

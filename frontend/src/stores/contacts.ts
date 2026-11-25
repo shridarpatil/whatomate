@@ -24,6 +24,8 @@ export interface Contact {
   tags: string[]
   metadata: Record<string, any>
   last_message_at?: string
+  /** Text of the latest message, shown under the name in the chat list. */
+  last_message_preview?: string
   last_inbound_at?: string
   service_window_open?: boolean
   unread_count: number
@@ -94,6 +96,9 @@ export const useContactsStore = defineStore('contacts', () => {
   const hasMoreMessages = ref(false)
   const searchQuery = ref('')
   const selectedTags = ref<string[]>([])
+  /** Chat list tab: everyone's conversations, mine, or unassigned ones. */
+  const assignedFilter = ref<'all' | 'me' | 'none'>('all')
+  const assignedParam = () => (assignedFilter.value === 'all' ? undefined : assignedFilter.value)
   const replyingTo = ref<Message | null>(null)
   const accountFilter = ref<string | null>(null)
 
@@ -116,7 +121,7 @@ export const useContactsStore = defineStore('contacts', () => {
     })
   })
 
-  async function fetchContacts(params?: { search?: string; page?: number; limit?: number; tags?: string }) {
+  async function fetchContacts(params?: { search?: string; page?: number; limit?: number; tags?: string; assigned?: 'me' | 'none' }) {
     isLoading.value = true
     try {
       const tagsParam = selectedTags.value.length > 0 ? selectedTags.value.join(',') : undefined
@@ -128,6 +133,7 @@ export const useContactsStore = defineStore('contacts', () => {
         limit: contactsLimit.value,
         tags: tagsParam,
         search,
+        assigned: assignedParam(),
         ...params
       })
       // API returns { status: "success", data: { contacts: [...], total: number } }
@@ -154,7 +160,8 @@ export const useContactsStore = defineStore('contacts', () => {
         page: nextPage,
         limit: contactsLimit.value,
         tags: tagsParam,
-        search
+        search,
+        assigned: assignedParam()
       })
       const data = response.data.data || response.data
       const newContacts = data.contacts || []
@@ -295,10 +302,13 @@ export const useContactsStore = defineStore('contacts', () => {
 
   // Reflect a new message on its sidebar row. Returns false when the contact
   // isn't in the loaded list (a new conversation, or beyond the loaded pages).
-  function updateContactFromMessage(message: Pick<Message, 'contact_id' | 'direction' | 'status' | 'created_at'>): boolean {
+  function updateContactFromMessage(message: Pick<Message, 'contact_id' | 'direction' | 'status' | 'created_at'> & { content?: unknown }): boolean {
     const contact = contacts.value.find(c => c.id === message.contact_id)
     if (!contact) return false
     contact.last_message_at = message.created_at
+    const c = message.content as { body?: unknown } | string | undefined
+    const text = typeof c === 'string' ? c : typeof c?.body === 'string' ? c.body : ''
+    if (text) contact.last_message_preview = text
     if (message.direction === 'incoming') {
       // Mirrors the server's unread count, which excludes already-read
       // messages (e.g. ones the chatbot handled).
@@ -404,8 +414,11 @@ export const useContactsStore = defineStore('contacts', () => {
     }, 300)
   })
 
+  watch(assignedFilter, () => fetchContacts())
+
   return {
     contacts,
+    assignedFilter,
     currentContact,
     messages,
     isLoading,

@@ -24,6 +24,7 @@ import {
   X,
   Info,
 } from '@/lib/icons'
+import { templateTone, humanize } from '@/lib/status'
 import { getErrorMessage } from '@/lib/api-utils'
 import { getQualityBadgeVariant, getQualityRatingLabel } from '@/lib/utils'
 
@@ -335,15 +336,6 @@ const headerTypes = [
   { value: 'DOCUMENT', label: 'Document' },
 ]
 
-const statusVariant = computed(() => {
-  if (!template.value) return 'secondary' as const
-  switch (template.value.status?.toUpperCase()) {
-    case 'APPROVED': return 'success' as const
-    case 'REJECTED': return 'danger' as const
-    case 'PENDING': return 'warning' as const
-    default: return 'secondary' as const
-  }
-})
 
 async function loadTemplate() {
   isLoading.value = true
@@ -686,7 +678,7 @@ onMounted(async () => {
         <summary>
           <span class="hstack gap-2">
             {{ $t('templates.details', 'Details') }}
-            <span v-if="!isNew && template?.status" class="badge" :data-variant="statusVariant">{{ template.status }}</span>
+            <span v-if="!isNew && template?.status" class="badge" :data-status="templateTone(template.status)">{{ humanize(template.status) }}</span>
             <span v-if="!isNew && template?.quality_rating" class="badge" :data-variant="getQualityBadgeVariant(template.quality_rating)">
               {{ getQualityRatingLabel(template.quality_rating, t) }}
             </span>
@@ -1136,7 +1128,7 @@ onMounted(async () => {
       <div class="vstack gap-2">
         <div class="hstack justify-between">
           <span class="text-light">{{ $t('templates.status', 'Status') }}:</span>
-          <span class="badge" :data-variant="statusVariant">{{ template.status }}</span>
+          <span class="badge" :data-status="templateTone(template.status)">{{ humanize(template.status) }}</span>
         </div>
         <div v-if="template.quality_rating" class="hstack justify-between">
           <span class="text-light">{{ $t('templates.qualityRating', 'Quality Rating') }}:</span>

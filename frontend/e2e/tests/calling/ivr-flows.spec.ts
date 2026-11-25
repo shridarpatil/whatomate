@@ -49,19 +49,18 @@ test.describe('IVR Flow Toggle Status', () => {
   })
 
   test('should show confirmation when toggling flow status', async ({ page }) => {
-    // Find an active/disabled status badge that acts as a toggle button
-    const statusBadge = page.locator('main tbody button.badge').filter({ hasText: /enabled|disabled/i }).first()
-    if (await statusBadge.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await statusBadge.click()
+    // Enable/Disable lives in the row's "More actions" menu
+    const firstRow = page.locator('main tbody tr').first()
+    const menuButton = firstRow.getByRole('button', { name: 'More actions' })
+    if (await menuButton.isVisible({ timeout: 3000 }).catch(() => false)) {
+      await menuButton.click()
+      await firstRow.getByRole('menuitem', { name: /^(Disable|Enable)$/ }).click()
       // Verify the confirmation alert dialog appears
       const alertDialog = page.getByRole('alertdialog')
-      const dialogVisible = await alertDialog.isVisible({ timeout: 3000 }).catch(() => false)
-      if (dialogVisible) {
-        // Click cancel to dismiss without changing state
-        const cancelBtn = alertDialog.getByRole('button', { name: /cancel/i })
-        await cancelBtn.click()
-        await alertDialog.waitFor({ state: 'hidden' })
-      }
+      await expect(alertDialog).toBeVisible()
+      // Click cancel to dismiss without changing state
+      await alertDialog.getByRole('button', { name: /cancel/i }).click()
+      await alertDialog.waitFor({ state: 'hidden' })
     }
   })
 })
@@ -78,8 +77,8 @@ test.describe('IVR Flow Editor', () => {
     const rowCount = await rows.count()
 
     if (rowCount > 0) {
-      // Click the first flow's edit action
-      const editButton = rows.first().getByRole('button', { name: /edit/i })
+      // Edit is a link to the flow editor
+      const editButton = rows.first().getByRole('link', { name: /edit/i })
       if (await editButton.isVisible()) {
         await editButton.click()
         await page.waitForTimeout(1000)

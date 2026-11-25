@@ -20,14 +20,9 @@ import {
   Megaphone,
   Trash2,
   Save,
-  CheckCircle,
   Play,
   Pause,
-  Clock,
-  AlertCircle,
   Users,
-  Send,
-  Eye,
   XCircle,
   RefreshCw,
   UserPlus,
@@ -35,6 +30,7 @@ import {
   FileSpreadsheet,
   Download,
 } from '@/lib/icons'
+import { campaignTone, humanize, type StatusTone } from '@/lib/status'
 
 interface Campaign {
   id: string
@@ -243,54 +239,23 @@ const manualEntryFormat = computed(() => {
   return `phone_number, name, ${labels.join(', ')}`
 })
 
-// Status helpers
-function getStatusIcon(status: string) {
-  switch (status) {
-    case 'completed':
-      return CheckCircle
-    case 'running':
-    case 'processing':
-    case 'queued':
-      return Play
-    case 'paused':
-      return Pause
-    case 'scheduled':
-      return Clock
-    case 'failed':
-    case 'cancelled':
-      return AlertCircle
-    default:
-      return Megaphone
-  }
-}
+// Status: readable label + shared tone (lib/status.ts)
+const statusLabel = (status: string) => t(`campaigns.${status}`, humanize(status))
+const RECIPIENT_TONE: Record<string, StatusTone> = { pending: 'neutral', sent: 'info', delivered: 'success', read: 'success', failed: 'danger' }
+const recipientTone = (status: string): StatusTone => RECIPIENT_TONE[status] ?? 'neutral'
 
-function getStatusVariant(status: string): string | undefined {
-  switch (status) {
-    case 'completed':
-      return 'success'
-    case 'running':
-    case 'processing':
-    case 'queued':
-      return 'secondary'
-    case 'failed':
-    case 'cancelled':
-      return 'danger'
-    default:
-      return undefined
-  }
-}
-
-function getRecipientStatusVariant(status: string): string | undefined {
-  switch (status) {
-    case 'sent':
-    case 'delivered':
-      return 'success'
-    case 'failed':
-      return 'danger'
-    default:
-      return undefined
-  }
-}
+/** Widths (%) of the read / delivered / sent / failed segments, each counted once. */
+const deliverySegments = computed(() => {
+  const c = campaign.value
+  if (!c) return []
+  const total = Math.max(c.total_recipients, 1)
+  return [
+    { k: 'read', pct: (c.read_count / total) * 100 },
+    { k: 'delivered', pct: (Math.max(c.delivered_count - c.read_count, 0) / total) * 100 },
+    { k: 'sent', pct: (Math.max(c.sent_count - c.delivered_count, 0) / total) * 100 },
+    { k: 'failed', pct: (c.failed_count / total) * 100 },
+  ].filter(x => x.pct > 0)
+})
 
 const progressPercent = computed(() => {
   const c = campaign.value
@@ -934,9 +899,8 @@ onUnmounted(() => {
     <template #actions>
       <div class="hstack gap-2">
         <!-- Status badge for existing campaigns -->
-        <span v-if="!isNew && campaign" class="badge" :data-variant="getStatusVariant(campaign.status)">
-          <component :is="getStatusIcon(campaign.status)" :size="12" />
-          {{ campaign.status }}
+        <span v-if="!isNew && campaign" class="badge" :data-status="campaignTone(campaign.status, campaign.failed_count)">
+          {{ statusLabel(campaign.status) }}
         </span>
 
         <!-- Start/Resume -->
@@ -1048,9 +1012,8 @@ onUnmounted(() => {
         <div v-if="!isNew && campaign" class="vstack gap-1">
           <small class="text-light">{{ $t('campaigns.status', 'Status') }}</small>
           <div>
-            <span class="badge" :data-variant="getStatusVariant(campaign.status)">
-              <component :is="getStatusIcon(campaign.status)" :size="12" />
-              {{ campaign.status }}
+            <span class="badge" :data-status="campaignTone(campaign.status, campaign.failed_count)">
+              {{ statusLabel(campaign.status) }}
             </span>
           </div>
         </div>
@@ -1062,41 +1025,22 @@ onUnmounted(() => {
       <header>
         <h3>{{ $t('campaigns.statistics', 'Statistics') }}</h3>
       </header>
-      <div class="hstack gap-4 flex-wrap">
-        <div class="vstack items-center gap-1 flex-1">
-          <Users :size="16" />
-          <strong>{{ campaign.total_recipients }}</strong>
-          <small class="text-light">{{ $t('campaigns.totalRecipients', 'Recipients') }}</small>
-        </div>
-        <div class="vstack items-center gap-1 flex-1">
-          <Send :size="16" />
-          <strong>{{ campaign.sent_count }}</strong>
-          <small class="text-light">{{ $t('campaigns.sent', 'Sent') }}</small>
-        </div>
-        <div class="vstack items-center gap-1 flex-1">
-          <CheckCircle :size="16" />
-          <strong>{{ campaign.delivered_count }}</strong>
-          <small class="text-light">{{ $t('campaigns.delivered', 'Delivered') }}</small>
-        </div>
-        <div class="vstack items-center gap-1 flex-1">
-          <Eye :size="16" />
-          <strong>{{ campaign.read_count }}</strong>
-          <small class="text-light">{{ $t('campaigns.read', 'Read') }}</small>
-        </div>
-        <div class="vstack items-center gap-1 flex-1">
-          <XCircle :size="16" />
-          <strong>{{ campaign.failed_count }}</strong>
-          <small class="text-light">{{ $t('campaigns.failed', 'Failed') }}</small>
-        </div>
-      </div>
-
-      <!-- Progress Bar -->
+      <!-- Counts, then the same delivery bar as the campaigns list. -->
+      <dl class="stat-row">
+        <div><dt>{{ $t('campaigns.totalRecipients', 'Recipients') }}</dt><dd>{{ campaign.total_recipients.toLocaleString() }}</dd></div>
+        <div><dt>{{ $t('campaigns.sent', 'Sent') }}</dt><dd>{{ campaign.sent_count.toLocaleString() }}</dd></div>
+        <div><dt>{{ $t('campaigns.delivered', 'Delivered') }}</dt><dd>{{ campaign.delivered_count.toLocaleString() }}</dd></div>
+        <div><dt>{{ $t('campaigns.read', 'Read') }}</dt><dd>{{ campaign.read_count.toLocaleString() }}</dd></div>
+        <div><dt>{{ $t('campaigns.failed', 'Failed') }}</dt><dd>{{ campaign.failed_count.toLocaleString() }}</dd></div>
+      </dl>
       <div v-if="campaign.total_recipients > 0" class="vstack gap-1 mt-4">
         <div class="hstack justify-between">
           <small class="text-light">{{ $t('campaigns.progress', 'Progress') }}</small>
           <small class="text-light">{{ progressPercent }}%</small>
         </div>
-        <progress :value="progressPercent" max="100" :aria-label="$t('campaigns.progress', 'Progress')"></progress>
+        <div data-delivery role="img" :aria-label="$t('campaigns.deliverySummary', { read: campaign.read_count, delivered: campaign.delivered_count, sent: campaign.sent_count, failed: campaign.failed_count, total: campaign.total_recipients })">
+          <i v-for="seg in deliverySegments" :key="seg.k" :data-k="seg.k" :style="{ width: `${seg.pct}%` }"></i>
+        </div>
       </div>
     </article>
 
@@ -1139,7 +1083,7 @@ onUnmounted(() => {
                   <td>{{ recipient.recipient_name || '-' }}</td>
                   <td>
                     <div class="vstack gap-1">
-                      <span class="badge" :data-variant="getRecipientStatusVariant(recipient.status)">{{ recipient.status }}</span>
+                      <span class="badge" :data-status="recipientTone(recipient.status)">{{ statusLabel(recipient.status) }}</span>
                       <small
                         v-if="recipient.status === 'failed' && recipient.error_message"
                         class="truncate"

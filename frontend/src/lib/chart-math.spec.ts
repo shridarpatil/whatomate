@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { niceTicks, linearScale, linePath, pieArcs } from './chart-math'
+import { niceTicks, linearScale, linePath, smoothPath, pieArcs } from './chart-math'
 
 const noNaN = (v: unknown) => {
   if (typeof v === 'number') expect(Number.isNaN(v)).toBe(false)
@@ -46,6 +46,27 @@ describe('linePath', () => {
   it('handles zero and one point', () => {
     expect(linePath([])).toBe('')
     expect(linePath([[4, 5]])).toBe('M4 5')
+  })
+})
+
+describe('smoothPath', () => {
+  it('falls back to straight lines below three points', () => {
+    expect(smoothPath([[0, 1], [2, 3]])).toBe('M0 1L2 3')
+    expect(smoothPath([])).toBe('')
+  })
+  it('draws one cubic segment per gap, ending on each point', () => {
+    const d = smoothPath([[0, 0], [10, 10], [20, 0]])
+    expect(d.startsWith('M0 0')).toBe(true)
+    expect(d.match(/C/g)).toHaveLength(2)
+    expect(d.endsWith(' 20 0')).toBe(true)
+  })
+  it('never overshoots: control points stay within each segment\'s y range', () => {
+    const pts: Array<[number, number]> = [[0, 0], [10, 0], [20, 50], [30, 50], [40, 5]]
+    const d = smoothPath(pts)
+    const nums = d.replace(/[MC]/g, ' ').trim().split(/\s+/).map(Number)
+    const ys = nums.filter((_, i) => i % 2 === 1)
+    expect(Math.min(...ys)).toBeGreaterThanOrEqual(0)
+    expect(Math.max(...ys)).toBeLessThanOrEqual(50)
   })
 })
 

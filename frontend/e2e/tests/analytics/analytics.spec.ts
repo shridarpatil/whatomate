@@ -10,7 +10,7 @@ test.describe('Agent Analytics', () => {
 
   test('should display agent analytics page', async ({ page }) => {
     // Check for page header
-    await expect(page.locator('h1')).toContainText('Agent Analytics')
+    await expect(page.locator('h1')).toContainText('Agent analytics')
   })
 
   test('should display time range filter', async ({ page }) => {
@@ -32,8 +32,8 @@ test.describe('Agent Analytics', () => {
     await page.locator('[data-testid="agent-stats"] h3').first().waitFor({ timeout: 15000 })
 
     // Stat card labels (exact match to avoid matching chart descriptions)
-    await expect(page.getByText('Transfers Handled', { exact: true }).first()).toBeVisible()
-    await expect(page.getByText('Active Conversations', { exact: true })).toBeVisible()
+    await expect(page.getByText('Transfers handled', { exact: true }).first()).toBeVisible()
+    await expect(page.getByText('Active conversations', { exact: true })).toBeVisible()
   })
 })
 

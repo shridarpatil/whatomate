@@ -12,7 +12,7 @@ export class AccountsPage extends BasePage {
 
   constructor(page: Page) {
     super(page)
-    this.heading = page.locator('h1').filter({ hasText: 'WhatsApp Accounts' })
+    this.heading = page.locator('h1').filter({ hasText: /WhatsApp accounts/i })
     // "Add Account" is a RouterLink styled as a button (class="button"), not a <button>
     this.addButton = page.locator('main').getByRole('link', { name: /Add Account/i }).first()
     this.dialog = page.locator('dialog[open]')
@@ -48,10 +48,10 @@ export class AccountsPage extends BasePage {
     accessToken: string
   }) {
     // Fields are inputs nested in <label data-field>, so they resolve by label
-    await this.page.getByLabel(/Account Name/).fill(options.name)
-    await this.page.getByLabel(/Phone Number ID/).fill(options.phoneId)
+    await this.page.getByLabel(/Account name/i).fill(options.name)
+    await this.page.getByLabel(/Phone number ID/i).fill(options.phoneId)
     await this.page.getByLabel(/Business Account ID/).fill(options.businessId)
-    await this.page.getByLabel(/Access Token/).fill(options.accessToken)
+    await this.page.getByLabel(/Access token/i).fill(options.accessToken)
   }
 
   async saveAccount() {
@@ -61,7 +61,8 @@ export class AccountsPage extends BasePage {
 
   async deleteAccount(name: string) {
     const row = this.page.locator('tr').filter({ hasText: name })
-    await row.getByRole('button', { name: 'Delete' }).click()
+    await row.getByRole('button', { name: 'More actions' }).click()
+    await row.getByRole('menuitem', { name: 'Delete' }).click()
     await this.alertDialog.waitFor({ state: 'visible' })
   }
 

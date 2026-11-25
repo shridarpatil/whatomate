@@ -129,16 +129,15 @@ test.describe('Webhook Toggle Confirmation', () => {
     await page.goto('/settings/webhooks')
     await page.waitForLoadState('networkidle')
 
-    const toggleSwitch = page.getByRole('switch').first()
-    if (await toggleSwitch.isVisible()) {
-      await toggleSwitch.click()
+    // Only an active webhook asks for confirmation (enabling applies directly)
+    const activeRow = page.locator('tbody tr').filter({ has: page.locator('.badge', { hasText: /^Active$/ }) }).first()
+    if (await activeRow.isVisible()) {
+      await activeRow.getByRole('button', { name: 'More actions' }).click()
+      await activeRow.getByRole('menuitem', { name: 'Disable', exact: true }).click()
       const alertDialog = page.getByRole('alertdialog')
-      const dialogVisible = await alertDialog.isVisible({ timeout: 3000 }).catch(() => false)
-      if (dialogVisible) {
-        const cancelBtn = alertDialog.getByRole('button', { name: /cancel/i })
-        await cancelBtn.click()
-        await alertDialog.waitFor({ state: 'hidden' })
-      }
+      await expect(alertDialog).toBeVisible()
+      await alertDialog.getByRole('button', { name: /cancel/i }).click()
+      await alertDialog.waitFor({ state: 'hidden' })
     }
   })
 })

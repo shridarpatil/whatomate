@@ -16,7 +16,7 @@ export class CardGridPage extends BasePage {
   constructor(page: Page, options: { headingText: string; addButtonText: string }) {
     super(page)
     // Use first() to handle multiple headings (PageHeader + CardTitle)
-    this.heading = page.locator('h1').filter({ hasText: options.headingText }).first()
+    this.heading = page.locator('h1').filter({ hasText: new RegExp(options.headingText, 'i') }).first()
     this.addButton = page.getByRole('button', { name: new RegExp(options.addButtonText, 'i') }).first()
     this.searchInput = page.locator('input[placeholder*="Search"]')
     this.categoryFilter = page.locator('main').locator('select').first()
@@ -118,7 +118,7 @@ export class TableSettingsPage extends BasePage {
   constructor(page: Page, options: { headingText: string; addButtonText: string }) {
     super(page)
     // Use first() to handle multiple headings and buttons (PageHeader + CardTitle + empty state)
-    this.heading = page.locator('h1').filter({ hasText: options.headingText }).first()
+    this.heading = page.locator('h1').filter({ hasText: new RegExp(options.headingText, 'i') }).first()
     this.addButton = page.getByRole('button', { name: new RegExp(options.addButtonText, 'i') }).first()
     this.searchInput = page.locator('input[placeholder*="Search"]')
     this.table = page.locator('table')
@@ -152,13 +152,23 @@ export class TableSettingsPage extends BasePage {
   }
 
   async deleteRow(rowText: string) {
-    await this.clickRowButton(rowText, 1) // Delete is usually second button
+    const row = this.getRow(rowText)
+    const menu = row.getByRole('button', { name: 'More actions' })
+    if (await menu.count() > 0) {
+      // Redesigned lists keep Delete in the row's "More actions" menu
+      await menu.click()
+      await row.getByRole('menuitem', { name: 'Delete' }).click()
+    } else {
+      await this.clickRowButton(rowText, 1) // Delete is usually second button
+    }
     await this.alertDialog.waitFor({ state: 'visible' })
   }
 
+  /** Enable/disable a row via its "More actions" menu (lists no longer have row switches). */
   async toggleRowSwitch(rowText: string) {
     const row = this.getRow(rowText)
-    await row.locator('[role="switch"]').click()
+    await row.getByRole('button', { name: 'More actions' }).click()
+    await row.getByRole('menuitem', { name: /^(Disable|Enable)$/ }).click()
   }
 
   // Dialog helpers
@@ -325,18 +335,19 @@ export class CannedResponsesPage extends TableSettingsPage {
     return this.page.locator('tbody tr').filter({ hasText: name })
   }
 
-  /** Action column order: copy, edit, delete. */
+  /** Copy lives in the row's "More actions" menu. */
   async copyResponse(name: string) {
     const row = this.getResponseRow(name)
     await expect(row).toBeVisible({ timeout: 10000 })
-    await row.locator('td:last-child button').first().click()
+    await row.getByRole('button', { name: 'More actions' }).click()
+    await row.getByRole('menuitem', { name: /Copy/ }).click()
   }
 
   /** Click the Edit (pencil) action → navigates to the detail page. */
   async editResponse(name: string) {
     const row = this.getResponseRow(name)
     await expect(row).toBeVisible({ timeout: 10000 })
-    await row.locator('td:last-child button').nth(1).click()
+    await row.getByRole('link', { name: 'Edit' }).click()
     await this.page.waitForURL(/\/settings\/canned-responses\/[a-f0-9-]+$/)
     await this.page.waitForLoadState('networkidle')
   }
@@ -345,7 +356,8 @@ export class CannedResponsesPage extends TableSettingsPage {
   async deleteResponse(name: string) {
     const row = this.getResponseRow(name)
     await expect(row).toBeVisible({ timeout: 10000 })
-    await row.locator('td:last-child button').nth(2).click()
+    await row.getByRole('button', { name: 'More actions' }).click()
+    await row.getByRole('menuitem', { name: 'Delete' }).click()
     await this.alertDialog.waitFor({ state: 'visible' })
   }
 
@@ -365,7 +377,7 @@ export class CustomActionsPage extends TableSettingsPage {
   constructor(page: Page) {
     super(page, { headingText: 'Custom Actions', addButtonText: 'Add Action' })
     // Override heading to use text locator since this page uses CardTitle not h1
-    this.heading = page.locator('text=Custom Actions').first()
+    this.heading = page.locator('h1').filter({ hasText: /Custom actions/i }).first()
   }
 
   async goto() {
@@ -416,7 +428,7 @@ export class ApiKeysPage extends TableSettingsPage {
   }
 
   async expectKeyCreatedDialog() {
-    await expect(this.dialog).toContainText('API Key Created')
+    await expect(this.dialog).toContainText('API key created')
     await expect(this.dialog).toContainText('whm_')
   }
 
@@ -471,7 +483,7 @@ export class ContactsPage extends TableSettingsPage {
   }
 
   async goto() {
-    await this.page.goto('/settings/contacts')
+    await this.page.goto('/contacts')
     await this.page.waitForLoadState('networkidle')
   }
 
@@ -517,17 +529,19 @@ export class ContactsPage extends TableSettingsPage {
   async editContact(identifier: string) {
     const row = this.getContactRow(identifier)
     await expect(row).toBeVisible({ timeout: 10000 })
-    // Edit links to detail page (second element in actions column)
-    await row.locator('td:last-child a').first().click()
-    await this.page.waitForURL(/\/settings\/contacts\/[a-f0-9-]+$/)
+    // Edit is in the row's "More actions" menu
+    await row.getByRole('button', { name: 'More actions' }).click()
+    await row.getByRole('menuitem', { name: 'Edit' }).click()
+    await this.page.waitForURL(/\/contacts\/[a-f0-9-]+$/)
     await this.page.waitForLoadState('networkidle')
   }
 
   async deleteContact(identifier: string) {
     const row = this.getContactRow(identifier)
     await expect(row).toBeVisible({ timeout: 10000 })
-    // Actions column: Open chat (button), Edit (link), Delete (button)
-    await row.locator('td:last-child').getByRole('button', { name: 'Delete', exact: true }).click()
+    // Actions column: Message (button), then Edit and Delete in the "More actions" menu
+    await row.getByRole('button', { name: 'More actions' }).click()
+    await row.getByRole('menuitem', { name: 'Delete', exact: true }).click()
     await this.alertDialog.waitFor({ state: 'visible' })
   }
 

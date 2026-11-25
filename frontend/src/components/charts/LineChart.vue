@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { linePath, linearScale, niceTicks } from '@/lib/chart-math'
+import { smoothPath, linearScale, niceTicks } from '@/lib/chart-math'
 import ChartMarker from './ChartMarker.vue'
 import ChartLegend from './ChartLegend.vue'
 import ChartTooltip from './ChartTooltip.vue'
 import ChartDataTable from './ChartDataTable.vue'
 import { useChartWidth } from './useChartWidth'
 import {
-  type ChartSeries, MARKER_SIZE, SERIES_COLORS, SERIES_DASHES, SERIES_MARKERS,
+  type ChartSeries, MARKER_SIZE, SERIES_COLORS,
   foldSeries, seriesColor, textWidth, value,
 } from './chart-utils'
 
@@ -31,14 +31,16 @@ const active = ref<number | null>(null)
 const folded = computed(() => foldSeries(props.series, t('common.other')))
 const n = computed(() => props.labels.length)
 const empty = computed(() => n.value === 0 || folded.value.length === 0)
-// Single series: minimal look (no y tick labels).
+// Single series: area fill and plain dots instead of shape markers.
 const single = computed(() => folded.value.length === 1)
 
 const items = computed(() => folded.value.map((s, i) => ({
   label: s.label,
   color: seriesColor(i, i === SERIES_COLORS.length - 1 && props.series.length > SERIES_COLORS.length ? undefined : s.color),
-  dash: SERIES_DASHES[i],
-  marker: SERIES_MARKERS[i],
+  // Every series is a solid line with round markers; only the colour differs.
+  // (The legend, tooltip and "Show data" table name each series.)
+  dash: '',
+  marker: 'circle' as const,
   kind: 'line' as const,
 })))
 
@@ -52,7 +54,7 @@ const margin = computed(() => ({
   top: 12,
   right: 16,
   bottom: 28,
-  left: single.value ? 8 : Math.max(40, Math.max(...tickLabels.value.map(textWidth)) + 14),
+  left: Math.max(32, Math.max(...tickLabels.value.map(textWidth)) + 14),
 }))
 const plot = computed(() => ({
   x0: margin.value.left,
@@ -67,7 +69,8 @@ const xs = computed(() => props.labels.map((_, i) =>
 
 const lines = computed(() => folded.value.map((s, si) => {
   const pts = props.labels.map((_, i) => [xs.value[i], y.value(value(s, i))] as [number, number])
-  const d = linePath(pts)
+  // Curved line; the area below follows the same curve, then closes along the baseline.
+  const d = smoothPath(pts)
   const base = y.value(0)
   const area = pts.length > 1 ? `${d}L${pts[pts.length - 1][0]} ${base}L${pts[0][0]} ${base}Z` : ''
   return { ...items.value[si], pts, d, area }
@@ -103,7 +106,7 @@ const tableCells = computed(() => props.labels.map((_, i) => folded.value.map(s 
 </script>
 
 <template>
-  <figure role="group" :aria-label="caption || undefined">
+  <figure role="group" :aria-label="caption || undefined" data-chart>
     <figcaption v-if="caption || $slots.caption"><slot name="caption">{{ caption }}</slot></figcaption>
     <p v-if="empty" class="text-light">{{ t('common.noData') }}</p>
     <template v-else>
@@ -113,7 +116,7 @@ const tableCells = computed(() => props.labels.map((_, i) => folded.value.map(s 
           <g>
             <template v-for="(tk, i) in ticks" :key="i">
               <line :x1="plot.x0" :x2="plot.x1" :y1="y(tk)" :y2="y(tk)" stroke="var(--border)" stroke-width="1" />
-              <text v-if="!single" :x="plot.x0 - 6" :y="y(tk)" text-anchor="end" dominant-baseline="middle" fill="var(--muted-foreground)">{{ tickLabels[i] }}</text>
+              <text :x="plot.x0 - 6" :y="y(tk)" text-anchor="end" dominant-baseline="middle" fill="var(--muted-foreground)">{{ tickLabels[i] }}</text>
             </template>
           </g>
           <g>
@@ -123,10 +126,21 @@ const tableCells = computed(() => props.labels.map((_, i) => folded.value.map(s 
           </g>
           <line v-if="active !== null" :x1="xs[active]" :x2="xs[active]" :y1="plot.y0" :y2="plot.y1" stroke="var(--muted-foreground)" stroke-width="1" />
           <g v-for="(l, si) in lines" :key="si">
-            <path v-if="(fill || single) && l.area" :d="l.area" :fill="l.color" fill-opacity="0.1" stroke="none" />
+            <path v-if="(fill || single) && l.area" :d="l.area" :fill="l.color" fill-opacity="0.12" stroke="none" />
             <path :d="l.d" fill="none" :stroke="l.color" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" :stroke-dasharray="l.dash || undefined" />
             <template v-for="(p, i) in l.pts" :key="i">
               <ChartMarker v-if="!single && (i % markerStep === 0 || i === active)" :shape="l.marker" :x="p[0]" :y="p[1]" :size="MARKER_SIZE" :color="l.color" />
+              <!-- Single series: small dots, the latest (or hovered) point larger. -->
+              <circle
+                v-else-if="single && (i % markerStep === 0 || i === active || i === l.pts.length - 1)"
+                :cx="p[0]"
+                :cy="p[1]"
+                :r="i === active || i === l.pts.length - 1 ? 4 : 2.5"
+                fill="var(--card)"
+                :stroke="l.color"
+                stroke-width="2"
+                data-point
+              />
             </template>
           </g>
           <g>

@@ -37,13 +37,29 @@ export class CampaignsPage extends BasePage {
 
   getEditButton(card?: Locator): Locator {
     const container = card || this.page
-    // Edit is a router link (a.button) in the list, a button elsewhere
-    return container.locator('a, button').filter({ has: this.page.locator('[data-icon="pencil"]') }).first()
+    // In the list each row's main action is a link ("Edit" or "View report") to the detail page.
+    return container.locator('tbody tr td:last-child a.button').first()
   }
 
+  /** Delete lives in each row's "More actions" menu (disabled while a campaign is sending). */
   getDeleteButton(card?: Locator): Locator {
     const container = card || this.page
-    return container.locator('button').filter({ has: this.page.locator('[data-icon="trash-2"]') }).first()
+    return container.getByRole('menuitem', { name: /^Delete$/ }).first()
+  }
+
+  /** Open the "More actions" menu of the first row whose Delete is available. */
+  async openRowMenuWithDelete(): Promise<boolean> {
+    const rows = this.page.locator('tbody tr')
+    const n = await rows.count()
+    for (let i = 0; i < n; i++) {
+      const trigger = rows.nth(i).getByRole('button', { name: 'More actions' })
+      if (!(await trigger.isVisible())) continue
+      await trigger.click()
+      const item = rows.nth(i).getByRole('menuitem', { name: /Delete/ })
+      if (await item.isEnabled()) return true
+      await this.page.keyboard.press('Escape')
+    }
+    return false
   }
 
   getViewRecipientsButton(card?: Locator): Locator {
@@ -98,6 +114,7 @@ export class CampaignsPage extends BasePage {
   }
 
   async clickDeleteButton() {
+    if (!(await this.openRowMenuWithDelete())) return false
     const btn = this.getDeleteButton()
     if (await btn.isVisible()) {
       await btn.click()
@@ -232,7 +249,7 @@ export class CampaignsPage extends BasePage {
   }
 
   async hasDeleteButton(): Promise<boolean> {
-    return this.getDeleteButton().isVisible()
+    return this.page.locator('tbody tr').first().getByRole('button', { name: 'More actions' }).isVisible()
   }
 
   async hasViewRecipientsButton(): Promise<boolean> {

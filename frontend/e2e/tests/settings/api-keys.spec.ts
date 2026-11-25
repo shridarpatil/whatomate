@@ -117,9 +117,10 @@ test.describe('API Keys Management', () => {
     await tablePage.search(keyName)
     await tablePage.expectRowExists(keyName)
 
-    // Click the delete (last) button on the row
+    // Delete lives in the row's "More actions" menu
     const row = await tablePage.getRow(keyName)
-    await row.locator('td:last-child button').last().click()
+    await row.getByRole('button', { name: 'More actions' }).click()
+    await row.getByRole('menuitem', { name: 'Delete' }).click()
     await expect(page.getByRole('alertdialog')).toBeVisible()
     await page.getByRole('alertdialog').getByRole('button', { name: /delete|confirm/i }).click()
 

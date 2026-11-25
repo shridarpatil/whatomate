@@ -19,8 +19,10 @@ test.describe('Chatbot Hub Page', () => {
     await expect(chatbotHubPage.toggleButton).toBeVisible()
   })
 
-  test('should have status badge', async () => {
-    await expect(chatbotHubPage.statusBadge).toBeVisible()
+  test('should show the chatbot status', async ({ page }) => {
+    // On: an "Active" badge in the header. Off: a warning banner with "Turn on chatbot".
+    const offBanner = page.locator('main [role="alert"]').filter({ hasText: 'The chatbot is off' })
+    await expect(chatbotHubPage.statusBadge.or(offBanner)).toBeVisible()
   })
 
   test('should have keywords navigation card', async () => {
@@ -121,29 +123,28 @@ test.describe('Chatbot Hub Card Content', () => {
   })
 
   test('should show keywords card with title', async () => {
-    // Title is in h3 element
-    await expect(chatbotHubPage.keywordsCard.locator('h3')).toContainText('Keyword Rules')
+    // Title is the step's <strong>
+    await expect(chatbotHubPage.keywordsCard.locator('strong')).toContainText('Keyword rules')
   })
 
   test('should show flows card with title', async () => {
-    await expect(chatbotHubPage.flowsCard.locator('h3')).toContainText('Conversation Flows')
+    await expect(chatbotHubPage.flowsCard.locator('strong')).toContainText('Bot flows')
   })
 
   test('should show AI contexts card with title', async () => {
-    await expect(chatbotHubPage.aiContextsCard.locator('h3')).toContainText('AI Contexts')
+    await expect(chatbotHubPage.aiContextsCard.locator('strong')).toContainText('AI contexts')
   })
 
-  // The hub cards no longer carry a long description (removed in the Oat redesign);
-  // the line under the title is the item count.
+  // The line under each step title is the item count ("No rules yet", "1 rule", "N rules").
   test('should show keywords card count summary', async () => {
-    await expect(chatbotHubPage.keywordsCard.locator('small')).toContainText(/\d+ rules configured/)
+    await expect(chatbotHubPage.keywordsCard.locator('small')).toContainText(/No rules yet|\d+ rules?/)
   })
 
   test('should show flows card count summary', async () => {
-    await expect(chatbotHubPage.flowsCard.locator('small')).toContainText(/\d+ flows created/)
+    await expect(chatbotHubPage.flowsCard.locator('small')).toContainText(/No flows yet|\d+ flows?/)
   })
 
   test('should show AI contexts card count summary', async () => {
-    await expect(chatbotHubPage.aiContextsCard.locator('small')).toContainText(/\d+ contexts active/)
+    await expect(chatbotHubPage.aiContextsCard.locator('small')).toContainText(/No contexts yet|\d+ contexts?/)
   })
 })
