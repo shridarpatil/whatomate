@@ -4,6 +4,8 @@ import (
 	"crypto/hmac"
 	"crypto/sha1" //nolint:gosec // SHA-1 is mandated by the coturn TURN REST API (RFC draft)
 	"encoding/base64"
+	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -99,8 +101,8 @@ type CallingConfig struct {
 }
 
 type AppConfig struct {
-	Name          string `koanf:"name"`     // Shown on the login page ("Welcome to <name>")
-	LogoURL       string `koanf:"logo_url"` // Login page logo; empty uses the default icon
+	Name          string `koanf:"name"`        // Shown on the login page ("Welcome to <name>")
+	LogoURL       string `koanf:"logo_url"`    // Login page logo; empty uses the default icon
 	Environment   string `koanf:"environment"` // development, staging, production
 	Debug         bool   `koanf:"debug"`
 	EncryptionKey string `koanf:"encryption_key"` // AES-256 key for encrypting secrets at rest
@@ -112,6 +114,7 @@ type ServerConfig struct {
 	ReadTimeout    int    `koanf:"read_timeout"`
 	WriteTimeout   int    `koanf:"write_timeout"`
 	BasePath       string `koanf:"base_path"`       // Base path for frontend (e.g., "/whatomate" for proxy pass)
+	PublicURL      string `koanf:"public_url"`      // Public origin users reach the app at (e.g., "https://chat.example.com"); used for SSO callback URLs
 	AllowedOrigins string `koanf:"allowed_origins"` // Comma-separated list of allowed CORS origins
 }
 
@@ -223,7 +226,38 @@ func Load(configPath string) (*Config, error) {
 	// Set defaults
 	setDefaults(&cfg)
 
+	publicURL, err := normalizePublicURL(cfg.Server.PublicURL)
+	if err != nil {
+		return nil, err
+	}
+	cfg.Server.PublicURL = publicURL
+
 	return &cfg, nil
+}
+
+// normalizePublicURL checks server.public_url is a bare http(s) origin
+// (scheme, host, optional port) and drops a trailing slash. A sub-path goes
+// in server.base_path instead, so the two can't disagree.
+func normalizePublicURL(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", nil
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return "", fmt.Errorf("server.public_url: %w", err)
+	}
+	switch {
+	case u.Scheme != "http" && u.Scheme != "https":
+		return "", fmt.Errorf("server.public_url must start with http:// or https:// (got %q)", raw)
+	case u.Host == "":
+		return "", fmt.Errorf("server.public_url has no host (got %q)", raw)
+	case u.User != nil:
+		return "", fmt.Errorf("server.public_url must not contain credentials")
+	case (u.Path != "" && u.Path != "/") || u.RawQuery != "" || u.Fragment != "" || u.ForceQuery:
+		return "", fmt.Errorf("server.public_url must be just scheme and host (put a sub-path in server.base_path), got %q", raw)
+	}
+	return u.Scheme + "://" + u.Host, nil
 }
 
 func setDefaults(cfg *Config) {

@@ -517,7 +517,38 @@ func (a *App) DeleteSSOProvider(r *fastglue.Request) error {
 	return r.SendEnvelope(map[string]string{"message": "SSO provider deleted"})
 }
 
+// GetSSOCallbackURL returns the redirect URI the server sends to the provider,
+// so admins register exactly that URL rather than one guessed from the browser.
+func (a *App) GetSSOCallbackURL(r *fastglue.Request) error {
+	if _, _, err := a.requireAuth(r, models.ResourceSettingsSSO, models.ActionRead); err != nil {
+		return nil
+	}
+
+	provider, _ := r.RequestCtx.UserValue("provider").(string)
+	if _, ok := oauthProviders[provider]; !ok && provider != "custom" {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid SSO provider", nil, "")
+	}
+
+	return r.SendEnvelope(map[string]string{"callback_url": a.ssoCallbackURL(r, provider)})
+}
+
 // Helper functions
+
+// ssoCallbackURL is the provider's redirect URI. server.public_url wins when
+// set; otherwise it's built from the request's Host, which behind a proxy that
+// rewrites Host is the internal address, not the one users reach.
+func (a *App) ssoCallbackURL(r *fastglue.Request, provider string) string {
+	origin := a.Config.Server.PublicURL
+	if origin == "" {
+		scheme := "https"
+		if !r.RequestCtx.IsTLS() && a.Config.App.Environment == "development" {
+			scheme = "http"
+		}
+		origin = scheme + "://" + string(r.RequestCtx.Host())
+	}
+	basePath := sanitizeRedirectPath(a.Config.Server.BasePath)
+	return fmt.Sprintf("%s%s/api/auth/sso/%s/callback", origin, basePath, provider)
+}
 
 func (a *App) buildOAuthConfig(provider string, ssoConfig *models.SSOProvider, r *fastglue.Request) *oauth2.Config {
 	var endpoint oauth2.Endpoint
@@ -535,14 +566,7 @@ func (a *App) buildOAuthConfig(provider string, ssoConfig *models.SSOProvider, r
 		scopes = providerCfg.Scopes
 	}
 
-	// Build callback URL from request
-	scheme := "https"
-	if !r.RequestCtx.IsTLS() && a.Config.App.Environment == "development" {
-		scheme = "http"
-	}
-	host := string(r.RequestCtx.Host())
-	basePath := sanitizeRedirectPath(a.Config.Server.BasePath)
-	callbackURL := fmt.Sprintf("%s://%s%s/api/auth/sso/%s/callback", scheme, host, basePath, provider)
+	callbackURL := a.ssoCallbackURL(r, provider)
 
 	// Decrypt SSO client secret
 	decryptedSecret, err := appcrypto.Decrypt(ssoConfig.ClientSecret, a.Config.App.EncryptionKey)

@@ -92,12 +92,26 @@ const editForm = ref({
 
 const currentProviderConfig = computed(() => providerConfigs[editingProvider.value])
 
-// Generate redirect URL for OAuth provider configuration
-const redirectUrl = computed(() => {
-  const baseUrl = window.location.origin
+// The redirect URL to register at the provider. The server builds it (from
+// server.public_url, or the request host), so ask it rather than assume the
+// browser's address matches.
+const redirectUrl = ref('')
+
+function browserRedirectUrl(providerKey: string) {
   const basePath = ((window as any).__BASE_PATH__ ?? import.meta.env.BASE_URL ?? '').replace(/\/$/, '')
-  return `${baseUrl}${basePath}/api/auth/sso/${editingProvider.value}/callback`
-})
+  return `${window.location.origin}${basePath}/api/auth/sso/${providerKey}/callback`
+}
+
+async function fetchRedirectUrl(providerKey: string) {
+  redirectUrl.value = ''
+  try {
+    const response = await api.get(`/settings/sso/${providerKey}/callback-url`)
+    if (editingProvider.value === providerKey) redirectUrl.value = response.data.data.callback_url
+  } catch {
+    // Older server without the endpoint: fall back to the browser's address.
+    if (editingProvider.value === providerKey) redirectUrl.value = browserRedirectUrl(providerKey)
+  }
+}
 
 const copiedRedirectUrl = ref(false)
 function copyRedirectUrl() {
@@ -125,6 +139,7 @@ async function fetchProviders() {
 
 function openEditDialog(providerKey: string) {
   editingProvider.value = providerKey
+  fetchRedirectUrl(providerKey)
   const existing = providers.value.find(p => p.provider === providerKey)
 
   editForm.value = {
