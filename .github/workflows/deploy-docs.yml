@@ -6,6 +6,11 @@ on:
       - main
     paths:
       - 'docs/**'
+      # The docs take the app's theme variables and fonts from these.
+      - 'frontend/src/assets/theme.css'
+      - 'frontend/src/assets/fonts.css'
+      - 'frontend/src/assets/fonts/**'
+      - '.github/workflows/deploy-docs.yml'
   workflow_dispatch:
 
 permissions:
@@ -24,23 +29,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - name: Setup Go
+        uses: actions/setup-go@v5
         with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: docs/package-lock.json
+          go-version: "1.26"
+          cache: false
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
 
-      - name: Install dependencies
-        working-directory: docs
-        run: npm ci
-
-      - name: Build with Astro
-        working-directory: docs
-        run: npm run build
+      # oatdocs: a small Go docs generator, no npm. The version is pinned and
+      # Go's checksum database verifies its source.
+      - name: Build docs
+        run: go run github.com/shridarpatil/oatdocs@v0.2.1 build docs
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

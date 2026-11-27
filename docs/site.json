@@ -1,0 +1,8 @@
+{
+  "title": "Whatomate",
+  "description": "A modern WhatsApp Business Platform",
+  "base": "/whatomate",
+  "repo": "https://github.com/shridarpatil/whatomate",
+  "css": ["../frontend/src/assets/fonts.css"],
+  "tokens": ["../frontend/src/assets/theme.css"]
+}
