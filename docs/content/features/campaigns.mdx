@@ -1,0 +1,204 @@
+---
+title: Campaigns
+description: Send bulk messages to multiple contacts
+order: 12
+---
+
+import { Card, CardGrid, Steps, Aside } from '@astrojs/starlight/components';
+
+![Campaigns](/whatomate/images/13-campaigns.png)
+
+## Overview
+
+Campaigns allow you to send bulk WhatsApp messages to multiple contacts at once. Whether you're sending promotional offers, updates, or notifications, Whatomate handles the delivery efficiently while respecting WhatsApp's rate limits.
+
+## Creating a Campaign
+
+<Steps>
+
+1. **Select Template**
+
+   Choose an approved message template for your campaign.
+
+2. **Define Audience**
+
+   Select contacts or upload a contact list for targeting.
+
+3. **Set Variables**
+
+   Configure template variables for personalization.
+
+4. **Schedule (Optional)**
+
+   Schedule the campaign for a specific date and time.
+
+5. **Review & Send**
+
+   Review the campaign details and send or schedule it.
+
+</Steps>
+
+## Adding Recipients
+
+You can add recipients to your campaign in two ways:
+
+### Manual Entry
+
+Add recipients one at a time by entering:
+- **Phone Number** - The recipient's WhatsApp number (with country code)
+- **Name** - Optional display name
+- **Parameters** - Template variable values for personalization
+
+### CSV Upload
+
+For bulk imports, upload a CSV file with your recipient data:
+
+<Steps>
+
+1. **Prepare Your CSV**
+
+   Create a CSV file with columns for phone number, name, and template parameters:
+   ```csv
+   phone,name,param1,param2
+   +1234567890,John Doe,Order #123,December 25
+   +0987654321,Jane Smith,Order #456,December 26
+   ```
+
+   **TEXT header parameter:** if the template's header has a variable
+   (`{{...}}`), add a column named `header`. Meta indexes positional
+   placeholders per component, so header `{{1}}` and body `{{1}}` are two
+   distinct values — the reserved column name avoids that collision. The
+   header column always comes **before** the body parameter columns. For
+   example, a template with header `Our {{season}} sale` and body
+   `Hi {{customer_name}}, use code {{coupon}}`:
+   ```csv
+   phone,name,header,customer_name,coupon
+   +1234567890,John Doe,Summer,John,SAVE20
+   +0987654321,Jane Smith,Winter,Jane,SAVE15
+   ```
+
+   The recipient dialog also provides a **Download sample CSV** link that
+   generates a template with the correct columns for your campaign's
+   template — no manual setup required.
+
+2. **Upload and Validate**
+
+   The system automatically validates your CSV against the selected template:
+   - Checks for required phone number column
+   - Validates parameter count matches template requirements
+   - Detects duplicate phone numbers
+   - Shows validation errors per row
+
+3. **Review and Import**
+
+   Preview the validation results before importing:
+   - View first 50 rows with status indicators
+   - See error details for invalid rows
+   - Only valid rows will be imported
+
+</Steps>
+
+<Aside type="tip">
+  **CSV Column Names**: The system recognizes various column names:
+  - Phone: `phone`, `phone_number`, `mobile`, `number`
+  - Name: `name`, `contact_name`, `customer_name`
+  - Parameters: `param1`, `param2`, etc. or `variable1`, `variable2`, etc.
+</Aside>
+
+<Aside type="caution">
+  **Duplicate Detection**: If the same phone number appears multiple times in your CSV, only the first occurrence will be valid. Subsequent duplicates will be flagged as errors.
+</Aside>
+
+## Campaign Details
+
+![Campaign Details](/whatomate/images/14-campaign-details.png)
+
+Track your campaign performance with detailed analytics:
+
+### Delivery Metrics
+
+| Metric | Description |
+|--------|-------------|
+| **Total** | Total number of recipients |
+| **Sent** | Messages successfully sent |
+| **Delivered** | Messages delivered to recipients |
+| **Read** | Messages opened by recipients |
+| **Failed** | Messages that failed to send |
+
+### Campaign Status
+
+The campaign itself moves through a lifecycle, shown on the campaign card and detail page:
+
+| Status | Meaning |
+|--------|---------|
+| **Draft** | Created but not yet queued for sending |
+| **Scheduled** | Set to start at a future date/time |
+| **Queued** | Handed off to the send queue, waiting for a worker |
+| **Processing** | Workers are actively sending messages |
+| **Paused** | Sending temporarily halted; can be resumed or retried |
+| **Completed** | All recipients processed |
+| **Cancelled** | Stopped by a user; no further sends |
+| **Failed** | Campaign could not complete |
+
+### Status Tracking
+
+Each recipient's message status is tracked individually:
+- **Pending** - Waiting to be sent
+- **Sent** - Sent to WhatsApp servers
+- **Delivered** - Delivered to recipient's device
+- **Read** - Opened by recipient
+- **Failed** - Failed to deliver
+
+Each **failed** recipient also records a **failure reason** — the error
+message returned by WhatsApp (e.g. an invalid number or a template mismatch) —
+so you can see exactly why a message didn't go out and fix the data before
+retrying.
+
+## Managing a Running Campaign
+
+While a campaign is queued or processing you can **pause** it to halt sending,
+then resume it later. A campaign can also be **cancelled**, which stops it for
+good.
+
+### Retry Failed
+
+On a **completed**, **paused**, or **failed** campaign, use **Retry Failed** to
+re-queue every recipient whose message failed. Whatomate resets those
+recipients back to pending, clears their previous error, and puts the campaign
+back into **processing** — recipients that already succeeded are left
+untouched, so no one is messaged twice.
+
+## Campaign Features
+
+<CardGrid>
+  <Card title="Personalization" icon="pencil">
+    Use template variables to personalize each message with recipient data.
+  </Card>
+  <Card title="Scheduling" icon="seti:clock">
+    Schedule campaigns for optimal delivery times.
+  </Card>
+  <Card title="Rate Limiting" icon="setting">
+    Automatic rate limiting to comply with WhatsApp policies.
+  </Card>
+  <Card title="Analytics" icon="graph">
+    Real-time tracking of delivery and engagement metrics.
+  </Card>
+</CardGrid>
+
+## Best Practices
+
+<Aside type="tip">
+  **Timing Matters**: Send campaigns during business hours in your recipients' timezone for better engagement.
+</Aside>
+
+<Aside type="caution">
+  **Compliance**: Only send messages to contacts who have opted in to receive communications. Violating WhatsApp's policies can result in account restrictions.
+</Aside>
+
+### Tips for Successful Campaigns
+
+1. **Segment your audience** - Target specific groups for relevant messaging
+2. **Personalize content** - Use variables to make messages feel personal
+3. **Test first** - Send to a small group before full rollout
+4. **Monitor metrics** - Track delivery and adjust strategy accordingly
+5. **Respect opt-outs** - Always honor unsubscribe requests

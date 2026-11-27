@@ -1,0 +1,156 @@
+---
+title: Custom Actions
+description: Configure custom action buttons for quick integrations
+order: 10
+---
+
+import { Card, CardGrid, Aside } from '@astrojs/starlight/components';
+
+## Overview
+
+Custom Actions allow you to create action buttons that appear in the chat header when viewing a conversation. These buttons enable quick integrations with external systems like CRMs, help desks, or custom workflows.
+
+## Action Types
+
+<CardGrid>
+  <Card title="Webhook" icon="rocket">
+    Call external APIs with contact data. Perfect for creating tickets, updating CRM records, or triggering workflows.
+  </Card>
+  <Card title="URL" icon="external">
+    Open external URLs in a new tab with contact data embedded in the URL parameters.
+  </Card>
+  <Card title="JavaScript" icon="seti:javascript">
+    Run custom JavaScript code server-side in a sandboxed VM to compute clipboard values, toast notifications, or a redirect URL from contact data.
+  </Card>
+</CardGrid>
+
+## Creating Custom Actions
+
+Navigate to **Settings > Custom Actions** to manage your action buttons.
+
+### Webhook Actions
+
+Webhook actions call external APIs when triggered. Configure:
+
+- **URL** - The endpoint to call (e.g., `https://api.helpdesk.com/tickets`)
+- **Method** - HTTP method (POST, GET, PUT, PATCH)
+- **Headers** - Custom headers like authorization tokens
+- **Body** - JSON payload with contact data
+
+Example webhook body:
+```json
+{
+  "subject": "WhatsApp: {{contact.name}}",
+  "phone": "{{contact.phone_number}}",
+  "description": "Support request from WhatsApp",
+  "assignee": "{{user.email}}"
+}
+```
+
+### URL Actions
+
+URL actions open a web page with contact data in the URL:
+
+```
+https://crm.example.com/contact?phone={{contact.phone_number}}&name={{contact.name}}
+```
+
+Options:
+- **Open in new tab** - Whether to open in a new browser tab
+
+### JavaScript Actions
+
+JavaScript actions run custom code **server-side** in a sandboxed [goja](https://github.com/dop251/goja) VM — the code has no access to the filesystem, network, or any host globals. The VM is seeded with the `contact`, `user`, and `organization` data objects, and your code returns a structured result (`clipboard`, `toast`, and/or `url`). Only that returned result is sent back to the browser, which applies it (copies to clipboard, shows the toast, or opens the redirect).
+
+Example - Copy phone to clipboard:
+```javascript
+return { clipboard: contact.phone_number }
+```
+
+Example - Show toast notification:
+```javascript
+return {
+  toast: {
+    message: 'Contact: ' + contact.name,
+    type: 'success'
+  }
+}
+```
+
+Example - Open URL:
+```javascript
+return {
+  url: 'https://crm.example.com?phone=' + contact.phone_number
+}
+```
+
+## Available Variables
+
+Use these variables in webhook URLs, bodies, and JavaScript code:
+
+### Contact Variables
+
+| Variable | Description |
+|----------|-------------|
+| `{{contact.id}}` | Contact's unique ID |
+| `{{contact.phone_number}}` | Contact's phone number |
+| `{{contact.name}}` | Contact's display name |
+| `{{contact.profile_name}}` | Contact's WhatsApp profile name |
+| `{{contact.tags}}` | Contact's tags |
+| `{{contact.metadata}}` | Contact's custom metadata object |
+
+### User Variables
+
+| Variable | Description |
+|----------|-------------|
+| `{{user.id}}` | Current user's ID |
+| `{{user.name}}` | Current user's full name |
+| `{{user.email}}` | Current user's email |
+| `{{user.role}}` | Current user's role |
+
+### Organization Variables
+
+| Variable | Description |
+|----------|-------------|
+| `{{organization.id}}` | Organization's ID |
+| `{{organization.name}}` | Organization's name |
+
+## Use Cases
+
+### Create Support Ticket
+
+Configure a webhook action to create tickets in your help desk:
+
+- **Type**: Webhook
+- **URL**: `https://api.zendesk.com/v2/tickets.json`
+- **Method**: POST
+- **Headers**: `Authorization: Bearer YOUR_TOKEN`
+- **Body**:
+```json
+{
+  "ticket": {
+    "subject": "WhatsApp: {{contact.name}}",
+    "comment": { "body": "Contact from WhatsApp" },
+    "requester": { "name": "{{contact.name}}" }
+  }
+}
+```
+
+### Open CRM Profile
+
+Configure a URL action to open the contact in your CRM:
+
+- **Type**: URL
+- **URL**: `https://crm.example.com/contacts?phone={{contact.phone_number}}`
+- **Open in new tab**: Yes
+
+### Copy Phone Number
+
+Configure a JavaScript action for quick clipboard access:
+
+- **Type**: JavaScript
+- **Code**: `return { clipboard: contact.phone_number, toast: { message: 'Phone copied!', type: 'success' } }`
+
+<Aside type="tip">
+  You can create multiple custom actions and reorder them by their display order. Actions are shown in the chat header in order from lowest to highest display order.
+</Aside>

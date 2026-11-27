@@ -1,0 +1,306 @@
+---
+title: WhatsApp Flows
+description: Manage WhatsApp Flows for interactive experiences
+order: 14
+label: Flows
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## Overview
+
+WhatsApp Flows provide native UI components for building interactive experiences within WhatsApp. Use the Flows API to create, publish, and manage your flows.
+
+## List Flows
+
+Retrieve all flows.
+
+```bash
+GET /api/flows
+```
+
+### Query Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `page` | integer | Page number (default: 1) |
+| `limit` | integer | Page size, 1–100. Default `50`. |
+| `status` | string | Filter by status (DRAFT, PUBLISHED, DEPRECATED) |
+| `account` | string | Filter by WhatsApp account **name** |
+| `search` | string | Case-insensitive match on the flow name |
+
+<Aside type="caution">
+  The account is referenced by **name** via `whatsapp_account` — there is no `account_id`, and the
+  filter parameter is `account`. The flow definition field is `flow_json`, not `json_definition`,
+  and the category field is a single string `category`, not a `categories` array.
+</Aside>
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "flows": [
+      {
+        "id": "uuid",
+        "whatsapp_account": "Main Business",
+        "meta_flow_id": "123456789",
+        "name": "Order Form",
+        "status": "PUBLISHED",
+        "category": "OTHER",
+        "json_version": "7.0",
+        "flow_json": { },
+        "screens": [],
+        "preview_url": "",
+        "has_local_changes": false,
+        "created_at": "2024-01-01T00:00:00Z",
+        "updated_at": "2024-01-01T00:00:00Z"
+      }
+    ],
+    "total": 10,
+    "page": 1,
+    "limit": 50
+  }
+}
+```
+
+`has_local_changes` is true when the flow has been edited in Whatomate but not yet pushed to Meta
+(see [Save to Meta](#save-to-meta)).
+
+## Get Flow
+
+Retrieve a single flow with its JSON definition. Same object shape as a list item.
+
+```bash
+GET /api/flows/{id}
+```
+
+## Create Flow
+
+Create a new WhatsApp Flow.
+
+```bash
+POST /api/flows
+```
+
+### Request Body
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `whatsapp_account` | string | Yes | Account **name** |
+| `name` | string | Yes | Flow name |
+| `category` | string | No | Meta flow category |
+| `json_version` | string | No | Flow JSON version, e.g. `"7.0"` |
+| `flow_json` | object | No | The full Flow JSON definition |
+| `screens` | array | No | Screen definitions |
+
+```json
+{
+  "whatsapp_account": "Main Business",
+  "name": "Customer Survey",
+  "category": "CUSTOMER_SUPPORT",
+  "json_version": "7.0",
+  "flow_json": {
+    "version": "3.0",
+    "screens": [
+      {
+        "id": "SURVEY",
+        "title": "Quick Survey",
+        "layout": {
+          "type": "SingleColumnLayout",
+          "children": [
+            {
+              "type": "TextHeading",
+              "text": "How was your experience?"
+            },
+            {
+              "type": "RadioButtonsGroup",
+              "name": "rating",
+              "label": "Rating",
+              "data-source": [
+                {"id": "5", "title": "Excellent"},
+                {"id": "4", "title": "Good"},
+                {"id": "3", "title": "Average"},
+                {"id": "2", "title": "Poor"},
+                {"id": "1", "title": "Very Poor"}
+              ]
+            },
+            {
+              "type": "Footer",
+              "label": "Submit",
+              "on-click-action": {
+                "name": "complete",
+                "payload": {}
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}
+```
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "id": "uuid",
+    "name": "Customer Survey",
+    "status": "DRAFT",
+    "created_at": "2024-01-01T00:00:00Z"
+  }
+}
+```
+
+## Update Flow
+
+Update a flow's definition.
+
+```bash
+PUT /api/flows/{id}
+```
+
+### Request Body
+
+```json
+{
+  "whatsapp_account": "Main Business",
+  "name": "Updated Survey",
+  "category": "CUSTOMER_SUPPORT",
+  "json_version": "7.0",
+  "flow_json": { }
+}
+```
+
+## Delete Flow
+
+Delete a flow.
+
+```bash
+DELETE /api/flows/{id}
+```
+
+<Aside type="caution">
+  Published flows cannot be deleted. Deprecate them first.
+</Aside>
+
+## Save to Meta
+
+Push the flow definition to Meta's WhatsApp Business API.
+
+```bash
+POST /api/flows/{id}/save-to-meta
+```
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "meta_flow_id": "123456789",
+    "validation_errors": []
+  }
+}
+```
+
+## Publish Flow
+
+Publish a draft flow to make it available for use.
+
+```bash
+POST /api/flows/{id}/publish
+```
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "id": "uuid",
+    "status": "PUBLISHED"
+  }
+}
+```
+
+## Deprecate Flow
+
+Deprecate a published flow.
+
+```bash
+POST /api/flows/{id}/deprecate
+```
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "id": "uuid",
+    "status": "DEPRECATED"
+  }
+}
+```
+
+## Duplicate Flow
+
+Clone an existing flow into a fresh `DRAFT`. The copy keeps the same account,
+category, and flow JSON, is named `<original name> (Copy)`, and has no
+`meta_flow_id` — it is a brand-new local flow that you can edit and publish
+independently.
+
+```bash
+POST /api/flows/{id}/duplicate
+```
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "flow": {
+      "id": "new-uuid",
+      "name": "Order Form (Copy)",
+      "status": "DRAFT"
+    },
+    "message": "Flow duplicated successfully. You can now edit and publish the new flow."
+  }
+}
+```
+
+## Sync Flows
+
+Sync flows from Meta.
+
+```bash
+POST /api/flows/sync
+```
+
+### Request Body
+
+```json
+{
+  "whatsapp_account": "Main Business"
+}
+```
+
+Omitting it returns `400 WhatsApp account is required`; an unknown name returns `400 WhatsApp account not found`.
+
+## Flow Status Lifecycle
+
+| Status | Description |
+|--------|-------------|
+| `DRAFT` | Flow is being designed, not yet available |
+| `PUBLISHED` | Flow is live and can be sent to users |
+| `DEPRECATED` | Flow has been retired |
+
+<Aside type="note">
+  Flows must pass Meta's validation before they can be published. Use the Save to Meta endpoint to check for validation errors.
+</Aside>
