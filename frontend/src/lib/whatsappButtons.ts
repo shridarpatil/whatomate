@@ -160,6 +160,17 @@ export function validateWhatsAppButtons(
 }
 
 /**
+ * Whether tapping any of the buttons sends a reply back to the chatbot. URL
+ * and Call buttons are CTAs handled on the user's device, so a set made only
+ * of those never produces one and a chatbot buttons node must not wait on it.
+ * Keep in sync with buttonsExpectReply in
+ * internal/handlers/chatbot_graph_runner.go.
+ */
+export function buttonsExpectReply(buttons: ButtonConfig[]): boolean {
+  return buttons.some(b => b.type !== 'url' && b.type !== 'voice_call')
+}
+
+/**
  * A bare host like "example.com" is the easy mistake to make in the UI, and
  * Meta rejects it — the button needs an absolute http(s) URL.
  */
