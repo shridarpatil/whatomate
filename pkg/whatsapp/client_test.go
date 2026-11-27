@@ -173,6 +173,48 @@ func TestClient_SendTextMessage(t *testing.T) {
 	}
 }
 
+func TestClient_SendTextMessage_PreviewURL(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		text string
+		want bool
+	}{
+		{name: "https link", text: "Track it: https://example.com/t/1", want: true},
+		{name: "http link", text: "See http://example.com", want: true},
+		{name: "no link", text: "Hello, World!", want: false},
+		{name: "bare domain", text: "Visit example.com", want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				var body map[string]any
+				require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+				textContent := body["text"].(map[string]any)
+				assert.Equal(t, tt.want, textContent["preview_url"])
+
+				w.WriteHeader(http.StatusOK)
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"messages": []map[string]string{{"id": "wamid.preview"}},
+				})
+			}))
+			defer server.Close()
+
+			client := whatsapp.NewWithTimeout(testutil.NopLogger(), 5*time.Second)
+			client.HTTPClient = &http.Client{
+				Transport: &testServerTransport{serverURL: server.URL},
+			}
+
+			_, err := client.SendTextMessage(testutil.TestContext(t), testAccount(server.URL), whatsapp.Recipient{Phone: "1234567890"}, tt.text)
+			require.NoError(t, err)
+		})
+	}
+}
+
 func TestClient_GetMediaURL(t *testing.T) {
 	t.Parallel()
 
