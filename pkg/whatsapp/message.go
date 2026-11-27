@@ -30,7 +30,7 @@ func (c *Client) SendTextMessage(ctx context.Context, account *Account, rcpt Rec
 		"recipient_type":    "individual",
 		"type":              "text",
 		"text": map[string]any{
-			"preview_url": false,
+			"preview_url": strings.Contains(text, "http://") || strings.Contains(text, "https://"),
 			"body":        text,
 		},
 	}
