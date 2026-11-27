@@ -1239,9 +1239,7 @@ func (a *App) createTransferToQueue(account *models.WhatsAppAccount, contact *mo
 	if settings != nil && settings.BusinessHours.Enabled && len(settings.BusinessHours.Hours) > 0 {
 		if !a.isWithinBusinessHours(settings.BusinessHours.Hours) {
 			a.Log.Info("Outside business hours, sending out-of-hours message instead of queue transfer", "contact_id", contact.ID, "source", source)
-			if settings.BusinessHours.OutOfHoursMessage != "" {
-				_ = a.sendAndSaveTextMessage(account, contact, settings.BusinessHours.OutOfHoursMessage)
-			}
+			a.sendOutOfHoursMessage(account, contact, settings)
 			return
 		}
 	}
@@ -1278,9 +1276,7 @@ func (a *App) createTransferFromKeyword(account *models.WhatsAppAccount, contact
 	if settings != nil && settings.BusinessHours.Enabled && len(settings.BusinessHours.Hours) > 0 {
 		if !a.isWithinBusinessHours(settings.BusinessHours.Hours) {
 			a.Log.Info("Outside business hours, sending out of hours message instead of transfer", "contact_id", contact.ID)
-			if settings.BusinessHours.OutOfHoursMessage != "" {
-				_ = a.sendAndSaveTextMessage(account, contact, settings.BusinessHours.OutOfHoursMessage)
-			}
+			a.sendOutOfHoursMessage(account, contact, settings)
 			return
 		}
 	}
@@ -1337,9 +1333,7 @@ func (a *App) createTransferToTeam(account *models.WhatsAppAccount, contact *mod
 	if settings != nil && settings.BusinessHours.Enabled && len(settings.BusinessHours.Hours) > 0 {
 		if !a.isWithinBusinessHours(settings.BusinessHours.Hours) {
 			a.Log.Info("Outside business hours, sending out-of-hours message instead of team transfer", "contact_id", contact.ID, "team_id", teamID, "source", source)
-			if settings.BusinessHours.OutOfHoursMessage != "" {
-				_ = a.sendAndSaveTextMessage(account, contact, settings.BusinessHours.OutOfHoursMessage)
-			}
+			a.sendOutOfHoursMessage(account, contact, settings)
 			return
 		}
 	}
